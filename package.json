@@ -1,0 +1,17 @@
+{
+  "name": "tagoio-custom-widget",
+  "version": "1.0.0",
+  "main": "./dist/customWidget.js",
+  "scripts": {
+    "build": "tsc && uglifyjs ./dist/customWidget.js -o ./dist/customWidget.min.js"
+  },
+  "author": "Tago LLC",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "2.27.0",
+    "@typescript-eslint/parser": "2.27.0",
+    "eslint": "6.8.0",
+    "typescript": "3.8.3",
+    "uglify-js": "3.8.1"
+  }
+}
