@@ -1,17 +1,7 @@
 "use strict";
-var __assign = (this && this.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 var shortid = require("shortid");
+var utils_1 = require("./utils");
 (function () {
     var funcRealtime;
     var funcStart;
@@ -51,19 +41,17 @@ var shortid = require("shortid");
     window.TagoIO.onError = function (callback) {
         funcError = callback;
     };
-    window.TagoIO.onSendData = function (variables, options, callback) {
+    window.TagoIO.sendData = function (variables, options, callback) {
         var uniqueKey = shortid.generate();
-        pool[uniqueKey] = callback;
+        pool[uniqueKey] = callback || null;
         var autoFillArray = [];
         if (options && options.autoFill && widgetVariables) {
-            variables.map(function (userVar) {
-                widgetVariables.map(function (widgetVar) {
-                    if (userVar.variable == widgetVar.variable) {
-                        autoFillArray.push(__assign({ bucket: widgetVar.origin.bucket || "", origin: widgetVar.origin.id || "" }, userVar));
-                    }
-                });
-            });
+            autoFillArray = utils_1.enableAutofill(variables, widgetVariables);
         }
+        sendMessage({
+            variables: (options && options.autoFill) ? autoFillArray : variables,
+            key: uniqueKey
+        });
         if (window.Promise && !callback) {
             return new Promise(function (resolve, reject) {
                 pool[uniqueKey] = function (success, error) {
@@ -73,9 +61,5 @@ var shortid = require("shortid");
                 };
             });
         }
-        sendMessage({
-            variables: (options && options.autoFill) ? autoFillArray : variables,
-            key: uniqueKey
-        });
     };
 })();

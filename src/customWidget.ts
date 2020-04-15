@@ -1,19 +1,17 @@
 import * as shortid from "shortid";
+import {
+  ITagoIO,
+  ICallbackStart,
+  IError,
+  IData,
+  IVariable,
+  ICallbackRealtime,
+  ICallbackError,
+  ITagoVariables,
+  IEvent,
+} from './interfaces';
+import { enableAutofill } from './utils';
 
-interface ICallback {
-  (data: unknown, error?: unknown): void;
-}
-
-interface IOptions {
-  autoFill: boolean;
-}
-
-interface ITagoIO {
-  onError?: (callback: ICallback) => void;
-  onStart?: (callback: ICallback) => void;
-  onRealtime?: (callback: ICallback) => void;
-  onSendData?: (variables: (number)[], options: IOptions, callback: ICallback) => void;
-}
 
 declare global {
   interface Window {
@@ -22,13 +20,13 @@ declare global {
 }
 
 ((): void => {
-  let funcRealtime: ICallback;
-  let funcStart: ICallback;
-  let funcError: ICallback;
-  let widgetVariables: (number)[];
-  const pool: any = [];
+  let funcRealtime: ICallbackRealtime;
+  let funcStart: ICallbackStart;
+  let funcError: ICallbackError;
+  let widgetVariables: Array<ITagoVariables>;
+  const pool: Array<(data: IData | null, error?: IError) => void> = [];
 
-  function receiveMessage(event: any): void  {
+  function receiveMessage(event: IEvent): void  {
     const { data } = event;
     if (data) {
       if(data.realtime && funcRealtime){
@@ -69,37 +67,27 @@ declare global {
     funcError = callback;
   };
 
-  window.TagoIO.onSendData = (variables, options, callback): any  => {
+  window.TagoIO.sendData = (variables, options, callback): Promise<IData> | void => {
     const uniqueKey: string = shortid.generate();
-    pool[uniqueKey] = callback;
+    pool[uniqueKey] = callback || null;
 
-    const autoFillArray = [] as (number)[];
+    let autoFillArray: Array<IVariable> = [];
     if (options && options.autoFill && widgetVariables) {
-      variables.map(function(userVar: any) {
-        widgetVariables.map(function(widgetVar: any) {
-          if (userVar.variable == widgetVar.variable) { // acha o nome da variavel nas do widget
-            autoFillArray.push({
-              bucket: widgetVar.origin.bucket || "",
-              origin: widgetVar.origin.id || "",
-              ...userVar
-            });
-          }
-        })
-      });
-    }
-
-    if (window.Promise && !callback) {
-      return new Promise((resolve: any, reject: any) => {
-        pool[uniqueKey] = (success: any, error: any): void => {
-          if (error) reject(error);
-          resolve(success);
-        };
-      });
+      autoFillArray = enableAutofill(variables, widgetVariables);
     }
 
     sendMessage({
       variables: (options && options.autoFill) ? autoFillArray : variables,
       key: uniqueKey
     });
+
+    if (window.Promise && !callback) {
+      return new Promise((resolve: (data: IData) => void, reject: (data: IError) => void) => {
+        pool[uniqueKey] = (success: IData, error: IError): void => {
+          if (error) reject(error);
+          resolve(success);
+        };
+      });
+    }
   };
 })();
