@@ -17,11 +17,11 @@
   <script src="../dist/customWidget.js"></script>
   <script>
     window.onload = function() {
-      window.TagoIO.onStart(function(widget) {
+      TagoIO.onStart(function(widget) {
         let name = document.getElementById('widget-name');
         name.textContent = widget.label;
       });
-      window.TagoIO.onRealtime(function(data) {
+      TagoIO.onRealtime(function(data) {
         let value = document.getElementById("value");
         let var_name = document.getElementById("var-name");
         value.innerHTML = '';
