@@ -91,7 +91,7 @@ interface ITagoIO {
   /**
    * @param callback function that loads the information from the widget
    */
-  onStart: (callback: ICallbackStart) => void;
+  onStart: (callback?: ICallbackStart) => void;
   /**
    * @param callback function that executes whenever a realtime data arrives
    */
@@ -100,8 +100,9 @@ interface ITagoIO {
    * @param variables Array containing all variables
    * @param options Data sending options
    * @param callback function it performs when the response to the request arrives
+   * @return Promise or null
    */
-  sendData: (variables: Array<IVariable>, options: IOptions, callback: ICallbackSendData) => Promise<IData> | void;
+  sendData: (variables: Array<IVariable>, options?: IOptions, callback?: ICallbackSendData) => Promise<IData> | void;
 }
 
 interface IEventData {

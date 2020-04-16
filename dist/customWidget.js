@@ -16,16 +16,20 @@ var utils_1 = require("./utils");
             }
             if (data.widget) {
                 widgetVariables = data.widget.display.variables;
-                funcStart(data.widget);
+                if (funcStart) {
+                    funcStart(data.widget);
+                }
             }
-            if (data.status && data.key) {
+            if (data.status && data.key && pool[data.key]) {
                 pool[data.key](data);
             }
-            if (data.status === false && data.key) {
+            if (data.status === false) {
                 if (funcError) {
                     funcError(data);
                 }
-                pool[data.key](null, data);
+                if (data.key && pool[data.key]) {
+                    pool[data.key](null, data);
+                }
             }
         }
     };
@@ -33,7 +37,9 @@ var utils_1 = require("./utils");
         window.parent.postMessage(message, "*");
     };
     window.TagoIO.onStart = function (callback) {
-        funcStart = callback;
+        if (callback) {
+            funcStart = callback;
+        }
         sendMessage({ loaded: true });
         window.addEventListener("message", receiveMessage, false);
     };

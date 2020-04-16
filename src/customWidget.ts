@@ -26,6 +26,7 @@ declare global {
   let funcRealtime: ICallbackRealtime;
   let funcStart: ICallbackStart;
   let funcError: ICallbackError;
+  // array with widget variables to enable autoFill
   let widgetVariables: Array<ITagoVariables>;
   const pool: Array<(data: IData | null, error?: IError) => void> = [];
 
@@ -42,7 +43,10 @@ declare global {
 
       if (data.widget) {
         widgetVariables = data.widget.display.variables;
-        funcStart(data.widget);
+
+        if (funcStart) {
+          funcStart(data.widget);
+        }
       }
 
       if (data.status && data.key && pool[data.key]) {
@@ -69,7 +73,9 @@ declare global {
   };
 
   window.TagoIO.onStart = (callback): void => {
-    funcStart = callback;
+    if (callback) {
+      funcStart = callback;
+    }
     sendMessage({ loaded: true });
     window.addEventListener("message", receiveMessage, false);
   };
@@ -97,6 +103,7 @@ declare global {
       key: uniqueKey,
     });
 
+    // If a callback is not passed it returns the promise
     if (window.Promise && !callback) {
       return new Promise((resolve: (data: IData) => void, reject: (data: IError) => void) => {
         pool[uniqueKey] = (success: IData, error: IError): void => {
