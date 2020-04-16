@@ -8,7 +8,7 @@ var utils_1 = require("./utils");
     var funcError;
     var widgetVariables;
     var pool = [];
-    function receiveMessage(event) {
+    var receiveMessage = function (event) {
         var data = event.data;
         if (data) {
             if (data.realtime && funcRealtime) {
@@ -22,14 +22,16 @@ var utils_1 = require("./utils");
                 pool[data.key](data);
             }
             if (data.status === false && data.key) {
-                funcError(data);
+                if (funcError) {
+                    funcError(data);
+                }
                 pool[data.key](null, data);
             }
         }
-    }
-    function sendMessage(message) {
+    };
+    var sendMessage = function (message) {
         window.parent.postMessage(message, "*");
-    }
+    };
     window.TagoIO.onStart = function (callback) {
         funcStart = callback;
         sendMessage({ loaded: true });
@@ -49,8 +51,8 @@ var utils_1 = require("./utils");
             autoFillArray = utils_1.enableAutofill(variables, widgetVariables);
         }
         sendMessage({
-            variables: (options && options.autoFill) ? autoFillArray : variables,
-            key: uniqueKey
+            variables: options && options.autoFill ? autoFillArray : variables,
+            key: uniqueKey,
         });
         if (window.Promise && !callback) {
             return new Promise(function (resolve, reject) {

@@ -9,11 +9,15 @@ import {
   ICallbackError,
   ITagoVariables,
   IEvent,
+  IMessage,
 } from "./interfaces";
 import { enableAutofill } from "./utils";
 
 declare global {
   interface Window {
+    /**
+     * Send and receive data from the widget and variables from TagoIO
+     */
     TagoIO: ITagoIO;
   }
 }
@@ -25,6 +29,10 @@ declare global {
   let widgetVariables: Array<ITagoVariables>;
   const pool: Array<(data: IData | null, error?: IError) => void> = [];
 
+  /**
+   * eventListener function that receives messages sent by the parent component
+   * @param event event coming from the parent component
+   */
   const receiveMessage = (event: IEvent): void => {
     const { data } = event;
     if (data) {
@@ -37,20 +45,26 @@ declare global {
         funcStart(data.widget);
       }
 
-      if (data.status && data.key) {
+      if (data.status && data.key && pool[data.key]) {
         pool[data.key](data);
       }
 
-      if (data.status === false && data.key) {
+      if (data.status === false) {
         if (funcError) {
           funcError(data);
         }
-        pool[data.key](null, data);
+        if (data.key && pool[data.key]) {
+          pool[data.key](null, data);
+        }
       }
     }
   };
 
-  const sendMessage = (message: {}): void => {
+  /**
+   * Send message to parent component
+   * @param message message to send
+   */
+  const sendMessage = (message: IMessage): void => {
     window.parent.postMessage(message, "*");
   };
 
@@ -69,6 +83,7 @@ declare global {
   };
 
   window.TagoIO.sendData = (variables, options, callback): Promise<IData> | void => {
+    // generates a unique key to run the callback or promisse
     const uniqueKey: string = shortid.generate();
     pool[uniqueKey] = callback || null;
 

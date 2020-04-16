@@ -84,9 +84,23 @@ interface IOptions {
 }
 
 interface ITagoIO {
+  /**
+   * @param callback function that runs when a TagoIO error arrives
+   */
   onError: (callback: ICallbackError) => void;
+  /**
+   * @param callback function that loads the information from the widget
+   */
   onStart: (callback: ICallbackStart) => void;
+  /**
+   * @param callback function that executes whenever a realtime data arrives
+   */
   onRealtime: (callback: ICallbackRealtime) => void;
+  /**
+   * @param variables Array containing all variables
+   * @param options Data sending options
+   * @param callback function it performs when the response to the request arrives
+   */
   sendData: (variables: Array<IVariable>, options: IOptions, callback: ICallbackSendData) => Promise<IData> | void;
 }
 
@@ -103,6 +117,12 @@ interface IEvent {
   data: IEventData;
 }
 
+interface IMessage {
+  loaded?: boolean;
+  variables?: IVariable[];
+  key?: string;
+}
+
 export {
   ITagoIO,
   IOptions,
@@ -116,4 +136,5 @@ export {
   ICallbackRealtime,
   ICallbackError,
   IEvent,
+  IMessage,
 };
