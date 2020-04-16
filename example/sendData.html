@@ -17,7 +17,7 @@
     <input type="text" id="variable2">
     <input type="text" id="value2">
     <br>
-    <button onclick="sendForm2()">Enviar</button>
+    <button onclick="sendFormWithoutCallback()">Enviar</button>
   </div>
 </body>
 <style>
@@ -33,8 +33,9 @@
   }
 </style>
 <script>
-  function sendForm()
-  {
+
+  // Send data to Tago with callback response
+  function sendForm() {
     const variable = document.getElementById("variable").value;
     const value = document.getElementById("value").value;
     window.TagoIO.sendData([{
@@ -43,8 +44,9 @@
       console.log(response);
     });
   }
-  async function sendForm2()
-  {
+
+  // Send data to Tago without callback
+  async function sendFormWithoutCallback() {
     const variable = document.getElementById("variable2").value;
     const value = document.getElementById("value2").value;
     const response = await window.TagoIO.sendData([{

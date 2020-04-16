@@ -17,10 +17,12 @@
   <script src="../dist/customWidget.js"></script>
   <script>
     window.onload = function() {
+
       TagoIO.onStart(function(widget) {
         let name = document.getElementById('widget-name');
         name.textContent = widget.label;
       });
+
       TagoIO.onRealtime(function(data) {
         let value = document.getElementById("value");
         let var_name = document.getElementById("var-name");
@@ -29,6 +31,7 @@
         value.append(data.result[0].value);
         var_name.append(data.result[0].variable);
       });
+
     };
   </script>
 </body>
