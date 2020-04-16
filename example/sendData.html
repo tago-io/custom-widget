@@ -24,7 +24,7 @@
   body {
     height: 100%;
   }
-  .form{
+  .form, .form2{
     padding: 20px;
     margin: 10px;
     border: 1px solid black;
@@ -43,7 +43,7 @@
       console.log(response);
     });
   }
-  function sendForm2()
+  async function sendForm2()
   {
     const variable = document.getElementById("variable2").value;
     const value = document.getElementById("value2").value;
