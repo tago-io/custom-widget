@@ -9,9 +9,8 @@ import {
   ICallbackError,
   ITagoVariables,
   IEvent,
-} from './interfaces';
-import { enableAutofill } from './utils';
-
+} from "./interfaces";
+import { enableAutofill } from "./utils";
 
 declare global {
   interface Window {
@@ -26,14 +25,14 @@ declare global {
   let widgetVariables: Array<ITagoVariables>;
   const pool: Array<(data: IData | null, error?: IError) => void> = [];
 
-  function receiveMessage(event: IEvent): void  {
+  const receiveMessage = (event: IEvent): void => {
     const { data } = event;
     if (data) {
-      if(data.realtime && funcRealtime){
-        funcRealtime(data.realtime[0])
+      if (data.realtime && funcRealtime) {
+        funcRealtime(data.realtime[0]);
       }
 
-      if(data.widget) {
+      if (data.widget) {
         widgetVariables = data.widget.display.variables;
         funcStart(data.widget);
       }
@@ -43,23 +42,25 @@ declare global {
       }
 
       if (data.status === false && data.key) {
-        funcError(data);
+        if (funcError) {
+          funcError(data);
+        }
         pool[data.key](null, data);
       }
     }
-  }
+  };
 
-  function sendMessage(message: {}): void  {
+  const sendMessage = (message: {}): void => {
     window.parent.postMessage(message, "*");
-  }
+  };
 
-  window.TagoIO.onStart = (callback): void  => {
+  window.TagoIO.onStart = (callback): void => {
     funcStart = callback;
     sendMessage({ loaded: true });
     window.addEventListener("message", receiveMessage, false);
   };
 
-  window.TagoIO.onRealtime = (callback): void  => {
+  window.TagoIO.onRealtime = (callback): void => {
     funcRealtime = callback;
   };
 
@@ -77,8 +78,8 @@ declare global {
     }
 
     sendMessage({
-      variables: (options && options.autoFill) ? autoFillArray : variables,
-      key: uniqueKey
+      variables: options && options.autoFill ? autoFillArray : variables,
+      key: uniqueKey,
     });
 
     if (window.Promise && !callback) {

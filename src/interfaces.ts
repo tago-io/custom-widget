@@ -14,9 +14,7 @@ interface IRealtime {
     bucket?: string;
     origin?: string;
   };
-  result?: [
-    IVariable
-  ];
+  result?: [IVariable];
 }
 
 interface ICallbackRealtime {
@@ -89,7 +87,7 @@ interface ITagoIO {
   onError: (callback: ICallbackError) => void;
   onStart: (callback: ICallbackStart) => void;
   onRealtime: (callback: ICallbackRealtime) => void;
-  sendData: (variables: Array<IVariable>, options: IOptions, callback: ICallbackSendData) => Promise<IData> | void ;
+  sendData: (variables: Array<IVariable>, options: IOptions, callback: ICallbackSendData) => Promise<IData> | void;
 }
 
 interface IEventData {
