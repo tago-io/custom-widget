@@ -10,7 +10,14 @@
   <div class="form">
     <input type="text" id="variable">
     <input type="text" id="value">
+    <br>
     <button onclick="sendForm()">Enviar</button>
+  </div>
+  <div class="form2">
+    <input type="text" id="variable2">
+    <input type="text" id="value2">
+    <br>
+    <button onclick="sendForm2()">Enviar</button>
   </div>
 </body>
 <style>
@@ -35,6 +42,15 @@
     }], { autoFill: true }, function(response) {
       console.log(response);
     });
+  }
+  function sendForm2()
+  {
+    const variable = document.getElementById("variable2").value;
+    const value = document.getElementById("value2").value;
+    const response = await window.TagoIO.sendData([{
+      variable, value
+    }], { autoFill: true });
+    console.log(response);
   }
   window.onload = function(event) {
     TagoIO.onStart();
