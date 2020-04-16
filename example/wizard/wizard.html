@@ -163,7 +163,7 @@
       ]
       $('.buttonGroup').attr('style', 'display: none');
 
-      TagoIO.onSendData(variables, { autoFill: true }, (data) => {
+      TagoIO.sendData(variables, { autoFill: true }, (data) => {
         $('.result').append('<p style="text-align: center">Success</p>');
         $('.result').append('<button class="btn" onclick="resetForm()">Reset</button>');
       })

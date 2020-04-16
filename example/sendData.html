@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Widget</title>
+</head>
+<body>
+  <div class="form">
+    <input type="text" id="variable">
+    <input type="text" id="value">
+    <button onclick="sendForm()">Enviar</button>
+  </div>
+</body>
+<style>
+  body {
+    height: 100%;
+  }
+  .form{
+    padding: 20px;
+    margin: 10px;
+    border: 1px solid black;
+    display: flex;
+    flex-direction: column;
+  }
+</style>
+<script>
+  function sendForm()
+  {
+    const variable = document.getElementById("variable").value;
+    const value = document.getElementById("value").value;
+    TagoIO.sendData([{
+      variable, value
+    }], { autoFill: true }, function(response) {
+      console.log(response);
+    });
+  }
+  window.onload = function(event) {
+    TagoIO.start();
+  };
+</script>
+</html>
