@@ -29,14 +29,14 @@
   {
     const variable = document.getElementById("variable").value;
     const value = document.getElementById("value").value;
-    TagoIO.sendData([{
+    window.TagoIO.sendData([{
       variable, value
     }], { autoFill: true }, function(response) {
       console.log(response);
     });
   }
   window.onload = function(event) {
-    TagoIO.start();
+    TagoIO.onStart();
   };
 </script>
 </html>
