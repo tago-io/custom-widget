@@ -10,12 +10,13 @@
     <span id="widget-name"></span>
     <div id="variables">
       Variable: <span id="var-name"></span>
+      <br>
       Value: <span id="value"></span>
     </div>
   </div>
   <script src="../dist/customWidget.js"></script>
   <script>
-    window.onload(function() {
+    window.onload = function() {
       window.TagoIO.onStart(function(widget) {
         let name = document.getElementById('widget-name');
         name.textContent = widget.label;
@@ -28,7 +29,7 @@
         value.append(data.result[0].value);
         var_name.append(data.result[0].variable);
       });
-    });
+    };
   </script>
 </body>
 </html>
