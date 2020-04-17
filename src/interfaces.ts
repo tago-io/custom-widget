@@ -83,6 +83,19 @@ interface IOptions {
   autoFill: boolean;
 }
 
+interface IStartOptions {
+  header: {
+    /**
+     * Changes the position of the card header
+     */
+    absolute: boolean;
+    /**
+     * Changes the card header color
+     */
+    color: string;
+  };
+}
+
 interface ITagoIO {
   /**
    * @param callback function that runs when a TagoIO error arrives
@@ -91,7 +104,7 @@ interface ITagoIO {
   /**
    * @param callback function that loads the information from the widget
    */
-  onStart: (callback?: ICallbackStart) => void;
+  onStart: (options: IStartOptions, callback?: ICallbackStart) => void;
   /**
    * @param callback function that executes whenever a realtime data arrives
    */
@@ -122,6 +135,7 @@ interface IMessage {
   loaded?: boolean;
   variables?: IVariable[];
   key?: string;
+  options?: IStartOptions;
 }
 
 export {

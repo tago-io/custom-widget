@@ -73,11 +73,11 @@ const sendMessage = (message: IMessage): void => {
   window.parent.postMessage(message, "*");
 };
 
-window.TagoIO.onStart = (callback): void => {
+window.TagoIO.onStart = (options, callback): void => {
   if (callback) {
     funcStart = callback;
   }
-  sendMessage({ loaded: true });
+  sendMessage({ loaded: true, options });
   window.addEventListener("message", receiveMessage, false);
 };
 
