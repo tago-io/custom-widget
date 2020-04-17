@@ -3,8 +3,8 @@ showTab(currentTab); // Display the current tab
 
 function resetForm() {
   currentTab = 0;
-  $('.result').empty();
-  $('.buttonGroup').attr('style', 'display: block;overflow:auto;');
+  $(".result").empty();
+  $(".buttonGroup").attr("style", "display: block;overflow:auto;");
   showTab(currentTab);
 }
 
@@ -18,21 +18,20 @@ function showTab(n) {
   } else {
     document.getElementById("prevBtn").style.display = "inline";
   }
-  if (n == (x.length - 1)) {
+  if (n == x.length - 1) {
     document.getElementById("nextBtn").innerHTML = "Submit";
   } else {
     document.getElementById("nextBtn").innerHTML = "Next";
   }
   // ... and run a function that displays the correct step indicator:
-  fixStepIndicator(n)
+  fixStepIndicator(n);
 }
 
 function nextPrev(n) {
   // This function will figure out which tab to display
   var x = document.getElementsByClassName("tab");
   // Hide the current tab:
-  if (x[currentTab])
-    x[currentTab].style.display = "none";
+  if (x[currentTab]) x[currentTab].style.display = "none";
   // Increase or decrease the current tab by 1:
   currentTab = currentTab + n;
   // if you have reached the end of the form... :
@@ -46,7 +45,8 @@ function nextPrev(n) {
 
 function fixStepIndicator(n) {
   // This function removes the "active" class of all steps...
-  var i, x = document.getElementsByClassName("step");
+  var i,
+    x = document.getElementsByClassName("step");
   for (i = 0; i < x.length; i++) {
     x[i].className = x[i].className.replace(" active", "");
   }

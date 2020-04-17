@@ -18,7 +18,13 @@
   <script>
     window.onload = function() {
 
-      TagoIO.onStart(function(widget) {
+      TagoIO.onStart({ 
+        header: {
+          absolute: true,
+          color: '#000' 
+        } 
+      },
+      function(widget) {
         let name = document.getElementById('widget-name');
         name.textContent = widget.label;
       });
