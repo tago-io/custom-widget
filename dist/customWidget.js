@@ -579,11 +579,11 @@ var receiveMessage = function (event) {
 var sendMessage = function (message) {
     window.parent.postMessage(message, "*");
 };
-window.TagoIO.onStart = function (callback) {
+window.TagoIO.onStart = function (options, callback) {
     if (callback) {
         funcStart = callback;
     }
-    sendMessage({ loaded: true });
+    sendMessage({ loaded: true, options: options });
     window.addEventListener("message", receiveMessage, false);
 };
 window.TagoIO.onRealtime = function (callback) {
