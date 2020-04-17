@@ -77,7 +77,7 @@ window.TagoIO.onStart = (options, callback): void => {
   if (callback) {
     funcStart = callback;
   }
-  sendMessage({ loaded: true, options });
+  sendMessage({ loaded: true, ...options });
   window.addEventListener("message", receiveMessage, false);
 };
 
