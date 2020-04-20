@@ -23,7 +23,7 @@ import "@tago/custom-widget/dist/custom-widget.css"; // OPTIONAL
 ### Projects Examples
 
 [Boilerplate](https://github.com/tago-io/custom-widget-boilerplate)
-Boilerplate with basic usage of TagoIO Custom Widget.
+=== Boilerplate with basic usage of TagoIO Custom Widget.
 
 [Wizard Widget](https://github.com/tago-io/custom-widget-example-wizard)
-Wizard widget with 3 steps
+=== Wizard widget with 3 steps
