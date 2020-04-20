@@ -533,9 +533,9 @@ function enableAutofill(variables, widgetVariables) {
 }
 
 
-// CONCATENATED MODULE: ./src/customWidget.ts
-var customWidget_assign = (undefined && undefined.__assign) || function () {
-    customWidget_assign = Object.assign || function(t) {
+// CONCATENATED MODULE: ./src/custom-widget.ts
+var custom_widget_assign = (undefined && undefined.__assign) || function () {
+    custom_widget_assign = Object.assign || function(t) {
         for (var s, i = 1, n = arguments.length; i < n; i++) {
             s = arguments[i];
             for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
@@ -543,7 +543,7 @@ var customWidget_assign = (undefined && undefined.__assign) || function () {
         }
         return t;
     };
-    return customWidget_assign.apply(this, arguments);
+    return custom_widget_assign.apply(this, arguments);
 };
 
 
@@ -594,7 +594,7 @@ window.TagoIO.onStart = function (options, callback) {
     if (callback) {
         funcStart = callback;
     }
-    sendMessage(customWidget_assign({ loaded: true }, options));
+    sendMessage(custom_widget_assign({ loaded: true }, options));
     window.addEventListener("message", receiveMessage, false);
 };
 window.TagoIO.onRealtime = function (callback) {

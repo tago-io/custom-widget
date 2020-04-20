@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wizard example</title>
   <link href="./steps.css" rel="stylesheet" type="text/css" />
-  <script src="../../dist/customWidget.js"></script>
+  <script src="../../dist/custom-widget.js"></script>
 </head>
 <body>
   <div id="root">
     <form id="regForm" action="">
 
       <h1>Wizard example:</h1>
-      
+
       <!-- TAB 1 -->
       <div class="tab" id="#tab1">
 
@@ -27,7 +27,7 @@
         </div>
 
       </div>
-      
+
       <!-- TAB 2 -->
       <div class="tab" id="#tab2">
 
@@ -52,7 +52,7 @@
         </div>
 
       </div>
-      
+
       <!-- TAB 3 -->
       <div class="tab" id="#tab3">
 
@@ -73,21 +73,21 @@
 
       <!-- the sendData response will be placed here -->
       <div class="result" style="text-align: center;margin-bottom: 20px;"></div>
-      
+
       <div style="overflow:auto;" class="buttonGroup">
         <div style="float:right;">
           <button type="button" class="btn" id="prevBtn" onclick="nextPrev(-1)">Previous</button>
           <button type="button" class="btn" id="nextBtn" onclick="nextPrev(1)">Next</button>
         </div>
       </div>
-      
+
       <!-- Circles which indicates the steps of the form: -->
       <div style="text-align:center;margin-top:40px;">
         <span class="step"></span>
         <span class="step"></span>
         <span class="step"></span>
       </div>
-      
+
     </form>
   </div>
 

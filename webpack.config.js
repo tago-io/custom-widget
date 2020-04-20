@@ -2,7 +2,7 @@ const path = require("path");
 const MINIMIZE = !!process.env.MINIMIZE;
 
 module.exports = {
-  entry: "./src/customWidget.ts",
+  entry: "./src/custom-widget.ts",
   mode: "production",
   stats: "verbose",
   module: {
@@ -22,7 +22,7 @@ module.exports = {
   },
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: MINIMIZE ? "customWidget.min.js" : "customWidget.js",
+    filename: MINIMIZE ? "custom-widget.min.js" : "custom-widget.js",
   },
   resolve: {
     extensions: [".js", ".ts"],
