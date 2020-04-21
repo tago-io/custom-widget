@@ -25,5 +25,9 @@ import "@tago/custom-widget/dist/custom-widget.css"; // OPTIONAL
 [Boilerplate](https://github.com/tago-io/custom-widget-boilerplate)
 === Boilerplate with basic usage of TagoIO Custom Widget.
 
+[SendData Widget](https://github.com/tago-io/custom-widget-example-send-data)
+=== Basic send data widget
+
 [Wizard Widget](https://github.com/tago-io/custom-widget-example-wizard)
 === Wizard widget with 3 steps
+
