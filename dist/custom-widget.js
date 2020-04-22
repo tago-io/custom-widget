@@ -584,6 +584,7 @@ var receiveMessage = function (event) {
         }
     }
 };
+window.addEventListener("message", receiveMessage, false);
 /**
  * Send message to parent component
  * @param message message to send
@@ -591,12 +592,11 @@ var receiveMessage = function (event) {
 var sendMessage = function (message) {
     window.parent.postMessage(message, "*");
 };
-window.TagoIO.onStart = function (options, callback) {
-    if (callback) {
-        funcStart = callback;
-    }
+window.TagoIO.ready = function (options) {
     sendMessage(custom_widget_assign({ loaded: true }, options));
-    window.addEventListener("message", receiveMessage, false);
+};
+window.TagoIO.onStart = function (callback) {
+    funcStart = callback;
 };
 window.TagoIO.onRealtime = function (callback) {
     funcRealtime = callback;
