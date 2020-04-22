@@ -66,6 +66,7 @@ const receiveMessage = (event: IEvent): void => {
     }
   }
 };
+window.addEventListener("message", receiveMessage, false);
 
 /**
  * Send message to parent component
@@ -75,12 +76,14 @@ const sendMessage = (message: IMessage): void => {
   window.parent.postMessage(message, "*");
 };
 
-window.TagoIO.onStart = (options, callback): void => {
+window.TagoIO.ready = (options) => {
+  sendMessage({ loaded: true, ...options });
+};
+
+window.TagoIO.onStart = (callback): void => {
   if (callback) {
     funcStart = callback;
   }
-  sendMessage({ loaded: true, ...options });
-  window.addEventListener("message", receiveMessage, false);
 };
 
 window.TagoIO.onRealtime = (callback): void => {
