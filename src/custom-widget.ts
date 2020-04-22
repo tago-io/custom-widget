@@ -81,9 +81,7 @@ window.TagoIO.ready = (options) => {
 };
 
 window.TagoIO.onStart = (callback): void => {
-  if (callback) {
-    funcStart = callback;
-  }
+  funcStart = callback;
 };
 
 window.TagoIO.onRealtime = (callback): void => {
