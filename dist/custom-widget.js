@@ -548,6 +548,7 @@ var custom_widget_assign = (undefined && undefined.__assign) || function () {
 
 
 window.TagoIO = {};
+window.TagoIO.autoFill = true;
 var funcRealtime;
 var funcStart;
 var funcError;
@@ -603,16 +604,25 @@ window.TagoIO.onRealtime = function (callback) {
 window.TagoIO.onError = function (callback) {
     funcError = callback;
 };
-window.TagoIO.sendData = function (variables, options, callback) {
+window.TagoIO.sendData = function (variables, callback) {
     // generates a unique key to run the callback or promisse
     var uniqueKey = shortid["generate"]();
     pool[uniqueKey] = callback || null;
+    var vars = Array.isArray(variables) ? variables : [variables];
     var autoFillArray = [];
-    if (options && options.autoFill && widgetVariables) {
-        autoFillArray = enableAutofill(variables, widgetVariables);
+    if (window.TagoIO.autoFill) {
+        console.info("AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables passed to the widget, this option can be disabled with window.TagoIO.autoFill = false.");
+        autoFillArray = enableAutofill(vars, widgetVariables);
+    }
+    else {
+        vars.map(function (vari) {
+            if (!vari.bucket || !vari.origin) {
+                console.error("AutoFill is disabled, the bucket and origin id must be passed.");
+            }
+        });
     }
     sendMessage({
-        variables: options && options.autoFill ? autoFillArray : variables,
+        variables: window.TagoIO.autoFill ? autoFillArray : vars,
         key: uniqueKey,
     });
     // If a callback is not passed it returns the promise
