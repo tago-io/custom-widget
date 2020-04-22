@@ -19,7 +19,7 @@ interface IVariable {
    */
   bucket?: string;
   /**
-   * The device that contains this variable. 
+   * The device that contains this variable.
    */
   origin?: string;
   /**
@@ -63,7 +63,7 @@ interface IError {
    */
   message: string;
   /**
-   * 
+   *
    */
   result: [IVariable];
   /**
@@ -180,25 +180,25 @@ interface IStartOptions {
 interface ITagoIO {
   /**
    * This is an error callback listener that will get fired whenever an API error related to this widget occurs.
-   * 
+   *
    * For example if you send the wrong data structure to `sendData`.
-   * 
-   * 
+   *
+   *
    * @param callback function that runs when a TagoIO error arrives
    */
   onError: (callback: ICallbackError) => void;
   /**
    * Starts the widget's flow. This should be the first function you call as soon as you're ready
    * to begin displaying your custom widget.
-   * 
-   * 
+   *
+   *
    * @param callback function that loads the information from the widget
    */
   onStart: (options: IStartOptions, callback?: ICallbackStart) => void;
   /**
    * Realtime data listener. This will get fired whenever this widget receives realtime data from TagoIO.
-   * 
-   * 
+   *
+   *
    * @param callback function that executes whenever realtime data arrives
    */
   onRealtime: (callback: ICallbackRealtime) => void;
@@ -206,14 +206,15 @@ interface ITagoIO {
    * Sends data to TagoIO's servers, this is the only way to send variables to your bucket.
    *
    * This function supports both a promise-based return or a callback return.
-   * 
-   * 
-   * @param variables This is the data 
+   *
+   *
+   * @param variables This is the data
    * @param options Data sending options
    * @param callback Callback function
    * @return Promise or null
    */
   sendData: (variables: Array<IVariable>, options?: IOptions, callback?: ICallbackSendData) => Promise<IData> | void;
+  autoFill: boolean;
 }
 
 interface IEventData {
