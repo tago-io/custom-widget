@@ -194,7 +194,7 @@ interface ITagoIO {
    *
    * @param callback function that loads the information from the widget
    */
-  onStart: (callback?: ICallbackStart) => void;
+  onStart: (callback: ICallbackStart) => void;
   /**
    * Realtime data listener. This will get fired whenever this widget receives realtime data from TagoIO.
    *
@@ -209,11 +209,10 @@ interface ITagoIO {
    *
    *
    * @param variables This is the data
-   * @param options Data sending options
    * @param callback Callback function
    * @return Promise or null
    */
-  sendData: (variables: Array<IVariable>, options?: IOptions, callback?: ICallbackSendData) => Promise<IData> | void;
+  sendData: (variables: Array<IVariable>, callback?: ICallbackSendData) => Promise<IData> | void;
   /**
    * enables and disables auto fill of variables
    */
@@ -226,7 +225,7 @@ interface ITagoIO {
 
 interface IEventData {
   realtime?: IRealtime;
-  widget?: IWidget | undefined;
+  widget?: IWidget;
   status?: boolean;
   key?: string;
   message?: string;
