@@ -24,6 +24,8 @@ declare global {
 
 window.TagoIO = {} as ITagoIO;
 
+window.TagoIO.autoFill = true;
+
 let funcRealtime: ICallbackRealtime;
 let funcStart: ICallbackStart;
 let funcError: ICallbackError;
@@ -89,18 +91,28 @@ window.TagoIO.onError = (callback): void => {
   funcError = callback;
 };
 
-window.TagoIO.sendData = (variables, options, callback): Promise<IData> | void => {
+window.TagoIO.sendData = (variables, callback): Promise<IData> | void => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
+  let vars = Array.isArray(variables) ? variables : [variables];
 
   let autoFillArray: Array<IVariable> = [];
-  if (options && options.autoFill && widgetVariables) {
-    autoFillArray = enableAutofill(variables, widgetVariables);
+  if (window.TagoIO.autoFill) {
+    console.info(
+      "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables passed to the widget, this option can be disabled with window.TagoIO.autoFill = false."
+    );
+    autoFillArray = enableAutofill(vars, widgetVariables);
+  } else {
+    vars.map((vari) => {
+      if (!vari.bucket || !vari.origin) {
+        console.error("AutoFill is disabled, the bucket and origin id must be passed.");
+      }
+    });
   }
 
   sendMessage({
-    variables: options && options.autoFill ? autoFillArray : variables,
+    variables: window.TagoIO.autoFill ? autoFillArray : vars,
     key: uniqueKey,
   });
 
