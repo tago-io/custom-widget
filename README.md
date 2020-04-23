@@ -1,5 +1,5 @@
 # TagoIO Toolkit to build your own widgets
-> Create your amazing widgets and run it inside TagoIO admin.
+Create your amazing widgets and run it inside TagoIO admin.
 
 ### How to install?
 
@@ -14,7 +14,7 @@ Also, you can add it on your project to use with webpack
 $ npm install @tago/custom-widget --save
 ```
 
-> On top of your entry component
+On top of your entry component
 ```javascript
 import "@tago/custom-widget";
 import "@tago/custom-widget/dist/custom-widget.css"; // OPTIONAL
@@ -22,12 +22,9 @@ import "@tago/custom-widget/dist/custom-widget.css"; // OPTIONAL
 
 ### Projects Examples
 
-[Boilerplate](https://github.com/tago-io/custom-widget-boilerplate)
-=== Boilerplate with basic usage of TagoIO Custom Widget.
+- [Boilerplate](https://github.com/tago-io/custom-widget-boilerplate): Basic boilerplate project using preact, it shows the basic usage of the TagoIO Custom Widget.
 
-[SendData Widget](https://github.com/tago-io/custom-widget-example-send-data)
-=== Basic send data widget
+- [SendData Widget](https://github.com/tago-io/custom-widget-example-send-data): Simple example demonstrating how to send data from your Custom Widget to TagoIO.
 
-[Wizard Widget](https://github.com/tago-io/custom-widget-example-wizard)
-=== Wizard widget with 3 steps
+- [Wizard Widget](https://github.com/tago-io/custom-widget-example-wizard): Demo showing a wizard built using TagoIO's Custom Widget.
 
