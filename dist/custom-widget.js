@@ -578,7 +578,9 @@ var receiveMessage = function (event) {
     var data = event.data;
     if (data) {
         if (data.realtime && funcRealtime) {
-            funcRealtime(data.realtime[0]);
+            data.realtime.map(function (realData) {
+                funcRealtime(realData);
+            });
         }
         if (data.widget) {
             widgetVariables = data.widget.display.variables;

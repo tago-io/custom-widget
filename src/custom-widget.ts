@@ -10,6 +10,7 @@ import {
   ITagoVariables,
   IEvent,
   IMessage,
+  IRealtime,
 } from "./interfaces";
 import { enableAutofill } from "./utils";
 
@@ -48,7 +49,9 @@ const receiveMessage = (event: IEvent): void => {
   const { data } = event;
   if (data) {
     if (data.realtime && funcRealtime) {
-      funcRealtime(data.realtime[0]);
+      data.realtime.map((realData: IRealtime) => {
+        funcRealtime(realData);
+      });
     }
 
     if (data.widget) {

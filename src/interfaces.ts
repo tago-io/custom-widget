@@ -221,7 +221,7 @@ interface ITagoIO {
  * .data property of the message received from the iframe.
  */
 interface IEventData {
-  realtime?: IRealtime;
+  realtime?: IRealtime[];
   widget?: IWidget;
   status?: boolean;
   key?: string;
@@ -259,4 +259,5 @@ export {
   ICallbackError,
   IEvent,
   IMessage,
+  IRealtime,
 };
