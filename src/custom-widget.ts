@@ -24,6 +24,13 @@ declare global {
 
 window.TagoIO = {} as ITagoIO;
 
+/**
+ * When window.TagoIO.autoFill = true, you don't have to pass a `bucket` and `origin` key inside of your
+ * objects in `sendData`. TagoIO will auto fill those fields automatically for you.
+ *
+ * If you want to set a specific bucket and device, you must set `window.TagoIO.autoFill` = false, and then pass
+ * a `bucket` and `origin` key to the objects in the `sendData` function.
+ */
 window.TagoIO.autoFill = true;
 
 let funcRealtime: ICallbackRealtime;

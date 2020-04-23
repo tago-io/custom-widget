@@ -151,23 +151,17 @@ interface ICallbackSendData {
 }
 
 /**
- * Options to be used when sending data.
- */
-interface IOptions {
-  autoFill: boolean;
-}
-
-/**
  * Options to be used when starting the widget.
  */
 interface IStartOptions {
   header: {
     /**
-     * Changes the position of the card header
+     * Sets the widget's header position. If this is true, then the widget's header will not
+     * occupy space in the widget. The default is false, meaning the header occupies space in the widget.
      */
     absolute: boolean;
     /**
-     * Changes the card header color
+     * Changes the widget's header color.
      */
     color: string;
   };
@@ -188,8 +182,7 @@ interface ITagoIO {
    */
   onError: (callback: ICallbackError) => void;
   /**
-   * Starts the widget's flow. This should be the first function you call as soon as you're ready
-   * to begin displaying your custom widget.
+   * Callback when the widget is started. In the parameter you will receive an object with the widget's configuration.
    *
    *
    * @param callback function that loads the information from the widget
@@ -218,7 +211,8 @@ interface ITagoIO {
    */
   autoFill: boolean;
   /**
-   * starts communication with Tago
+   * This function signals to TagoIO that you're ready so start receiving and sending data to TagoIO, and thus,
+   * this should be the first function you call as soon as you're ready to begin communication with TagoIO.
    */
   ready: (options: IStartOptions) => void;
 }
@@ -245,7 +239,6 @@ interface IMessage {
 
 export {
   ITagoIO,
-  IOptions,
   ICallbackSendData,
   ICallbackStart,
   IWidget,
