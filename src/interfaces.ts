@@ -153,17 +153,17 @@ interface ICallbackSendData {
 /**
  * Options to be used when starting the widget.
  */
-interface IStartOptions {
-  header: {
+interface IReadyOptions {
+  header?: {
     /**
      * Sets the widget's header position. If this is true, then the widget's header will not
      * occupy space in the widget. The default is false, meaning the header occupies space in the widget.
      */
-    absolute: boolean;
+    absolute?: boolean;
     /**
      * Changes the widget's header color.
      */
-    color: string;
+    color?: string;
   };
 }
 
@@ -214,9 +214,12 @@ interface ITagoIO {
    * This function signals to TagoIO that you're ready so start receiving and sending data to TagoIO, and thus,
    * this should be the first function you call as soon as you're ready to begin communication with TagoIO.
    */
-  ready: (options: IStartOptions) => void;
+  ready: (options: IReadyOptions) => void;
 }
 
+/**
+ * .data property of the message received from the iframe.
+ */
 interface IEventData {
   realtime?: IRealtime;
   widget?: IWidget;
@@ -226,15 +229,21 @@ interface IEventData {
   result?: [IVariable | IResultData];
 }
 
+/**
+ * Message received from the IFrame.
+ */
 interface IEvent {
   data: IEventData;
 }
 
+/**
+ * Message sent to the IFrame.
+ */
 interface IMessage {
   loaded?: boolean;
   variables?: IVariable[];
   key?: string;
-  options?: IStartOptions;
+  options?: IReadyOptions;
 }
 
 export {

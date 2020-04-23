@@ -110,6 +110,8 @@ window.TagoIO.sendData = (variables, callback): Promise<IData> | void => {
     console.info(
       "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
+
+    // converts the variables to autofill
     autoFillArray = enableAutofill(vars, widgetVariables);
   } else {
     vars.map((vari) => {
