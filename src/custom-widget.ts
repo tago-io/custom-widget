@@ -52,7 +52,7 @@ const receiveMessage = (event: IEvent): void => {
       }
     }
 
-    if (data.status && data.key && pool[data.key]) {
+    if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
       pool[data.key](data);
     }
 
@@ -101,13 +101,13 @@ window.TagoIO.sendData = (variables, callback): Promise<IData> | void => {
   let autoFillArray: Array<IVariable> = [];
   if (window.TagoIO.autoFill) {
     console.info(
-      "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables passed to the widget, this option can be disabled with window.TagoIO.autoFill = false."
+      "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
     autoFillArray = enableAutofill(vars, widgetVariables);
   } else {
     vars.map((vari) => {
       if (!vari.bucket || !vari.origin) {
-        console.error("AutoFill is disabled, the bucket and origin id must be passed.");
+        console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
       }
     });
   }
