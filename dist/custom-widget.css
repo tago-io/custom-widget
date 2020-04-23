@@ -37,7 +37,8 @@ select {
   -webkit-appearance: none;
 }
 input,
-select {
+select,
+textarea {
   outline-style: none;
   box-shadow: none;
   width: 100%;
@@ -54,17 +55,20 @@ select {
   background-color: hsl(0, 0%, 99%);
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   z-index: 1;
   position: relative;
   border-color: hsl(208, 56%, 46%);
 }
 input::-moz-focus-inner,
-select::-moz-focus-inner {
+select::-moz-focus-inner,
+textarea::-moz-focus-inner {
   border: 0;
 }
 input:disabled,
-select:disabled {
+select:disabled,
+textarea:disabled {
   pointer-events: none;
   border-color: transparent;
 }

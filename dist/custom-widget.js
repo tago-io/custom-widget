@@ -515,10 +515,18 @@ var __assign = (undefined && undefined.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 /**
- * Increase the bucket and origin in the variables that will be sent to TagoIO
- * @param variables variables to be sent to TagoIO
- * @param widgetVariables widget variables loaded when starting
- * @return the autofill of the variables found
+ * Applies the Auto fill logic.
+ *
+ * When window.TagoIO.autoFill = true, you don't have to pass a `bucket` and `origin` key inside of your
+ * objects in `sendData`. TagoIO will auto fill those fields automatically for you.
+ *
+ * If you want to set a specific bucket and device, you must set `window.TagoIO.autoFill` = false, and then pass
+ * a `bucket` and `origin` key to the objects in the `sendData` function.
+ *
+ *
+ * @param variables Variables to be sent
+ * @param widgetVariables Widget variables loaded when starting
+ * @return The autofill of the variables found
  */
 function enableAutofill(variables, widgetVariables) {
     var autoFillArray = [];
@@ -548,6 +556,13 @@ var custom_widget_assign = (undefined && undefined.__assign) || function () {
 
 
 window.TagoIO = {};
+/**
+ * When window.TagoIO.autoFill = true, you don't have to pass a `bucket` and `origin` key inside of your
+ * objects in `sendData`. TagoIO will auto fill those fields automatically for you.
+ *
+ * If you want to set a specific bucket and device, you must set `window.TagoIO.autoFill` = false, and then pass
+ * a `bucket` and `origin` key to the objects in the `sendData` function.
+ */
 window.TagoIO.autoFill = true;
 var funcRealtime;
 var funcStart;
@@ -571,7 +586,7 @@ var receiveMessage = function (event) {
                 funcStart(data.widget);
             }
         }
-        if (data.status && data.key && pool[data.key]) {
+        if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
             pool[data.key](data);
         }
         if (data.status === false) {
@@ -611,13 +626,14 @@ window.TagoIO.sendData = function (variables, callback) {
     var vars = Array.isArray(variables) ? variables : [variables];
     var autoFillArray = [];
     if (window.TagoIO.autoFill) {
-        console.info("AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables passed to the widget, this option can be disabled with window.TagoIO.autoFill = false.");
+        console.info("AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false.");
+        // converts the variables to autofill
         autoFillArray = enableAutofill(vars, widgetVariables);
     }
     else {
         vars.map(function (vari) {
             if (!vari.bucket || !vari.origin) {
-                console.error("AutoFill is disabled, the bucket and origin id must be passed.");
+                console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
             }
         });
     }
