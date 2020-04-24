@@ -33,9 +33,6 @@ a {
   width: 8px;
   height: 8px;
 }
-select {
-  -webkit-appearance: none;
-}
 input,
 select,
 textarea {

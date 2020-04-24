@@ -49,9 +49,7 @@ const receiveMessage = (event: IEvent): void => {
   const { data } = event;
   if (data) {
     if (data.realtime && funcRealtime) {
-      data.realtime.map((realData: IRealtime) => {
-        funcRealtime(realData);
-      });
+      funcRealtime(data.realtime);
     }
 
     if (data.widget) {

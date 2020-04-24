@@ -46,7 +46,7 @@ interface IRealtime {
  * in the `onRealtime` function.
  */
 interface ICallbackRealtime {
-  (data: IRealtime): void;
+  (data: IRealtime[]): void;
 }
 
 /**
