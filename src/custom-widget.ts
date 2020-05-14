@@ -137,3 +137,65 @@ window.TagoIO.sendData = (variables, callback): Promise<IData> | void => {
     });
   }
 };
+
+window.TagoIO.editData = (variables, callback): Promise<IData> | void => {
+  // generates a unique key to run the callback or promisse
+  const uniqueKey: string = shortid.generate();
+  pool[uniqueKey] = callback || null;
+  let vars = Array.isArray(variables) ? variables : [variables];
+
+  let autoFillArray: Array<IVariable> = [];
+  if (window.TagoIO.autoFill) {
+    console.info(
+      "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
+    );
+
+    // converts the variables to autofill
+    autoFillArray = enableAutofill(vars, widgetVariables);
+  } else {
+    vars.map((vari) => {
+      if (!vari.bucket || !vari.origin) {
+        console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
+      }
+    });
+  }
+
+  sendMessage({
+    variables: window.TagoIO.autoFill ? autoFillArray : vars,
+    status: "edit",
+    key: uniqueKey,
+  });
+
+  // If a callback is not passed it returns the promise
+  if (window.Promise && !callback) {
+    return new Promise((resolve: (data: IData) => void, reject: (data: IError) => void) => {
+      pool[uniqueKey] = (success: IData, error: IError): void => {
+        if (error) reject(error);
+        resolve(success);
+      };
+    });
+  }
+};
+
+window.TagoIO.deleteData = (variables, callback): Promise<IData> | void => {
+  // generates a unique key to run the callback or promisse
+  const uniqueKey: string = shortid.generate();
+  pool[uniqueKey] = callback || null;
+  let vars = Array.isArray(variables) ? variables : [variables];
+
+  sendMessage({
+    variables: vars,
+    status: "delete",
+    key: uniqueKey,
+  });
+
+  // If a callback is not passed it returns the promise
+  if (window.Promise && !callback) {
+    return new Promise((resolve: (data: IData) => void, reject: (data: IError) => void) => {
+      pool[uniqueKey] = (success: IData, error: IError): void => {
+        if (error) reject(error);
+        resolve(success);
+      };
+    });
+  }
+};

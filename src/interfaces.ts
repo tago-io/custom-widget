@@ -207,6 +207,28 @@ interface ITagoIO {
    */
   sendData: (variables: Array<IVariable>, callback?: ICallbackSendData) => Promise<IData> | void;
   /**
+   * Sends data to TagoIO's servers, this is the only way to delete variables.
+   *
+   * This function supports both a promise-based return or a callback return.
+   *
+   *
+   * @param variables This is the data
+   * @param callback Callback function
+   * @return Promise or null
+   */
+  deleteData: (variables: Array<IVariable>, callback?: ICallbackSendData) => Promise<IData> | void;
+  /**
+   * Sends data to TagoIO's servers, this is the only way to edit variables to your bucket.
+   *
+   * This function supports both a promise-based return or a callback return.
+   *
+   *
+   * @param variables This is the data
+   * @param callback Callback function
+   * @return Promise or null
+   */
+  editData: (variables: Array<IVariable>, callback?: ICallbackSendData) => Promise<IData> | void;
+  /**
    * enables and disables auto fill of variables
    */
   autoFill: boolean;
@@ -244,6 +266,7 @@ interface IMessage {
   variables?: IVariable[];
   key?: string;
   options?: IReadyOptions;
+  status?: string;
 }
 
 export {
