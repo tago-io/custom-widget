@@ -672,7 +672,7 @@ window.TagoIO.editData = function (variables, callback) {
     }
     sendMessage({
         variables: window.TagoIO.autoFill ? autoFillArray : vars,
-        status: "edit",
+        method: "edit",
         key: uniqueKey,
     });
     // If a callback is not passed it returns the promise
@@ -693,7 +693,7 @@ window.TagoIO.deleteData = function (variables, callback) {
     var vars = Array.isArray(variables) ? variables : [variables];
     sendMessage({
         variables: vars,
-        status: "delete",
+        method: "delete",
         key: uniqueKey,
     });
     // If a callback is not passed it returns the promise
