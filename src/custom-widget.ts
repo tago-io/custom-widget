@@ -161,7 +161,7 @@ window.TagoIO.editData = (variables, callback): Promise<IData> | void => {
 
   sendMessage({
     variables: window.TagoIO.autoFill ? autoFillArray : vars,
-    status: "edit",
+    method: "edit",
     key: uniqueKey,
   });
 
@@ -184,7 +184,7 @@ window.TagoIO.deleteData = (variables, callback): Promise<IData> | void => {
 
   sendMessage({
     variables: vars,
-    status: "delete",
+    method: "delete",
     key: uniqueKey,
   });
 
