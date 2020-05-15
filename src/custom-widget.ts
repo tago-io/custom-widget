@@ -10,7 +10,6 @@ import {
   ITagoVariables,
   IEvent,
   IMessage,
-  IRealtime,
 } from "./interfaces";
 import { enableAutofill } from "./utils";
 
