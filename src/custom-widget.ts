@@ -47,16 +47,16 @@ const pool: Array<(data: IData | null, error?: IError) => void> = [];
 const receiveMessage = (event: IEvent): void => {
   const { data } = event;
   if (data) {
-    if (data.realtime && funcRealtime) {
-      funcRealtime(data.realtime);
-    }
-
     if (data.widget) {
       widgetVariables = data.widget.display.variables;
 
       if (funcStart) {
         funcStart(data.widget);
       }
+    }
+
+    if (data.realtime && funcRealtime) {
+      funcRealtime(data.realtime);
     }
 
     if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
