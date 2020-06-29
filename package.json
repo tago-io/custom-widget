@@ -1,7 +1,7 @@
 {
   "name": "@tago/custom-widget",
   "description": "TagoIO Toolkit to build your own widgets",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "main": "./dist/custom-widget.js",
   "author": "Tago LLC",
   "license": "Apache-2.0",
