@@ -577,14 +577,14 @@ var pool = [];
 var receiveMessage = function (event) {
     var data = event.data;
     if (data) {
-        if (data.realtime && funcRealtime) {
-            funcRealtime(data.realtime);
-        }
         if (data.widget) {
             widgetVariables = data.widget.display.variables;
             if (funcStart) {
                 funcStart(data.widget);
             }
+        }
+        if (data.realtime && funcRealtime) {
+            funcRealtime(data.realtime);
         }
         if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
             pool[data.key](data);
