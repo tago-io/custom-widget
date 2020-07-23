@@ -11,13 +11,13 @@ The simplest way to use is to add the <script> direct on your project.
 
 Also, you can add it on your project to use with webpack
 ```bash
-$ npm install @tago/custom-widget --save
+$ npm install @tago-io/custom-widget --save
 ```
 
 On top of your entry component
 ```javascript
-import "@tago/custom-widget";
-import "@tago/custom-widget/dist/custom-widget.css"; // OPTIONAL
+import "@tago-io/custom-widget";
+import "@tago-io/custom-widget/dist/custom-widget.css"; // OPTIONAL
 ```
 
 ### Projects Examples
@@ -27,4 +27,3 @@ import "@tago/custom-widget/dist/custom-widget.css"; // OPTIONAL
 - [SendData Widget](https://github.com/tago-io/custom-widget-example-send-data): Simple example demonstrating how to send data from your Custom Widget to TagoIO.
 
 - [Wizard Widget](https://github.com/tago-io/custom-widget-example-wizard): Demo showing a wizard built using TagoIO's Custom Widget.
-
