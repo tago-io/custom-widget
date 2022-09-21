@@ -1,28 +1,16 @@
 import * as shortid from "shortid";
-import {
-  ITagoIO,
-  ICallbackStart,
-  IError,
-  IData,
-  IVariable,
-  ICallbackRealtime,
-  ICallbackError,
-  ITagoVariables,
-  IEvent,
-  IMessage,
-} from "./interfaces";
-import { enableAutofill } from "./utils";
+import { autoFillRecords } from "./utils";
 
 declare global {
   interface Window {
     /**
      * Send and receive data from the widget and variables from TagoIO
      */
-    TagoIO: ITagoIO;
+    TagoIO: TTagoIO;
   }
 }
 
-window.TagoIO = {} as ITagoIO;
+window.TagoIO = {} as TTagoIO;
 
 /**
  * When window.TagoIO.autoFill = true, you don't have to pass a `bucket` and `origin` key inside of your
@@ -33,20 +21,25 @@ window.TagoIO = {} as ITagoIO;
  */
 window.TagoIO.autoFill = true;
 
-let funcRealtime: ICallbackRealtime;
-let funcStart: ICallbackStart;
-let funcError: ICallbackError;
-// array with widget variables to enable autoFill
-let widgetVariables: Array<ITagoVariables>;
-const pool: Array<(data: IData | null, error?: IError) => void> = [];
+let funcRealtime: TRealtimeCallback;
+let funcStart: TStartCallback;
+let funcError: TErrorCallback;
+let funcSyncUserInfo: TUserInformationCallback;
+let widgetVariables: TWidgetVariable[];
+
+const pool: Array<(data: TData | null, error?: TError) => void> = [];
 
 /**
  * eventListener function that receives messages sent by the parent component
  * @param event event coming from the parent component
  */
-const receiveMessage = (event: IEvent): void => {
+const receiveMessage = (event: TEvent): void => {
   const { data } = event;
   if (data) {
+    if (data.userInformation) {
+      funcSyncUserInfo(data.userInformation);
+    }
+
     if (data.widget) {
       widgetVariables = data.widget.display.variables;
 
@@ -79,40 +72,44 @@ window.addEventListener("message", receiveMessage, false);
  * Send message to parent component
  * @param message message to send
  */
-const sendMessage = (message: IMessage): void => {
+const sendMessage = (message: TMessage): void => {
   window.parent.postMessage(message, "*");
 };
 
-window.TagoIO.ready = (options) => {
+const onReady = (options: TReadyOptions) => {
   sendMessage({ loaded: true, ...options });
 };
 
-window.TagoIO.onStart = (callback): void => {
+const onStart = (callback: TStartCallback): void => {
   funcStart = callback;
 };
 
-window.TagoIO.onRealtime = (callback): void => {
+const onRealtime = (callback: TRealtimeCallback): void => {
   funcRealtime = callback;
 };
 
-window.TagoIO.onError = (callback): void => {
+const onError = (callback: TErrorCallback): void => {
   funcError = callback;
 };
 
-window.TagoIO.sendData = (variables, callback): Promise<IData> | void => {
+const onSyncUserInformation = (callback: TUserInformationCallback) => {
+  funcSyncUserInfo = callback;
+};
+
+const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
-  let vars = Array.isArray(variables) ? variables : [variables];
+  const vars = Array.isArray(variables) ? variables : [variables];
 
-  let autoFillArray: Array<IVariable> = [];
+  let autoFillArray: TDataRecord[] = [];
   if (window.TagoIO.autoFill) {
     console.info(
       "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
 
     // converts the variables to autofill
-    autoFillArray = enableAutofill(vars, widgetVariables);
+    autoFillArray = autoFillRecords(vars, widgetVariables);
   } else {
     vars.map((vari) => {
       if (!vari.bucket || !vari.origin) {
@@ -128,8 +125,8 @@ window.TagoIO.sendData = (variables, callback): Promise<IData> | void => {
 
   // If a callback is not passed it returns the promise
   if (window.Promise && !callback) {
-    return new Promise((resolve: (data: IData) => void, reject: (data: IError) => void) => {
-      pool[uniqueKey] = (success: IData, error: IError): void => {
+    return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
+      pool[uniqueKey] = (success: TData, error: TError): void => {
         if (error) reject(error);
         resolve(success);
       };
@@ -137,20 +134,20 @@ window.TagoIO.sendData = (variables, callback): Promise<IData> | void => {
   }
 };
 
-window.TagoIO.editData = (variables, callback): Promise<IData> | void => {
+const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
-  let vars = Array.isArray(variables) ? variables : [variables];
+  const vars = Array.isArray(variables) ? variables : [variables];
 
-  let autoFillArray: Array<IVariable> = [];
+  let autoFillArray: TDataRecord[] = [];
   if (window.TagoIO.autoFill) {
     console.info(
       "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
 
     // converts the variables to autofill
-    autoFillArray = enableAutofill(vars, widgetVariables);
+    autoFillArray = autoFillRecords(vars, widgetVariables);
   } else {
     vars.map((vari) => {
       if (!vari.bucket || !vari.origin) {
@@ -167,8 +164,8 @@ window.TagoIO.editData = (variables, callback): Promise<IData> | void => {
 
   // If a callback is not passed it returns the promise
   if (window.Promise && !callback) {
-    return new Promise((resolve: (data: IData) => void, reject: (data: IError) => void) => {
-      pool[uniqueKey] = (success: IData, error: IError): void => {
+    return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
+      pool[uniqueKey] = (success: TData, error: TError): void => {
         if (error) reject(error);
         resolve(success);
       };
@@ -176,11 +173,11 @@ window.TagoIO.editData = (variables, callback): Promise<IData> | void => {
   }
 };
 
-window.TagoIO.deleteData = (variables, callback): Promise<IData> | void => {
+const deleteData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
-  let vars = Array.isArray(variables) ? variables : [variables];
+  const vars = Array.isArray(variables) ? variables : [variables];
 
   sendMessage({
     variables: vars,
@@ -190,11 +187,53 @@ window.TagoIO.deleteData = (variables, callback): Promise<IData> | void => {
 
   // If a callback is not passed it returns the promise
   if (window.Promise && !callback) {
-    return new Promise((resolve: (data: IData) => void, reject: (data: IError) => void) => {
-      pool[uniqueKey] = (success: IData, error: IError): void => {
+    return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
+      pool[uniqueKey] = (success: TData, error: TError): void => {
         if (error) reject(error);
         resolve(success);
       };
     });
   }
 };
+
+const editResourceData = (
+  variables: TDataRecord | TDataRecord[],
+  callback?: TSendDataCallback
+): Promise<TData> | void => {
+  const uniqueKey: string = shortid.generate();
+  pool[uniqueKey] = callback || null;
+  const variablesToEdit = Array.isArray(variables) ? variables : [variables];
+
+  sendMessage({
+    variables: variablesToEdit,
+    method: "edit-resource",
+    key: uniqueKey,
+  });
+
+  if (window.Promise && !callback) {
+    return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
+      pool[uniqueKey] = (success: TData, error: TError): void => {
+        if (error) reject(error);
+        resolve(success);
+      };
+    });
+  }
+};
+
+const openLink: TTagoIO["openLink"] = (url) => {
+  sendMessage({ method: "open-link", url });
+};
+
+// Bind functions to the `window.TagoIO` object for access in the Custom Widget code.
+window.TagoIO.ready = onReady;
+window.TagoIO.onStart = onStart;
+window.TagoIO.onRealtime = onRealtime;
+window.TagoIO.onError = onError;
+window.TagoIO.onSyncUserInformation = onSyncUserInformation;
+window.TagoIO.sendData = sendData;
+window.TagoIO.editData = editData;
+window.TagoIO.deleteData = deleteData;
+window.TagoIO.editResourceData = editResourceData;
+window.TagoIO.openLink = openLink;
+
+export { receiveMessage, sendMessage, onStart, onRealtime, onError, sendData, editData, deleteData, editResourceData };

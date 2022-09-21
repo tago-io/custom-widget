@@ -1,34 +1,43 @@
-import { ITagoVariables, IVariable } from "./interfaces";
-
 /**
- * Applies the Auto fill logic.
+ * Apply the auto-fill logic for the data records to make sure they have the necessary data before submission.
  *
- * When window.TagoIO.autoFill = true, you don't have to pass a `bucket` and `origin` key inside of your
- * objects in `sendData`. TagoIO will auto fill those fields automatically for you.
+ * When `window.TagoIO.autoFill = true`, there's no need to pass `bucket` and `device` (formerly `origin`) in the
+ * data record objects to be submitted. TagoIO will auto-fill those fields automatically.
  *
- * If you want to set a specific bucket and device, you must set `window.TagoIO.autoFill` = false, and then pass
- * a `bucket` and `origin` key to the objects in the `sendData` function.
+ * To have fine-grained control over the target `device` and `bucket`, set `window.TagoIO.autoFill = false` and
+ * make sure the data records being submitted have at least `device` (for Immutable and Mutable devices).
  *
+ * This function also makes sure that, when auto-fill is enabled, only records matching the variables on the
+ * widget itself are submitted.
  *
- * @param variables Variables to be sent
- * @param widgetVariables Widget variables loaded when starting
- * @return The autofill of the variables found
+ * @param dataRecords Data records to be submitted.
+ * @param widgetVariables Widget's variables.
+ *
+ * @return Array of data records for submission according to the auto-fill logic.
  */
-function enableAutofill(variables: Array<IVariable>, widgetVariables: Array<ITagoVariables>): Array<IVariable> {
-  const autoFillArray: Array<IVariable> = [];
-  variables.map((userVar: IVariable) => {
-    widgetVariables.map((widgetVar: ITagoVariables) => {
-      if (userVar.variable == widgetVar.variable) {
-        autoFillArray.push({
-          bucket: widgetVar.origin.bucket || "",
-          origin: widgetVar.origin.id || "",
-          ...userVar,
+function autoFillRecords(
+  dataRecords: TDataRecord[] | undefined,
+  widgetVariables: TWidgetVariable[] | undefined
+): TDataRecord[] {
+  const autoFilledArray: TDataRecord[] = [];
+
+  if (!dataRecords || !widgetVariables) {
+    return [];
+  }
+
+  dataRecords.forEach((dataRecord) => {
+    widgetVariables.forEach((widgetVar) => {
+      if (dataRecord.variable === widgetVar.variable) {
+        autoFilledArray.push({
+          device: widgetVar.origin.id,
+          ...(widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket }),
+          ...dataRecord,
         });
       }
     });
   });
 
-  return autoFillArray;
+  return autoFilledArray;
 }
 
-export { enableAutofill };
+export { autoFillRecords };
