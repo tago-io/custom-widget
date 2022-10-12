@@ -8,13 +8,6 @@ describe("autoFillRecords", () => {
     },
   ];
 
-  const mockWidgetVariablesNoMatch: TWidgetVariable[] = [
-    {
-      variable: "unmatched_variable",
-      origin: { id: "unmatchedDeviceId", bucket: "unmatchedBucketId" },
-    },
-  ];
-
   const mockDataRecordsNoBucket: TDataRecord[] = [
     {
       id: "dataRecord1",
@@ -112,24 +105,24 @@ describe("autoFillRecords", () => {
   it("auto-fills missing bucket IDs for records with matching widget variables, not overwriting the records' device ID", () => {
     const autoFilled = autoFillRecords(mockDataRecordsNoBucket, mockWidgetVariables);
     expect(autoFilled).toStrictEqual([
-      { ...mockDataRecordsNoBucket[0], bucket: "bucketId" },
-      { ...mockDataRecordsNoBucket[2], bucket: "bucketId" },
+      { ...mockDataRecordsNoBucket[0], origin: "deviceId", bucket: "bucketId" },
+      { ...mockDataRecordsNoBucket[2], origin: "deviceId", bucket: "bucketId" },
     ]);
   });
 
   it("auto-fills missing device IDs for records with matching widget variables, not overwriting the records' bucket ID", () => {
     const autoFilled = autoFillRecords(mockDataRecordsNoDevice, mockWidgetVariables);
     expect(autoFilled).toStrictEqual([
-      { ...mockDataRecordsNoDevice[0], device: "deviceId" },
-      { ...mockDataRecordsNoDevice[2], device: "deviceId" },
+      { ...mockDataRecordsNoDevice[0], device: "deviceId", origin: "deviceId" },
+      { ...mockDataRecordsNoDevice[2], device: "deviceId", origin: "deviceId" },
     ]);
   });
 
   it("auto-fills missing bucket and device IDs for records with matching widget variables", () => {
     const autoFilled = autoFillRecords(mockDataRecordsNoSource, mockWidgetVariables);
     expect(autoFilled).toStrictEqual([
-      { ...mockDataRecordsNoSource[0], device: "deviceId", bucket: "bucketId" },
-      { ...mockDataRecordsNoSource[2], device: "deviceId", bucket: "bucketId" },
+      { ...mockDataRecordsNoSource[0], device: "deviceId", origin: "deviceId", bucket: "bucketId" },
+      { ...mockDataRecordsNoSource[2], device: "deviceId", origin: "deviceId", bucket: "bucketId" },
     ]);
   });
 });

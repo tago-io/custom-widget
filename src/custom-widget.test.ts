@@ -189,7 +189,7 @@ describe("sendData", () => {
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
     const mockMessageAutoFilled = {
       key: key,
-      variables: [{ ...mockDataToSend, device: "widgetDeviceId", bucket: "widgetBucketId" }],
+      variables: [{ ...mockDataToSend, device: "widgetDeviceId", origin: "widgetDeviceId", bucket: "widgetBucketId" }],
     };
     const mockReceivedMessage = { data: { status: true, key: key } };
     const result = sendData(mockDataToSend);
@@ -206,7 +206,7 @@ describe("sendData", () => {
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
     const mockMessageAutoFilled = {
       key: key,
-      variables: [{ ...mockDataToSend, device: "widgetDeviceId", bucket: "widgetBucketId" }],
+      variables: [{ ...mockDataToSend, device: "widgetDeviceId", origin: "widgetDeviceId", bucket: "widgetBucketId" }],
     };
     const mockReceivedMessage = { data: { status: true, key: key } };
     const result = sendData(mockDataToSend, mockSendDataCallback);

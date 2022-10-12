@@ -36,7 +36,7 @@ const pool: Array<(data: TData | null, error?: TError) => void> = [];
 const receiveMessage = (event: TEvent): void => {
   const { data } = event;
   if (data) {
-    if (data.userInformation) {
+    if (data.userInformation && funcSyncUserInfo) {
       funcSyncUserInfo(data.userInformation);
     }
 

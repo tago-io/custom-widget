@@ -30,6 +30,7 @@ function autoFillRecords(
       if (dataRecord.variable === widgetVar.variable) {
         autoFilledArray.push({
           device: widgetVar.origin.id,
+          origin: widgetVar.origin.id,
           ...(widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket }),
           ...dataRecord,
         });

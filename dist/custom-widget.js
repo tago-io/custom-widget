@@ -491,7 +491,7 @@ function autoFillRecords(dataRecords, widgetVariables) {
     dataRecords.forEach(function (dataRecord) {
         widgetVariables.forEach(function (widgetVar) {
             if (dataRecord.variable === widgetVar.variable) {
-                autoFilledArray.push(__assign(__assign({ device: widgetVar.origin.id }, (widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket })), dataRecord));
+                autoFilledArray.push(__assign(__assign({ device: widgetVar.origin.id, origin: widgetVar.origin.id }, (widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket })), dataRecord));
             }
         });
     });
@@ -535,7 +535,7 @@ var pool = [];
 var receiveMessage = function (event) {
     var data = event.data;
     if (data) {
-        if (data.userInformation) {
+        if (data.userInformation && funcSyncUserInfo) {
             funcSyncUserInfo(data.userInformation);
         }
         if (data.widget) {
