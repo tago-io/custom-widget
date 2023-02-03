@@ -693,6 +693,9 @@ var editResourceData = function (variables, callback) {
 var openLink = function (url) {
     sendMessage({ method: "open-link", url: url });
 };
+var closeModal = function () {
+    sendMessage({ method: "close-modal" });
+};
 // Bind functions to the `window.TagoIO` object for access in the Custom Widget code.
 window.TagoIO.ready = onReady;
 window.TagoIO.onStart = onStart;
@@ -704,6 +707,7 @@ window.TagoIO.editData = editData;
 window.TagoIO.deleteData = deleteData;
 window.TagoIO.editResourceData = editResourceData;
 window.TagoIO.openLink = openLink;
+window.TagoIO.closeModal = closeModal;
 
 
 })();

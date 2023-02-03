@@ -1,6 +1,6 @@
 import * as shortid from "shortid";
 
-import { receiveMessage, onStart, onRealtime, onError, sendMessage, sendData } from "./custom-widget";
+import { receiveMessage, onStart, onRealtime, onError, sendMessage, sendData, closeModal } from "./custom-widget";
 
 // Mock the `shortid` library, but the `generate` method used in `spyOn` later to specify a key value per test.
 vi.mock("shortid", () => ({
@@ -214,5 +214,27 @@ describe("sendData", () => {
     expect(mockPostMessage).toHaveBeenCalledWith(mockMessageAutoFilled, "*");
     expect(result).toBeUndefined();
     expect(mockSendDataCallback).toHaveBeenCalledWith(mockReceivedMessage.data);
+  });
+});
+
+describe("closeModal", () => {
+  const mockPostMessage = vi.fn();
+  const originalWindowParent = window.parent;
+
+  beforeAll(() => {
+    window.parent.postMessage = mockPostMessage;
+  });
+
+  beforeEach(() => {
+    mockPostMessage.mockClear();
+  });
+
+  afterAll(() => {
+    window.parent = originalWindowParent;
+  });
+
+  it("sends the close modal message", () => {
+    closeModal();
+    expect(mockPostMessage).toHaveBeenCalledWith({ method: "close-modal" }, "*");
   });
 });
