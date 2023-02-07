@@ -224,6 +224,10 @@ const openLink: TTagoIO["openLink"] = (url) => {
   sendMessage({ method: "open-link", url });
 };
 
+const closeModal: TTagoIO["closeModal"] = () => {
+  sendMessage({ method: "close-modal" });
+};
+
 // Bind functions to the `window.TagoIO` object for access in the Custom Widget code.
 window.TagoIO.ready = onReady;
 window.TagoIO.onStart = onStart;
@@ -235,5 +239,17 @@ window.TagoIO.editData = editData;
 window.TagoIO.deleteData = deleteData;
 window.TagoIO.editResourceData = editResourceData;
 window.TagoIO.openLink = openLink;
+window.TagoIO.closeModal = closeModal;
 
-export { receiveMessage, sendMessage, onStart, onRealtime, onError, sendData, editData, deleteData, editResourceData };
+export {
+  receiveMessage,
+  sendMessage,
+  onStart,
+  onRealtime,
+  onError,
+  sendData,
+  editData,
+  deleteData,
+  editResourceData,
+  closeModal,
+};

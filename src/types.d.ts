@@ -1,7 +1,7 @@
 /**
  * Type of the messaging methods according to the operation used.
  */
-type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link";
+type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal";
 
 /**
  * Type for the user information when passed to the Custom Widget.
@@ -411,4 +411,8 @@ type TTagoIO = {
    * @param url URL to open.
    */
   openLink: (url: string) => void;
+  /**
+   * Function to close the modal containing the Custom Widget if the widget is used in a header button.
+   */
+  closeModal: () => void;
 };
