@@ -385,6 +385,8 @@ type TTagoIO = {
    * @param callback Callback function to be called when receiving user information data.
    */
   onSyncUserInformation: (callback: TUserInformationCallback) => void;
+  // TODO
+  onReceiveFormulaResults: (callback: TReceiveFormulaResultsCallback) => void;
   /**
    * Send device variables' data to the TagoIO API.
    *

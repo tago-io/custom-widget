@@ -587,6 +587,9 @@ var onError = function (callback) {
 var onSyncUserInformation = function (callback) {
     funcSyncUserInfo = callback;
 };
+var onReceiveFormulaResults = function (callback) {
+    funcReceiveFormulaResults = callback;
+};
 var sendData = function (variables, callback) {
     // generates a unique key to run the callback or promisse
     var uniqueKey = shortid.generate();
@@ -709,6 +712,7 @@ window.TagoIO.onStart = onStart;
 window.TagoIO.onRealtime = onRealtime;
 window.TagoIO.onError = onError;
 window.TagoIO.onSyncUserInformation = onSyncUserInformation;
+window.TagoIO.onReceiveFormulaResults = onReceiveFormulaResults;
 window.TagoIO.sendData = sendData;
 window.TagoIO.editData = editData;
 window.TagoIO.deleteData = deleteData;

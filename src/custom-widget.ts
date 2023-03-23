@@ -101,6 +101,10 @@ const onSyncUserInformation = (callback: TUserInformationCallback) => {
   funcSyncUserInfo = callback;
 };
 
+const onReceiveFormulaResults = (callback: TReceiveFormulaResultsCallback) => {
+  funcReceiveFormulaResults = callback;
+};
+
 const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
@@ -243,6 +247,7 @@ window.TagoIO.onStart = onStart;
 window.TagoIO.onRealtime = onRealtime;
 window.TagoIO.onError = onError;
 window.TagoIO.onSyncUserInformation = onSyncUserInformation;
+window.TagoIO.onReceiveFormulaResults = onReceiveFormulaResults;
 window.TagoIO.sendData = sendData;
 window.TagoIO.editData = editData;
 window.TagoIO.deleteData = deleteData;
