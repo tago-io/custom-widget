@@ -1,7 +1,7 @@
 /**
  * Type of the messaging methods according to the operation used.
  */
-type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal";
+type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal" | "apply-formula";
 
 /**
  * Type for the user information when passed to the Custom Widget.
@@ -10,6 +10,22 @@ type TUserInformation = {
   token: string | null;
   language: string | null;
   runURL: string | null;
+};
+
+/**
+ * Type for the results of the formulas being applied.
+ */
+type TFormulaResults = {
+  /**
+   * Unique identifier set by the Custom Widget when applying formulas to different datasets.
+   *
+   * Since postMessage is asynchronous, the Custom Widget can apply formulas to different datasets at the same time.
+   */
+  id: string;
+  /**
+   * Data with the formula applied.
+   */
+  data: TDataRecord[];
 };
 
 /**
@@ -46,6 +62,10 @@ type TEventData = {
    * Results for the event's API call.
    */
   result?: TDataRecord[] | TResultData[];
+  /**
+   * Results from applying formula sent to the IFrame.
+   */
+  formulaResults?: TFormulaResults;
 };
 
 /**
@@ -60,6 +80,14 @@ type TMessage = {
    * Data records for the API operation.
    */
   variables?: TDataRecord[];
+  /**
+   * Options for the apply formula method.
+   */
+  formulaOptions?: {
+    id: string;
+    settings: TFormulaSettings;
+    data: TDataRecord[];
+  };
   /**
    * Key for the IFrame element.
    */
@@ -234,6 +262,13 @@ type TSendDataCallback = (data: TData, error?: TError) => void;
 type TUserInformationCallback = (userInformation: TUserInformation) => void;
 
 /**
+ * Type for the callback function that handles receiving realtime data from TagoIO.
+ *
+ * @param data Data received from the realtime endpoint.
+ */
+type TReceiveFormulaResultsCallback = (formulaResults: TFormulaResults) => void;
+
+/**
  * Type for the messages received from the IFrame.
  */
 type TEvent = {
@@ -293,6 +328,10 @@ type TDataRecord = {
    */
   device?: string;
   /**
+   * Unit for the data record.
+   */
+  unit?: string;
+  /**
    * Device ID for the data record's origin device.
    *
    * @deprecated Only relevant for Legacy devices.
@@ -308,6 +347,9 @@ type TDataRecord = {
    */
   time: string;
 };
+
+// TODO
+type TFormulaSettings = any;
 
 /**
  * Type for the bridge interface between the Custom Widget's code and TagoIO's APIs.
@@ -415,4 +457,11 @@ type TTagoIO = {
    * Function to close the modal containing the Custom Widget if the widget is used in a header button.
    */
   closeModal: () => void;
+  /**
+   * Function to apply a formula to the data records.
+   *
+   * @param data Data records to apply the formula
+   * @param formulaSettings Formula settings.
+   */
+  applyFormula: (data: TDataRecord[], formulaSettings: TFormulaSettings, options: { id: string }) => void;
 };

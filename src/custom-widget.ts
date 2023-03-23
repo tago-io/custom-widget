@@ -25,6 +25,7 @@ let funcRealtime: TRealtimeCallback;
 let funcStart: TStartCallback;
 let funcError: TErrorCallback;
 let funcSyncUserInfo: TUserInformationCallback;
+let funcReceiveFormulaResults: TReceiveFormulaResultsCallback;
 let widgetVariables: TWidgetVariable[];
 
 const pool: Array<(data: TData | null, error?: TError) => void> = [];
@@ -63,6 +64,10 @@ const receiveMessage = (event: TEvent): void => {
       if (data.key && pool[data.key]) {
         pool[data.key](null, data);
       }
+    }
+
+    if (data.formulaResults && funcReceiveFormulaResults) {
+      funcReceiveFormulaResults(data.formulaResults);
     }
   }
 };
@@ -228,6 +233,10 @@ const closeModal: TTagoIO["closeModal"] = () => {
   sendMessage({ method: "close-modal" });
 };
 
+const applyFormula: TTagoIO["applyFormula"] = (data, settings, options) => {
+  sendMessage({ method: "apply-formula", formulaOptions: { data, settings, id: options.id } });
+};
+
 // Bind functions to the `window.TagoIO` object for access in the Custom Widget code.
 window.TagoIO.ready = onReady;
 window.TagoIO.onStart = onStart;
@@ -240,6 +249,7 @@ window.TagoIO.deleteData = deleteData;
 window.TagoIO.editResourceData = editResourceData;
 window.TagoIO.openLink = openLink;
 window.TagoIO.closeModal = closeModal;
+window.TagoIO.applyFormula = applyFormula;
 
 export {
   receiveMessage,

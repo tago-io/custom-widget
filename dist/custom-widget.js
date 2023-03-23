@@ -450,7 +450,7 @@ var __webpack_exports__ = {};
 (() => {
 "use strict";
 
-// UNUSED EXPORTS: deleteData, editData, editResourceData, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage
+// UNUSED EXPORTS: closeModal, deleteData, editData, editResourceData, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage
 
 // EXTERNAL MODULE: ./node_modules/shortid/index.js
 var shortid = __webpack_require__(670);
@@ -526,6 +526,7 @@ var funcRealtime;
 var funcStart;
 var funcError;
 var funcSyncUserInfo;
+var funcReceiveFormulaResults;
 var widgetVariables;
 var pool = [];
 /**
@@ -557,6 +558,9 @@ var receiveMessage = function (event) {
             if (data.key && pool[data.key]) {
                 pool[data.key](null, data);
             }
+        }
+        if (data.formulaResults && funcReceiveFormulaResults) {
+            funcReceiveFormulaResults(data.formulaResults);
         }
     }
 };
@@ -696,6 +700,9 @@ var openLink = function (url) {
 var closeModal = function () {
     sendMessage({ method: "close-modal" });
 };
+var applyFormula = function (data, settings, options) {
+    sendMessage({ method: "apply-formula", formulaOptions: { data: data, settings: settings, id: options.id } });
+};
 // Bind functions to the `window.TagoIO` object for access in the Custom Widget code.
 window.TagoIO.ready = onReady;
 window.TagoIO.onStart = onStart;
@@ -708,6 +715,7 @@ window.TagoIO.deleteData = deleteData;
 window.TagoIO.editResourceData = editResourceData;
 window.TagoIO.openLink = openLink;
 window.TagoIO.closeModal = closeModal;
+window.TagoIO.applyFormula = applyFormula;
 
 
 })();
