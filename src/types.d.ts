@@ -13,6 +13,93 @@ type TUserInformation = {
 };
 
 /**
+ * Type for the configuration of a Blueprint device on the dashboard.
+ */
+type TDashboardBlueprintDevice = {
+  /**
+   * Name of the Blueprint device.
+   */
+  name: string;
+  /**
+   * Unique ID for the Blueprint device.
+   */
+  id: string;
+  /**
+   * Placeholder for the Blueprint device selector.
+   */
+  placeholder?: string;
+  /**
+   * Label for the Blueprint device.
+   */
+  label?: string;
+  /**
+   * Whether to use a tag value for the label.
+   */
+  use_item_label_tag?: boolean;
+  /**
+   * Tag key to replace as the label.
+   */
+  tag_to_replace?: string;
+  /**
+   * Conditions for the Blueprint device to match its devices.
+   */
+  conditions: Array<{ key: string; value: string }>;
+  /**
+   * Whether to hide the selector when the list is empty.
+   */
+  hide_when_empty?: boolean;
+};
+
+/**
+ * Type for the device information.
+ */
+type TDevice = {
+  /**
+   * Device ID.
+   */
+  id: string;
+  /**
+   * Name of the device.
+   */
+  name: string;
+  /**
+   * Device tags.
+   */
+  tags?: Array<{ key: string; value: string }>;
+};
+
+/**
+ * Type for a single Blueprint device information.
+ *
+ * `device` will be `null` when the Blueprint device has no device selected.
+ */
+type TDashboardSelectedBlueprintDevice = { name: string; device: TDevice | null };
+
+/**
+ * Type for the Blueprint devices in a dashboard and the selected devices for each of them, indexed
+ * by the Blueprint device's ID.
+ *
+ * `device` will be `null` for Blueprint devices that have no device selected or available.
+ *
+ * Value (for the key/value pair) will be `null` when the Dashboard has not yet loaded the selection.
+ */
+type TDashboardSelectedBlueprintDevices = Record<string, TDashboardSelectedBlueprintDevice | null>;
+
+/**
+ * Type for the Blueprint devices to be synchronized and sent to the Custom Widget.
+ */
+type TBlueprintDevicesSyncData = {
+  /**
+   * Currently selected Blueprint devices in the dashboard.
+   */
+  selected: TDashboardSelectedBlueprintDevices;
+  /**
+   * Blueprint device settings from the dashboard.
+   */
+  settings: TDashboardBlueprintDevice[];
+};
+
+/**
  * Type for the event data received from the IFrame.
  */
 type TEventData = {
@@ -42,6 +129,12 @@ type TEventData = {
    * Useful for setting up functionalities such as the Dictionary inside the Custom Widget.
    */
   userInformation?: TUserInformation;
+  /**
+   * Blueprint devices synchronization data.
+   *
+   * Useful for setting up functionalities such as direct requests to the API.
+   */
+  blueprintDevices?: TBlueprintDevicesSyncData;
   /**
    * Results for the event's API call.
    */
@@ -234,6 +327,11 @@ type TSendDataCallback = (data: TData, error?: TError) => void;
 type TUserInformationCallback = (userInformation: TUserInformation) => void;
 
 /**
+ * Type for the callback function to handle syncing the Blueprint devices with the Custom Widget.
+ */
+type TSyncBlueprintDevicesCallback = (blueprintDevices: TBlueprintDevicesSyncData) => void;
+
+/**
  * Type for the messages received from the IFrame.
  */
 type TEvent = {
@@ -343,6 +441,12 @@ type TTagoIO = {
    * @param callback Callback function to be called when receiving user information data.
    */
   onSyncUserInformation: (callback: TUserInformationCallback) => void;
+  /**
+   * Callback function that fires when initially rendering and whenever Blueprint devices are changed.
+   *
+   * @param callback Callback function to be called when receiving Blueprint devices synchronization data.
+   */
+  onSyncBlueprintDevices: (callback: TSyncBlueprintDevicesCallback) => void;
   /**
    * Send device variables' data to the TagoIO API.
    *
