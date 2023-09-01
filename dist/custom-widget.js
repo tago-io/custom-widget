@@ -450,7 +450,7 @@ var __webpack_exports__ = {};
 (() => {
 "use strict";
 
-// UNUSED EXPORTS: deleteData, editData, editResourceData, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage
+// UNUSED EXPORTS: closeModal, deleteData, editData, editResourceData, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage
 
 // EXTERNAL MODULE: ./node_modules/shortid/index.js
 var shortid = __webpack_require__(670);
@@ -526,6 +526,7 @@ var funcRealtime;
 var funcStart;
 var funcError;
 var funcSyncUserInfo;
+var funcSyncBlueprintDevices;
 var widgetVariables;
 var pool = [];
 /**
@@ -537,6 +538,9 @@ var receiveMessage = function (event) {
     if (data) {
         if (data.userInformation && funcSyncUserInfo) {
             funcSyncUserInfo(data.userInformation);
+        }
+        if (data.blueprintDevices && funcSyncBlueprintDevices) {
+            funcSyncBlueprintDevices(data.blueprintDevices);
         }
         if (data.widget) {
             widgetVariables = data.widget.display.variables;
@@ -582,6 +586,9 @@ var onError = function (callback) {
 };
 var onSyncUserInformation = function (callback) {
     funcSyncUserInfo = callback;
+};
+var onSyncBlueprintDevices = function (callback) {
+    funcSyncBlueprintDevices = callback;
 };
 var sendData = function (variables, callback) {
     // generates a unique key to run the callback or promisse
@@ -702,6 +709,7 @@ window.TagoIO.onStart = onStart;
 window.TagoIO.onRealtime = onRealtime;
 window.TagoIO.onError = onError;
 window.TagoIO.onSyncUserInformation = onSyncUserInformation;
+window.TagoIO.onSyncBlueprintDevices = onSyncBlueprintDevices;
 window.TagoIO.sendData = sendData;
 window.TagoIO.editData = editData;
 window.TagoIO.deleteData = deleteData;

@@ -25,6 +25,7 @@ let funcRealtime: TRealtimeCallback;
 let funcStart: TStartCallback;
 let funcError: TErrorCallback;
 let funcSyncUserInfo: TUserInformationCallback;
+let funcSyncBlueprintDevices: TSyncBlueprintDevicesCallback;
 let widgetVariables: TWidgetVariable[];
 
 const pool: Array<(data: TData | null, error?: TError) => void> = [];
@@ -38,6 +39,10 @@ const receiveMessage = (event: TEvent): void => {
   if (data) {
     if (data.userInformation && funcSyncUserInfo) {
       funcSyncUserInfo(data.userInformation);
+    }
+
+    if (data.blueprintDevices && funcSyncBlueprintDevices) {
+      funcSyncBlueprintDevices(data.blueprintDevices);
     }
 
     if (data.widget) {
@@ -94,6 +99,10 @@ const onError = (callback: TErrorCallback): void => {
 
 const onSyncUserInformation = (callback: TUserInformationCallback) => {
   funcSyncUserInfo = callback;
+};
+
+const onSyncBlueprintDevices = (callback: TSyncBlueprintDevicesCallback) => {
+  funcSyncBlueprintDevices = callback;
 };
 
 const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
@@ -234,6 +243,7 @@ window.TagoIO.onStart = onStart;
 window.TagoIO.onRealtime = onRealtime;
 window.TagoIO.onError = onError;
 window.TagoIO.onSyncUserInformation = onSyncUserInformation;
+window.TagoIO.onSyncBlueprintDevices = onSyncBlueprintDevices;
 window.TagoIO.sendData = sendData;
 window.TagoIO.editData = editData;
 window.TagoIO.deleteData = deleteData;
