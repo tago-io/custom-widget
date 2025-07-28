@@ -1,0 +1,461 @@
+/**
+ * Read Data Example
+ *
+ * This example demonstrates how to receive and display real-time data from
+ * TagoIO devices using the Custom Widget SDK. It shows how to handle incoming
+ * data streams and update the UI dynamically.
+ *
+ * Features demonstrated:
+ * - Receiving real-time data with onRealtime callback
+ * - Processing and displaying data from multiple variables
+ * - Handling data updates and UI refresh
+ * - Working with different data types and formats
+ *
+ * Usage: Include this script in an HTML file with the TagoIO Custom Widget SDK
+ */
+
+let realtimeData = [];
+let widgetVariables = [];
+
+// HTML structure and styles - Set up first
+document.body.innerHTML = `
+    <div class="widget-container">
+        <h2>Real-time Data Reader</h2>
+        <p>This widget displays real-time data from your configured TagoIO variables.</p>
+        
+        <div id="error-message"></div>
+        
+        <div id="widget-info" class="info-section">
+            <p>Loading widget information...</p>
+        </div>
+        
+        <div id="data-status" class="status-indicator">
+            <span class="status-dot waiting"></span>
+            <span>Waiting for data...</span>
+        </div>
+        
+        <div id="variables-grid" class="variables-grid">
+            <!-- Variables will be populated here -->
+        </div>
+        
+        <div id="realtime-log" class="realtime-log">
+            <h4>Recent Data Updates</h4>
+            <div id="log-entries">
+                <p class="no-data">No data received yet</p>
+            </div>
+            <button onclick="clearLog()" class="clear-btn">Clear Log</button>
+        </div>
+    </div>
+    
+    <style>
+        .widget-container {
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .info-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background-color: #e3f2fd;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-dot.waiting {
+            background-color: #ff9800;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.receiving {
+            background-color: #4caf50;
+            animation: pulse 1s infinite;
+        }
+        
+        .status-dot.error {
+            background-color: #f44336;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .variables-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .variable-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: border-color 0.3s;
+        }
+        
+        .variable-card.updated {
+            border-color: #4caf50;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+        
+        .variable-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .variable-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196f3;
+            margin-bottom: 5px;
+        }
+        
+        .variable-unit {
+            color: #666;
+            font-size: 14px;
+            margin-left: 5px;
+        }
+        
+        .variable-meta {
+            font-size: 12px;
+            color: #888;
+            margin-top: 10px;
+        }
+        
+        .variable-time {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .no-data {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+        
+        .realtime-log {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .realtime-log h4 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        
+        #log-entries {
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .log-entry {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .log-entry.new {
+            background-color: #e8f5e8;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { background-color: #4caf50; }
+            to { background-color: #e8f5e8; }
+        }
+        
+        .clear-btn {
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .clear-btn:hover {
+            background-color: #f57c00;
+        }
+        
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #c62828;
+            margin-bottom: 15px;
+        }
+    </style>
+`;
+
+// Now set up the widget functionality after DOM is ready
+document.addEventListener("DOMContentLoaded", function () {
+  /**
+   * Handle widget startup
+   */
+  window.TagoIO.onStart(function (widget) {
+    console.log("Read Data Widget started");
+    widgetVariables = widget.display.variables;
+
+    // Display widget information
+    document.getElementById("widget-info").innerHTML = `
+            <h4>Widget Configuration</h4>
+            <p><strong>Widget ID:</strong> ${widget.id}</p>
+            <p><strong>Variables Count:</strong> ${widget.display.variables.length}</p>
+            <p><strong>Dashboard:</strong> ${widget.dashboard}</p>
+        `;
+
+    // Setup variable cards
+    setupVariableCards(widget.display.variables);
+
+    updateStatus("Waiting for real-time data...", "waiting");
+  });
+
+  /**
+   * Handle real-time data updates
+   */
+  window.TagoIO.onRealtime(function (data) {
+    console.log("Real-time data received:", data);
+
+    updateStatus("Receiving data...", "receiving");
+
+    // Process each data group
+    data.forEach(function (dataGroup) {
+      if (dataGroup.result && Array.isArray(dataGroup.result)) {
+        dataGroup.result.forEach(function (dataPoint) {
+          processDataPoint(dataPoint);
+          addToLog(dataPoint);
+        });
+      }
+    });
+
+    // Reset status after processing
+    setTimeout(() => {
+      updateStatus("Ready - monitoring for updates", "receiving");
+    }, 1000);
+  });
+
+  /**
+   * Handle errors
+   */
+  window.TagoIO.onError(function (error) {
+    console.error("Read data error:", error);
+    showError("Error receiving data: " + error.message);
+    updateStatus("Error occurred", "error");
+  });
+
+  /**
+   * Initialize the widget
+   */
+  window.TagoIO.ready({
+    header: {
+      color: "#2196F3",
+    },
+  });
+});
+
+/**
+ * Setup variable cards in the grid
+ * @param {Array} variables - Widget variables
+ */
+function setupVariableCards(variables) {
+  const grid = document.getElementById("variables-grid");
+  if (!grid) return;
+
+  grid.innerHTML = "";
+
+  if (variables.length === 0) {
+    grid.innerHTML = '<p class="no-data">No variables configured for this widget</p>';
+    return;
+  }
+
+  variables.forEach(function (variable) {
+    const card = document.createElement("div");
+    card.className = "variable-card";
+    card.id = "card-" + variable.variable;
+
+    card.innerHTML = `
+            <div class="variable-name">${variable.variable}</div>
+            <div class="variable-value" id="value-${variable.variable}">--</div>
+            <div class="variable-meta">
+                <div>Device: ${variable.origin.id}</div>
+                <div class="variable-time" id="time-${variable.variable}">No data yet</div>
+            </div>
+        `;
+
+    grid.appendChild(card);
+  });
+}
+
+/**
+ * Process a single data point and update the UI
+ * @param {Object} dataPoint - Data point from real-time feed
+ */
+function processDataPoint(dataPoint) {
+  const valueElement = document.getElementById("value-" + dataPoint.variable);
+  const timeElement = document.getElementById("time-" + dataPoint.variable);
+  const cardElement = document.getElementById("card-" + dataPoint.variable);
+
+  if (valueElement && timeElement && cardElement) {
+    // Update value with unit if available
+    let displayValue = dataPoint.value;
+    if (dataPoint.unit) {
+      displayValue += '<span class="variable-unit">' + dataPoint.unit + "</span>";
+    }
+    valueElement.innerHTML = displayValue;
+
+    // Update timestamp
+    const timeStr = new Date(dataPoint.time).toLocaleString();
+    timeElement.textContent = "Updated: " + timeStr;
+
+    // Add visual feedback
+    cardElement.classList.add("updated");
+    setTimeout(() => {
+      cardElement.classList.remove("updated");
+    }, 2000);
+
+    // Store in realtime data array
+    realtimeData.push({
+      ...dataPoint,
+      receivedAt: new Date(),
+    });
+
+    // Keep only last 100 data points
+    if (realtimeData.length > 100) {
+      realtimeData = realtimeData.slice(-100);
+    }
+  }
+}
+
+/**
+ * Add data point to the log
+ * @param {Object} dataPoint - Data point to log
+ */
+function addToLog(dataPoint) {
+  const logEntries = document.getElementById("log-entries");
+  if (!logEntries) return;
+
+  // Remove "no data" message if it exists
+  const noDataMsg = logEntries.querySelector(".no-data");
+  if (noDataMsg) {
+    noDataMsg.remove();
+  }
+
+  const entry = document.createElement("div");
+  entry.className = "log-entry new";
+
+  const timestamp = new Date().toLocaleTimeString();
+  const value = dataPoint.value;
+  const unit = dataPoint.unit ? " " + dataPoint.unit : "";
+
+  entry.innerHTML = `
+        <strong>[${timestamp}]</strong> 
+        ${dataPoint.variable}: ${value}${unit}
+        ${dataPoint.group ? " (Group: " + dataPoint.group + ")" : ""}
+    `;
+
+  // Add to top of log
+  logEntries.insertBefore(entry, logEntries.firstChild);
+
+  // Remove animation class after animation completes
+  setTimeout(() => {
+    entry.classList.remove("new");
+  }, 500);
+
+  // Keep only last 50 log entries
+  const entries = logEntries.querySelectorAll(".log-entry");
+  if (entries.length > 50) {
+    entries[entries.length - 1].remove();
+  }
+}
+
+/**
+ * Update status indicator
+ * @param {string} message - Status message
+ * @param {string} type - Status type (waiting, receiving, error)
+ */
+function updateStatus(message, type) {
+  const statusIndicator = document.getElementById("data-status");
+  if (!statusIndicator) return;
+
+  const dot = statusIndicator.querySelector(".status-dot");
+  const text = statusIndicator.querySelector("span:last-child");
+
+  if (dot && text) {
+    dot.className = "status-dot " + type;
+    text.textContent = message;
+  }
+}
+
+/**
+ * Show error message
+ * @param {string} message - Error message
+ */
+function showError(message) {
+  const errorContainer = document.getElementById("error-message");
+  if (errorContainer) {
+    errorContainer.innerHTML = `
+            <div class="error-message">
+                <strong>Error:</strong> ${message}
+            </div>
+        `;
+
+    setTimeout(() => {
+      errorContainer.innerHTML = "";
+    }, 5000);
+  }
+}
+
+/**
+ * Clear the data log
+ */
+function clearLog() {
+  const logEntries = document.getElementById("log-entries");
+  if (logEntries) {
+    logEntries.innerHTML = '<p class="no-data">Log cleared</p>';
+  }
+
+  // Clear stored data
+  realtimeData = [];
+
+  console.log("Data log cleared");
+}
