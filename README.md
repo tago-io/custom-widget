@@ -89,17 +89,17 @@ The repository includes:
 
 ### Practical Examples
 
-This repository includes a comprehensive `/examples` folder with 7 different JavaScript examples:
+This repository includes a comprehensive `/examples` folder with 7 different HTML examples:
 
 | Example | Purpose | Best For |
 |---------|---------|----------|
-| **basic-widget.js** | Minimal setup and widget lifecycle | Beginners learning the basics |
-| **read-data.js** | Displaying real-time device data | Data visualization widgets |
-| **read-resource.js** | Accessing platform resources | User context and blueprint devices |
-| **read-entity.js** | Complex structured data handling | Advanced data relationships |
-| **send-data.js** | Sending data back to devices | Interactive input widgets |
-| **time-interval.js** | Time-based data analysis | Historical data and time controls |
-| **custom-units.js** | Unit conversions and formatting | Multi-unit sensor displays |
+| **basic-widget.html** | Minimal setup and widget lifecycle | Beginners learning the basics |
+| **read-data.html** | Displaying real-time device data | Data visualization widgets |
+| **read-resource.html** | Accessing platform resources | User context and blueprint devices |
+| **read-entity.html** | Complex structured data handling | Advanced data relationships |
+| **send-data.html** | Sending data back to devices | Interactive input widgets |
+| **time-interval.html** | Time-based data analysis | Historical data and time controls |
+| **custom-units.html** | Unit conversions and formatting | Multi-unit sensor displays |
 
 **📁 [View All Examples](./examples/README.md)**
 

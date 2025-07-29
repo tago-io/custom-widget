@@ -1,22 +1,22 @@
 # TagoIO Custom Widget Examples
 
-This folder contains practical JavaScript examples demonstrating how to use the TagoIO Custom Widget SDK. Each example showcases different aspects and features of the SDK with complete, runnable code.
+This folder contains practical HTML examples demonstrating how to use the TagoIO Custom Widget SDK. Each example showcases different aspects and features of the SDK with complete, runnable code.
 
 ## 📋 Available Examples
 
-### 1. **basic-widget.js** - Minimal Setup
+### 1. **basic-widget.html** - Minimal Setup
 **Purpose**: Demonstrates the minimal setup required to create a functional TagoIO Custom Widget.
 
 **Features**:
 - Widget initialization with `TagoIO.ready()`
 - Handling widget startup with `onStart` callback
 - Basic error handling with `onError`
-- Simple HTML structure and styling
+- Pre-defined HTML structure and embedded styling
 - Displaying widget configuration information
 
 **Best for**: Beginners who want to understand the basic structure and lifecycle of a Custom Widget.
 
-### 2. **read-data.js** - Data Retrieval
+### 2. **read-data.html** - Data Retrieval
 **Purpose**: Shows how to retrieve and display data from TagoIO devices using realtime data streams.
 
 **Features**:
@@ -28,7 +28,7 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 
 **Best for**: Developers who need to display device data in their widgets.
 
-### 3. **read-resource.js** - Resource Access
+### 3. **read-resource.html** - Resource Access
 **Purpose**: Demonstrates how to access TagoIO resources like user information and blueprint devices.
 
 **Features**:
@@ -39,7 +39,7 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 
 **Best for**: Widgets that need to interact with TagoIO platform resources and user context.
 
-### 4. **read-entity.js** - Entity Data Handling
+### 4. **read-entity.html** - Entity Data Handling
 **Purpose**: Shows how to work with structured entity-like data and complex data relationships.
 
 **Features**:
@@ -51,7 +51,7 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 
 **Best for**: Applications dealing with complex, structured IoT data that goes beyond simple variables.
 
-### 5. **send-data.js** - Data Transmission
+### 5. **send-data.html** - Data Transmission
 **Purpose**: Comprehensive example of sending data to TagoIO devices with different approaches.
 
 **Features**:
@@ -63,7 +63,7 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 
 **Best for**: Widgets that need to send data back to TagoIO devices or create interactive data input interfaces.
 
-### 6. **time-interval.js** - Time-Based Operations
+### 6. **time-interval.html** - Time-Based Operations
 **Purpose**: Demonstrates working with time intervals, preset time ranges, and time-based data operations.
 
 **Features**:
@@ -76,7 +76,7 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 
 **Best for**: Dashboards that need time-based data analysis, historical data views, or time range controls.
 
-### 7. **custom-units.js** - Unit Conversions
+### 7. **custom-units.html** - Unit Conversions
 **Purpose**: Shows how to work with custom units and unit conversions for different measurement systems.
 
 **Features**:
@@ -91,15 +91,14 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 
 ## 🚀 How to Use These Examples
 
-### Method 1: Direct HTML Implementation
-1. Create an HTML file
-2. Include the TagoIO Custom Widget SDK:
-   ```html
-   <script src="https://admin.tago.io/dist/custom-widget.min.js"></script>
-   <link rel="stylesheet" href="https://admin.tago.io/dist/custom-widget.min.css">
-   ```
-3. Copy the content of any example file
-4. Upload to TagoIO as a Custom Widget
+### Method 1: Direct HTML Upload (Recommended)
+1. Download any of the HTML example files
+2. Upload directly to TagoIO as a Custom Widget
+3. The HTML files are complete and ready to use - they include:
+   - TagoIO Custom Widget SDK reference
+   - Complete HTML structure
+   - Embedded CSS styling
+   - JavaScript functionality in `<script>` tags
 
 ### Method 2: Development Environment
 1. Clone this repository
@@ -107,14 +106,11 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 3. Use the examples as reference for your own widget development
 4. Build your widget: `npm run build`
 
-### Method 3: Webpack Integration
-1. Install the SDK: `npm install @tago-io/custom-widget --save`
-2. Import in your project:
-   ```javascript
-   import "@tago-io/custom-widget";
-   import "@tago-io/custom-widget/dist/custom-widget.css";
-   ```
-3. Adapt the example code to your needs
+### Method 3: Copy and Customize
+1. Open any HTML example file
+2. Copy the HTML structure, CSS, and JavaScript code
+3. Customize the styling and functionality for your needs
+4. Upload to TagoIO as a Custom Widget
 
 ## 📖 Understanding the Examples
 
@@ -122,11 +118,12 @@ This folder contains practical JavaScript examples demonstrating how to use the 
 
 All examples follow these common patterns:
 
-1. **DOM Ready Handler**: Wait for DOM to load before initializing
-2. **Widget Startup**: Use `window.TagoIO.onStart()` to handle widget initialization
-3. **Error Handling**: Implement `window.TagoIO.onError()` for robust error handling
-4. **Ready Signal**: Call `window.TagoIO.ready()` to signal the widget is ready
-5. **Proper Cleanup**: Handle cleanup for timers and event listeners
+1. **Complete HTML Structure**: Each file is a complete HTML document with proper DOCTYPE, head, and body
+2. **Embedded SDK**: TagoIO SDK is included via CDN: `<script src="https://admin.tago.io/dist/custom-widget.min.js"></script>`
+3. **Widget Startup**: Use `window.TagoIO.onStart()` to handle widget initialization
+4. **Error Handling**: Implement `window.TagoIO.onError()` for robust error handling
+5. **Ready Signal**: Call `window.TagoIO.ready()` to signal the widget is ready
+6. **Proper Cleanup**: Handle cleanup for timers and event listeners
 
 ### Key SDK Functions Demonstrated
 
