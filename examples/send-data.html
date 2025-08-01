@@ -6,623 +6,262 @@
     <title>Send Data Widget</title>
     <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
     <style>
-      .widget-container {
-        padding: 20px;
+      body {
         font-family: Arial, sans-serif;
-        max-width: 1200px;
-        margin: 0 auto;
-      }
-
-      .info-section {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-      }
-
-      .status-message {
-        padding: 10px 15px;
-        border-radius: 6px;
-        margin-bottom: 20px;
-        font-weight: bold;
-      }
-
-      .status-message.info {
-        background-color: #e3f2fd;
-        color: #1976d2;
-      }
-
-      .status-message.sending {
-        background-color: #fff3e0;
-        color: #f57c00;
-      }
-
-      .status-message.success {
-        background-color: #e8f5e8;
-        color: #2e7d32;
-      }
-
-      .status-message.error {
-        background-color: #ffebee;
-        color: #c62828;
-      }
-
-      .forms-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-      }
-
-      .form-section {
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 8px;
         padding: 20px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
-
-      .form-section h4 {
-        margin: 0 0 15px 0;
-        color: #333;
-      }
-
       .form-group {
-        margin-bottom: 15px;
+        margin: 10px 0;
       }
-
-      .form-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
-      }
-
       .form-group label {
         display: block;
         margin-bottom: 5px;
         font-weight: bold;
-        color: #555;
       }
-
-      .form-control {
-        width: 100%;
-        padding: 8px 12px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
-        box-sizing: border-box;
+      .form-group input,
+      .form-group select {
+        width: 200px;
+        padding: 5px;
       }
-
-      .form-control:focus {
-        outline: none;
-        border-color: #4caf50;
-        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
-      }
-
-      .send-btn {
-        width: 100%;
-        padding: 12px;
-        border: none;
-        border-radius: 6px;
-        font-size: 16px;
-        font-weight: bold;
-        cursor: pointer;
-        margin-top: 10px;
-        transition: background-color 0.3s;
-      }
-
-      .send-btn.primary {
-        background-color: #4caf50;
-        color: white;
-      }
-
-      .send-btn.primary:hover {
-        background-color: #45a049;
-      }
-
-      .send-btn.secondary {
-        background-color: #2196f3;
-        color: white;
-      }
-
-      .send-btn.secondary:hover {
-        background-color: #1976d2;
-      }
-
-      .send-btn.advanced {
-        background-color: #9c27b0;
-        color: white;
-      }
-
-      .send-btn.advanced:hover {
-        background-color: #7b1fa2;
-      }
-
-      .settings-section {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 8px;
-      }
-
-      .setting-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-      }
-
-      .toggle-btn {
-        background-color: #ff9800;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
+      button {
+        padding: 10px 15px;
+        margin: 5px;
         cursor: pointer;
       }
-
-      .toggle-btn:hover {
-        background-color: #f57c00;
-      }
-
-      .setting-description {
-        color: #666;
-        font-size: 0.9em;
-        margin: 10px 0 0 0;
-      }
-
-      .success-message {
-        background-color: #e8f5e8;
-        color: #2e7d32;
+      .success {
+        color: green;
         padding: 10px;
-        border-radius: 4px;
-        border-left: 4px solid #4caf50;
-        margin-bottom: 15px;
+        background: #f0fff0;
+        margin: 10px 0;
       }
-
-      .error-message {
-        background-color: #ffebee;
-        color: #c62828;
+      .error {
+        color: red;
         padding: 10px;
-        border-radius: 4px;
-        border-left: 4px solid #c62828;
-        margin-bottom: 15px;
+        background: #fff0f0;
+        margin: 10px 0;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
       }
     </style>
   </head>
   <body>
-    <div class="widget-container">
-      <h2>Send Data Widget</h2>
-      <p>This widget demonstrates different ways to send data to TagoIO devices.</p>
+    <h1>Send Data Widget</h1>
+    <p>Demonstrates sending data to TagoIO devices.</p>
 
-      <div id="error-container"></div>
-      <div id="success-container"></div>
+    <div id="status" class="status">Widget ready</div>
+    <div id="message" style="display: none"></div>
 
-      <div id="widget-info" class="info-section">
-        <p>Loading widget information...</p>
-      </div>
-
-      <div id="send-status" class="status-message info">Ready to send data</div>
-
-      <div class="forms-container">
-        <!-- Single Data Form -->
-        <div class="form-section">
-          <h4>Send Single Data Point</h4>
-          <div class="form-group">
-            <label>Variable:</label>
-            <select id="variable-selector" class="form-control">
-              <option>Loading variables...</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Value:</label>
-            <input
-              type="text"
-              id="single-value"
-              class="form-control"
-              placeholder="Enter value (number, text, or true/false)"
-            />
-          </div>
-          <button onclick="sendSingleData()" class="send-btn primary">Send Single Data</button>
-        </div>
-
-        <!-- Multiple Data Form -->
-        <div class="form-section">
-          <h4>Send Multiple Data Points</h4>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Variable 1:</label>
-              <select id="multi-variable1" class="form-control">
-                <option>Loading variables...</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Value 1:</label>
-              <input type="text" id="multi-value1" class="form-control" placeholder="Value 1" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Variable 2:</label>
-              <select id="multi-variable2" class="form-control">
-                <option>Loading variables...</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Value 2:</label>
-              <input type="text" id="multi-value2" class="form-control" placeholder="Value 2" />
-            </div>
-          </div>
-          <button onclick="sendMultipleData()" class="send-btn secondary">Send Multiple Data</button>
-        </div>
-
-        <!-- Advanced Data Form -->
-        <div class="form-section">
-          <h4>Send Advanced Data (with metadata)</h4>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Variable:</label>
-              <select id="advanced-variable" class="form-control">
-                <option>Loading variables...</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Value:</label>
-              <input type="text" id="advanced-value" class="form-control" placeholder="Value" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Unit (optional):</label>
-              <input type="text" id="advanced-unit" class="form-control" placeholder="e.g., °C, m/s" />
-            </div>
-            <div class="form-group">
-              <label>Group (optional):</label>
-              <input type="text" id="advanced-group" class="form-control" placeholder="Data group" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Latitude (optional):</label>
-              <input type="number" id="advanced-lat" class="form-control" placeholder="e.g., 40.7128" step="any" />
-            </div>
-            <div class="form-group">
-              <label>Longitude (optional):</label>
-              <input type="number" id="advanced-lng" class="form-control" placeholder="e.g., -74.0060" step="any" />
-            </div>
-          </div>
-          <button onclick="sendAdvancedData()" class="send-btn advanced">Send Advanced Data</button>
-        </div>
-      </div>
-
-      <!-- Settings Section -->
-      <div class="settings-section">
-        <h4>Settings</h4>
-        <div class="setting-item">
-          <span>AutoFill Status: <strong id="autofill-status">Enabled</strong></span>
-          <button onclick="toggleAutoFill()" class="toggle-btn">Toggle AutoFill</button>
-        </div>
-        <p class="setting-description">
-          AutoFill automatically sets device and bucket IDs based on widget configuration.
-        </p>
-      </div>
+    <h3>Send Single Data Point</h3>
+    <div class="form-group">
+      <label>Variable Name:</label>
+      <input type="text" id="single-variable" value="temperature" />
     </div>
+    <div class="form-group">
+      <label>Value:</label>
+      <input type="number" id="single-value" value="25.5" />
+    </div>
+    <div class="form-group">
+      <label>Unit:</label>
+      <input type="text" id="single-unit" value="°C" />
+    </div>
+    <button onclick="sendSingleData()">Send Single Data</button>
+
+    <h3>Send Multiple Data Points</h3>
+    <div class="form-group">
+      <label>Temperature:</label>
+      <input type="number" id="multi-temp" value="23.1" />
+    </div>
+    <div class="form-group">
+      <label>Humidity:</label>
+      <input type="number" id="multi-humidity" value="65" />
+    </div>
+    <div class="form-group">
+      <label>Pressure:</label>
+      <input type="number" id="multi-pressure" value="1013.25" />
+    </div>
+    <button onclick="sendMultipleData()">Send Multiple Data</button>
+
+    <h3>Send with Location</h3>
+    <div class="form-group">
+      <label>Variable:</label>
+      <input type="text" id="location-variable" value="location_check" />
+    </div>
+    <div class="form-group">
+      <label>Latitude:</label>
+      <input type="number" id="latitude" value="40.7128" step="any" />
+    </div>
+    <div class="form-group">
+      <label>Longitude:</label>
+      <input type="number" id="longitude" value="-74.0060" step="any" />
+    </div>
+    <button onclick="sendLocationData()">Send with Location</button>
 
     <script>
       /**
        * Send Data Example
-       *
-       * This example demonstrates how to send data to TagoIO devices using the
-       * Custom Widget SDK. It shows different methods of data transmission including
-       * single values, multiple variables, and batch operations.
-       *
-       * Features demonstrated:
-       * - Sending data with sendData() function
-       * - Using both Promise and callback approaches
-       * - Working with autoFill functionality
-       * - Handling data submission errors
-       * - Form-based data input
-       *
-       * Usage: Include this script in an HTML file with the TagoIO Custom Widget SDK
+       * Demonstrates sending data to TagoIO devices using sendData method
        */
 
       let widgetConfig = null;
 
-      /**
-       * Handle widget startup and setup forms
-       */
+      // Handle widget startup
       window.TagoIO.onStart(function (widget) {
-        console.log("Send Data Widget started");
+        console.log("Send Data Widget started:", widget);
         widgetConfig = widget;
-
-        // Display widget information
-        document.getElementById("widget-info").innerHTML = `
-                <h4>Widget Configuration</h4>
-                <p><strong>Widget ID:</strong> ${widget.id}</p>
-                <p><strong>AutoFill Status:</strong> ${window.TagoIO.autoFill ? "Enabled" : "Disabled"}</p>
-                <p><strong>Variables Available:</strong> ${widget.display.variables.length}</p>
-            `;
-
-        // Setup variable selector
-        setupVariableSelector(widget.display.variables);
-
-        updateSendStatus("Ready to send data");
-
-        // Setup all variable selectors after a short delay
-        setTimeout(function () {
-          setupAllVariableSelectors(widget.display.variables);
-        }, 100);
+        document.getElementById("status").textContent =
+          "Widget ready - configured with " + widget.display.variables.length + " variables";
       });
 
-      /**
-       * Handle errors
-       */
-      window.TagoIO.onError(function (error) {
-        console.error("Send data error:", error);
-        showError("Error sending data: " + error.message);
-        updateSendStatus("Error occurred", "error");
-      });
-
-      /**
-       * Initialize the widget
-       */
-      window.TagoIO.ready({
-        header: {
-          color: "#4CAF50",
-        },
-      });
-
-      /**
-       * Setup the variable selector dropdown
-       * @param {Array} variables - Available widget variables
-       */
-      function setupVariableSelector(variables) {
-        const selector = document.getElementById("variable-selector");
-        if (selector) {
-          selector.innerHTML = '<option value="">Select a variable...</option>';
-
-          variables.forEach(function (variable) {
-            const option = document.createElement("option");
-            option.value = variable.variable;
-            option.textContent = `${variable.variable} (Device: ${variable.origin.id})`;
-            selector.appendChild(option);
-          });
-        }
-      }
-
-      /**
-       * Setup all variable selectors
-       * @param {Array} variables - Available widget variables
-       */
-      function setupAllVariableSelectors(variables) {
-        const selectors = ["multi-variable1", "multi-variable2", "advanced-variable"];
-        selectors.forEach(function (selectorId) {
-          const selector = document.getElementById(selectorId);
-          if (selector) {
-            selector.innerHTML = '<option value="">Select a variable...</option>';
-            variables.forEach(function (variable) {
-              const option = document.createElement("option");
-              option.value = variable.variable;
-              option.textContent = `${variable.variable} (Device: ${variable.origin.id})`;
-              selector.appendChild(option);
-            });
-          }
-        });
-      }
-
-      /**
-       * Send a single data point using Promise approach
-       */
-      async function sendSingleData() {
-        const variable = document.getElementById("variable-selector").value;
+      // Send single data point
+      function sendSingleData() {
+        const variable = document.getElementById("single-variable").value;
         const value = document.getElementById("single-value").value;
+        const unit = document.getElementById("single-unit").value;
 
-        if (!variable || value === "") {
-          showError("Please select a variable and enter a value");
+        if (!variable || !value) {
+          showMessage("Please fill in variable name and value", "error");
           return;
         }
 
-        updateSendStatus("Sending single data point...", "sending");
-
-        try {
-          const dataRecord = {
+        const data = [
+          {
             variable: variable,
-            value: parseValue(value),
+            value: parseFloat(value),
+            unit: unit || undefined,
             time: new Date().toISOString(),
-          };
-
-          const result = await window.TagoIO.sendData(dataRecord);
-          console.log("Single data sent successfully:", result);
-
-          showSuccess(`Data sent successfully! Variable: ${variable}, Value: ${value}`);
-          updateSendStatus("Single data sent successfully", "success");
-
-          // Clear form
-          document.getElementById("single-value").value = "";
-        } catch (error) {
-          console.error("Error sending single data:", error);
-          showError("Failed to send data: " + error.message);
-          updateSendStatus("Failed to send single data", "error");
-        }
-      }
-
-      /**
-       * Send multiple data points using callback approach
-       */
-      function sendMultipleData() {
-        const variable1 = document.getElementById("multi-variable1").value;
-        const value1 = document.getElementById("multi-value1").value;
-        const variable2 = document.getElementById("multi-variable2").value;
-        const value2 = document.getElementById("multi-value2").value;
-
-        if (!variable1 || !variable2 || value1 === "" || value2 === "") {
-          showError("Please fill in all fields for multiple data sending");
-          return;
-        }
-
-        updateSendStatus("Sending multiple data points...", "sending");
-
-        const dataRecords = [
-          {
-            variable: variable1,
-            value: parseValue(value1),
-            time: new Date().toISOString(),
-          },
-          {
-            variable: variable2,
-            value: parseValue(value2),
-            time: new Date(Date.now() + 1000).toISOString(), // 1 second later
           },
         ];
 
-        window.TagoIO.sendData(dataRecords, function (result, error) {
-          if (error) {
-            console.error("Error sending multiple data:", error);
-            showError("Failed to send multiple data: " + error.message);
-            updateSendStatus("Failed to send multiple data", "error");
-          } else {
-            console.log("Multiple data sent successfully:", result);
-            showSuccess(`Multiple data points sent successfully!`);
-            updateSendStatus("Multiple data sent successfully", "success");
+        showMessage("Sending single data point...", "status");
 
-            // Clear form
-            document.getElementById("multi-value1").value = "";
-            document.getElementById("multi-value2").value = "";
-          }
-        });
+        window.TagoIO.sendData(data)
+          .then(function (result) {
+            console.log("Data sent successfully:", result);
+            showMessage("Single data point sent successfully!", "success");
+          })
+          .catch(function (error) {
+            console.error("Error sending data:", error);
+            showMessage("Error sending data: " + error.message, "error");
+          });
       }
 
-      /**
-       * Send data with custom metadata and location
-       */
-      async function sendAdvancedData() {
-        const variable = document.getElementById("advanced-variable").value;
-        const value = document.getElementById("advanced-value").value;
-        const unit = document.getElementById("advanced-unit").value;
-        const group = document.getElementById("advanced-group").value;
-        const lat = document.getElementById("advanced-lat").value;
-        const lng = document.getElementById("advanced-lng").value;
+      // Send multiple data points
+      function sendMultipleData() {
+        const temp = document.getElementById("multi-temp").value;
+        const humidity = document.getElementById("multi-humidity").value;
+        const pressure = document.getElementById("multi-pressure").value;
 
-        if (!variable || value === "") {
-          showError("Please select a variable and enter a value for advanced sending");
+        const data = [];
+        const timestamp = new Date().toISOString();
+
+        if (temp) {
+          data.push({
+            variable: "temperature",
+            value: parseFloat(temp),
+            unit: "°C",
+            time: timestamp,
+          });
+        }
+
+        if (humidity) {
+          data.push({
+            variable: "humidity",
+            value: parseFloat(humidity),
+            unit: "%",
+            time: timestamp,
+          });
+        }
+
+        if (pressure) {
+          data.push({
+            variable: "pressure",
+            value: parseFloat(pressure),
+            unit: "hPa",
+            time: timestamp,
+          });
+        }
+
+        if (data.length === 0) {
+          showMessage("Please fill in at least one value", "error");
           return;
         }
 
-        updateSendStatus("Sending advanced data...", "sending");
+        showMessage("Sending multiple data points...", "status");
 
-        try {
-          const dataRecord = {
+        window.TagoIO.sendData(data)
+          .then(function (result) {
+            console.log("Multiple data sent successfully:", result);
+            showMessage(`${data.length} data points sent successfully!`, "success");
+          })
+          .catch(function (error) {
+            console.error("Error sending multiple data:", error);
+            showMessage("Error sending data: " + error.message, "error");
+          });
+      }
+
+      // Send data with location
+      function sendLocationData() {
+        const variable = document.getElementById("location-variable").value;
+        const lat = document.getElementById("latitude").value;
+        const lng = document.getElementById("longitude").value;
+
+        if (!variable || !lat || !lng) {
+          showMessage("Please fill in all location fields", "error");
+          return;
+        }
+
+        const data = [
+          {
             variable: variable,
-            value: parseValue(value),
-            time: new Date().toISOString(),
-            unit: unit || undefined,
-            group: group || undefined,
-            location: lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : undefined,
-            metadata: {
-              source: "custom-widget",
-              description: "Data sent from Custom Widget example",
-              timestamp: Date.now(),
+            value: "Location data",
+            location: {
+              lat: parseFloat(lat),
+              lng: parseFloat(lng),
             },
-          };
+            time: new Date().toISOString(),
+          },
+        ];
 
-          const result = await window.TagoIO.sendData(dataRecord);
-          console.log("Advanced data sent successfully:", result);
+        showMessage("Sending location data...", "status");
 
-          showSuccess(`Advanced data sent with metadata!`);
-          updateSendStatus("Advanced data sent successfully", "success");
-
-          // Clear form
-          document.getElementById("advanced-value").value = "";
-          document.getElementById("advanced-unit").value = "";
-          document.getElementById("advanced-group").value = "";
-          document.getElementById("advanced-lat").value = "";
-          document.getElementById("advanced-lng").value = "";
-        } catch (error) {
-          console.error("Error sending advanced data:", error);
-          showError("Failed to send advanced data: " + error.message);
-          updateSendStatus("Failed to send advanced data", "error");
-        }
+        window.TagoIO.sendData(data)
+          .then(function (result) {
+            console.log("Location data sent successfully:", result);
+            showMessage("Location data sent successfully!", "success");
+          })
+          .catch(function (error) {
+            console.error("Error sending location data:", error);
+            showMessage("Error sending data: " + error.message, "error");
+          });
       }
 
-      /**
-       * Parse value to appropriate type
-       * @param {string} value - String value to parse
-       * @returns {string|number|boolean} Parsed value
-       */
-      function parseValue(value) {
-        // Try to parse as number
-        if (!isNaN(value) && !isNaN(parseFloat(value))) {
-          return parseFloat(value);
-        }
+      // Show message to user
+      function showMessage(text, type) {
+        const messageDiv = document.getElementById("message");
+        messageDiv.style.display = "block";
+        messageDiv.className = type;
+        messageDiv.textContent = text;
 
-        // Try to parse as boolean
-        if (value.toLowerCase() === "true") return true;
-        if (value.toLowerCase() === "false") return false;
-
-        // Return as string
-        return value;
-      }
-
-      /**
-       * Update send status display
-       * @param {string} message - Status message
-       * @param {string} type - Status type (sending, success, error)
-       */
-      function updateSendStatus(message, type = "info") {
-        const statusElement = document.getElementById("send-status");
-        if (statusElement) {
-          statusElement.className = `status-message ${type}`;
-          statusElement.textContent = message;
-        }
-      }
-
-      /**
-       * Show success message
-       * @param {string} message - Success message
-       */
-      function showSuccess(message) {
-        const successElement = document.getElementById("success-container");
-        if (successElement) {
-          successElement.innerHTML = `
-                    <div class="success-message">
-                        <strong>Success:</strong> ${message}
-                    </div>
-                `;
+        if (type === "success" || type === "error") {
           setTimeout(() => {
-            successElement.innerHTML = "";
-          }, 5000);
+            messageDiv.style.display = "none";
+          }, 3000);
         }
       }
 
-      /**
-       * Show error message
-       * @param {string} message - Error message
-       */
-      function showError(message) {
-        const errorElement = document.getElementById("error-container");
-        if (errorElement) {
-          errorElement.innerHTML = `
-                    <div class="error-message">
-                        <strong>Error:</strong> ${message}
-                    </div>
-                `;
-          setTimeout(() => {
-            errorElement.innerHTML = "";
-          }, 5000);
-        }
-      }
+      // Handle errors
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        showMessage("Widget error: " + (error.message || "Unknown error"), "error");
+      });
 
-      /**
-       * Toggle AutoFill functionality
-       */
-      function toggleAutoFill() {
-        window.TagoIO.autoFill = !window.TagoIO.autoFill;
-        const statusElement = document.getElementById("autofill-status");
-        if (statusElement) {
-          statusElement.textContent = window.TagoIO.autoFill ? "Enabled" : "Disabled";
-        }
-
-        showSuccess(`AutoFill ${window.TagoIO.autoFill ? "enabled" : "disabled"}`);
-      }
+      // Initialize widget
+      window.TagoIO.ready({
+        header: { color: "#FF9800" },
+      });
     </script>
   </body>
 </html>

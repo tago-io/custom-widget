@@ -3,230 +3,87 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Widget</title>
+    <title>Basic Widget</title>
     <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
     <style>
       body {
         font-family: Arial, sans-serif;
-        margin: 20px;
-        background-color: #f5f5f5;
-      }
-
-      .container {
-        max-width: 800px;
-        margin: 0 auto;
-        background: white;
         padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       }
-
-      .widget-header {
-        background-color: #2196f3;
-        color: white;
-        padding: 15px;
-        margin: -20px -20px 20px -20px;
-        border-radius: 8px 8px 0 0;
-      }
-
-      .widget-info {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 4px;
-        margin-bottom: 20px;
-      }
-
-      .info-item {
-        margin-bottom: 10px;
-      }
-
-      .info-label {
-        font-weight: bold;
-        color: #333;
-      }
-
-      .variables-section {
-        margin-top: 20px;
-      }
-
-      .variables-list {
-        list-style-type: none;
-        padding: 0;
-      }
-
-      .variable-item {
-        background-color: #e9ecef;
+      .error {
+        color: red;
         padding: 10px;
-        margin-bottom: 8px;
-        border-radius: 4px;
-        border-left: 4px solid #2196f3;
-      }
-
-      .variable-name {
-        font-weight: bold;
-        color: #2196f3;
-      }
-
-      .device-info {
-        color: #666;
-        font-size: 0.9em;
-      }
-
-      .error-message {
-        color: #d32f2f;
-        padding: 15px;
-        border: 1px solid #d32f2f;
-        border-radius: 4px;
-        background-color: #ffebee;
-        margin-top: 20px;
-        display: none;
-      }
-
-      .loading {
-        text-align: center;
-        padding: 20px;
-        color: #666;
+        border: 1px solid red;
+        margin: 10px 0;
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="widget-header">
-        <h1>Basic Custom Widget</h1>
-      </div>
+    <h1>Basic Custom Widget</h1>
+    <div id="loading">Loading widget...</div>
+    <div id="content" style="display: none">
+      <h3>Widget Information</h3>
+      <p><strong>Widget ID:</strong> <span id="widget-id">-</span></p>
+      <p><strong>Dashboard ID:</strong> <span id="dashboard-id">-</span></p>
+      <p><strong>Widget Label:</strong> <span id="widget-label">-</span></p>
+      <p><strong>Variables Count:</strong> <span id="variables-count">-</span></p>
 
-      <div class="loading" id="loading">
-        <p>Loading widget...</p>
-      </div>
-
-      <div id="widget-content" style="display: none">
-        <div class="widget-info" id="widget-info">
-          <h3>Widget Information</h3>
-          <div class="info-item">
-            <span class="info-label">Widget ID:</span>
-            <span id="widget-id">-</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Dashboard ID:</span>
-            <span id="dashboard-id">-</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Widget Label:</span>
-            <span id="widget-label">-</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Variables Count:</span>
-            <span id="variables-count">-</span>
-          </div>
-        </div>
-
-        <div class="variables-section">
-          <h3>Configured Variables</h3>
-          <ul class="variables-list" id="variables-list">
-            <!-- Variables will be populated here -->
-          </ul>
-        </div>
-      </div>
-
-      <div class="error-message" id="error-message">
-        <!-- Error messages will appear here -->
-      </div>
+      <h3>Configured Variables</h3>
+      <ul id="variables-list"></ul>
     </div>
+    <div id="error" class="error" style="display: none"></div>
 
     <script>
       /**
        * Basic Custom Widget Example
-       *
-       * This example demonstrates the minimal setup required to create a functional
-       * TagoIO Custom Widget. It shows how to initialize the widget, handle startup,
-       * and display basic information.
-       *
-       * Features demonstrated:
-       * - Widget initialization with TagoIO.ready()
-       * - Handling widget startup with onStart callback
-       * - Basic error handling
-       * - Simple HTML structure
-       *
-       * Usage: Include this script in an HTML file with the TagoIO Custom Widget SDK
+       * Demonstrates minimal setup and widget initialization
        */
 
-      /**
-       * Initialize the widget when it starts
-       * This callback receives the widget configuration and variables
-       */
+      // Handle widget startup
       window.TagoIO.onStart(function (widget) {
-        console.log("Widget started with configuration:", widget);
+        console.log("Widget started:", widget);
 
-        // Hide loading message and show content
+        // Show content, hide loading
         document.getElementById("loading").style.display = "none";
-        document.getElementById("widget-content").style.display = "block";
+        document.getElementById("content").style.display = "block";
 
-        // Populate widget information using DOM manipulation
+        // Display widget information
         document.getElementById("widget-id").textContent = widget.id || "N/A";
         document.getElementById("dashboard-id").textContent = widget.dashboard || "N/A";
-        document.getElementById("widget-label").textContent = widget.label || "No label set";
+        document.getElementById("widget-label").textContent = widget.label || "No label";
         document.getElementById("variables-count").textContent = widget.display.variables.length;
 
-        // Clear and populate variables list
+        // Display variables
         const variablesList = document.getElementById("variables-list");
-        variablesList.innerHTML = ""; // Clear existing content
+        variablesList.textContent = "";
 
         if (widget.display.variables.length === 0) {
-          const emptyItem = document.createElement("li");
-          emptyItem.className = "variable-item";
-          emptyItem.textContent = "No variables configured";
-          variablesList.appendChild(emptyItem);
+          const li = document.createElement("li");
+          li.textContent = "No variables configured";
+          variablesList.appendChild(li);
         } else {
           widget.display.variables.forEach(function (variable) {
-            const listItem = document.createElement("li");
-            listItem.className = "variable-item";
-
-            const variableName = document.createElement("span");
-            variableName.className = "variable-name";
-            variableName.textContent = variable.variable;
-
-            const deviceInfo = document.createElement("div");
-            deviceInfo.className = "device-info";
-            deviceInfo.textContent = `Device: ${variable.origin.id}`;
-
-            listItem.appendChild(variableName);
-            listItem.appendChild(deviceInfo);
-            variablesList.appendChild(listItem);
+            const li = document.createElement("li");
+            const strong = document.createElement("strong");
+            strong.textContent = variable.variable;
+            li.appendChild(strong);
+            li.appendChild(document.createTextNode(` (Device: ${variable.origin.id})`));
+            variablesList.appendChild(li);
           });
         }
       });
 
-      /**
-       * Handle any errors that occur during widget operations
-       */
+      // Handle errors
       window.TagoIO.onError(function (error) {
         console.error("Widget error:", error);
-
-        const errorElement = document.getElementById("error-message");
-        errorElement.style.display = "block";
-        errorElement.innerHTML = "";
-
-        const errorTitle = document.createElement("strong");
-        errorTitle.textContent = "Error: ";
-
-        const errorText = document.createElement("span");
-        errorText.textContent = error.message || "An unknown error occurred";
-
-        errorElement.appendChild(errorTitle);
-        errorElement.appendChild(errorText);
-
-        // Hide loading if still showing
+        document.getElementById("error").style.display = "block";
+        document.getElementById("error").textContent = "Error: " + (error.message || "Unknown error");
         document.getElementById("loading").style.display = "none";
       });
 
-      /**
-       * Signal to TagoIO that the widget is ready to start
-       * This should be called after all event listeners are set up
-       */
+      // Initialize widget
       window.TagoIO.ready({
-        header: {
-          color: "#2196F3", // Optional: Set header color
-        },
+        header: { color: "#2196F3" },
       });
     </script>
   </body>
