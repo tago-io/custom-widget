@@ -51,20 +51,22 @@ import "@tago-io/custom-widget/dist/custom-widget.css"; // OPTIONAL
 The TagoIO Custom Widget SDK provides a comprehensive API through the global `window.TagoIO` object:
 
 #### Initialization Functions
-- **`TagoIO.ready(options)`** - Signal that your widget is ready to start
-- **`TagoIO.onStart(callback)`** - Handle widget startup and receive configuration
-- **`TagoIO.onError(callback)`** - Handle API errors and widget issues
+- **`TagoIO.ready(options)`** - **[You send]** Signal to TagoIO that your widget has finished loading and is ready to receive data and events. This must be called to activate your widget.
+- **`TagoIO.onStart(callback)`** - **[You receive]** Asynchronous event triggered when TagoIO starts your widget and provides configuration data, variables, and settings.
+- **`TagoIO.onError(callback)`** - **[You receive]** Asynchronous event triggered when API errors or widget issues occur during runtime.
 
 #### Data Operations
-- **`TagoIO.sendData(data, callback)`** - Send data to TagoIO devices
-- **`TagoIO.editData(data, callback)`** - Edit existing device data
-- **`TagoIO.deleteData(data, callback)`** - Delete device data
-- **`TagoIO.editResourceData(data, callback)`** - Edit platform resources
+> **Note**: These data operations are heavily dependent on the Custom Widget configuration at TagoIO. A widget can only manipulate data that is within the Custom Widget settings and permissions.
+
+- **`TagoIO.sendData(data, callback)`** - **[You send]** Send data to TagoIO devices asynchronously
+- **`TagoIO.editData(data, callback)`** - **[You send]** Edit existing device data asynchronously
+- **`TagoIO.deleteData(data, callback)`** - **[You send]** Delete device data asynchronously
+- **`TagoIO.editResourceData(data, callback)`** - **[You send]** Edit platform resources asynchronously
 
 #### Real-time Data
-- **`TagoIO.onRealtime(callback)`** - Receive real-time data updates
-- **`TagoIO.onSyncUserInformation(callback)`** - Access user context and authentication
-- **`TagoIO.onSyncBlueprintDevices(callback)`** - Access blueprint device configurations
+- **`TagoIO.onRealtime(callback)`** - **[You receive]** Asynchronous event triggered when new data is received through dashboard real-time events from connected devices. This callback is invoked automatically whenever real-time data updates occur based on the dashboard's real-time configuration.
+- **`TagoIO.onSyncUserInformation(callback)`** - **[You receive]** Asynchronous event triggered when user context changes or authentication updates occur. Provides user context, authentication tokens, and session information based on dashboard real-time events.
+- **`TagoIO.onSyncBlueprintDevices(callback)`** - **[You receive]** Asynchronous event triggered when blueprint device configurations change or device selections are updated. Provides blueprint device configurations and selected devices through dashboard real-time events.
 
 #### Utility Functions
 - **`TagoIO.openLink(url)`** - Navigate to other dashboards or external links
@@ -112,6 +114,8 @@ Complete project implementations:
 - **[SendData Widget](https://github.com/tago-io/custom-widget-example-send-data)**: Simple example demonstrating how to send data from your Custom Widget to TagoIO.
 
 - **[Wizard Widget](https://github.com/tago-io/custom-widget-example-wizard)**: Advanced demo showing a multi-step wizard built using TagoIO's Custom Widget SDK.
+
+- **[ECharts Custom Gauge Widget](https://github.com/tago-io/custom-gauge-tutorial)**: Example of a custom gauge widget using the TagoIO Custom Widget SDK.
 
 ## 🛠️ Development Guide
 
@@ -186,23 +190,6 @@ window.TagoIO.onError(function(error) {
     showUserMessage('Something went wrong: ' + error.message);
 });
 ```
-
-#### Data Validation
-Validate data before sending:
-```javascript
-function validateAndSendData(variable, value) {
-    if (!variable || value === undefined) {
-        throw new Error('Variable and value are required');
-    }
-    
-    if (typeof value === 'number' && isNaN(value)) {
-        throw new Error('Invalid numeric value');
-    }
-    
-    return window.TagoIO.sendData({ variable, value });
-}
-```
-
 #### Performance Optimization
 - Use `window.TagoIO.autoFill = true` to automatically handle device/bucket IDs
 - Implement data throttling for high-frequency updates
@@ -225,33 +212,6 @@ window.TagoIO.onStart((widget: TWidget) => {
 });
 ```
 
-## 🎨 UI Design Guidelines
-
-### Responsive Design
-All examples include responsive CSS Grid layouts:
-```css
-.widget-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-    padding: 20px;
-}
-```
-
-### TagoIO Design Language
-Use colors that complement TagoIO's interface:
-- Primary: `#2196F3`
-- Success: `#4CAF50`
-- Warning: `#FF9800`
-- Error: `#f44336`
-- Neutral: `#607D8B`
-
-### Accessibility
-- Use semantic HTML elements
-- Provide proper labels for form controls
-- Ensure sufficient color contrast
-- Support keyboard navigation
-
 ## 🔧 Advanced Features
 
 ### Working with Blueprint Devices
@@ -272,16 +232,6 @@ window.TagoIO.onSyncUserInformation(function(userInfo) {
     console.log('User language:', userInfo.language);
     console.log('Has token:', !!userInfo.token);
     console.log('Run URL:', userInfo.runURL);
-});
-```
-
-### Custom Header Configuration
-```javascript
-window.TagoIO.ready({
-    header: {
-        absolute: true,  // Position header absolutely
-        color: '#2196F3' // Custom header color
-    }
 });
 ```
 
@@ -315,14 +265,6 @@ npm run check:types
 npm run coverage
 ```
 
-### Build Output
-
-The build process generates:
-- `dist/custom-widget.js` - Unminified library
-- `dist/custom-widget.min.js` - Minified library
-- `dist/custom-widget.css` - Optional styles
-- `dist/custom-widget.min.css` - Minified styles
-
 ## 🤝 Contributing
 
 We welcome contributions! Please:
@@ -344,23 +286,9 @@ We welcome contributions! Please:
 - **🐛 [Issue Tracker](https://github.com/tago-io/custom-widget/issues)** - Report bugs and request features
 - **📧 [Support Email](mailto:support@tago.io)** - Direct technical support
 
-### Useful Links
-
-- **[TagoIO Platform](https://admin.tago.io)** - Main platform dashboard
-- **[TagoIO Documentation](https://docs.tago.io)** - Complete platform documentation
-- **[API Reference](https://api.tago.io)** - REST API documentation
-- **[TagoRUN](https://run.tago.io)** - End-user portal documentation
-
 ## 📄 License
 
 This project is licensed under the Apache-2.0 License - see the [LICENSE.md](LICENSE.md) file for details.
-
-## 🏷️ Version Information
-
-- **Current Version**: 1.1.0
-- **Node.js Compatibility**: >= 14.0.0
-- **Browser Support**: Modern browsers (ES6+)
-- **TypeScript**: Full type definitions included
 
 ---
 
