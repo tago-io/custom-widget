@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Time Interval Widget</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .interval-btn {
+        margin: 5px;
+        padding: 8px 12px;
+        cursor: pointer;
+        border: 1px solid #ddd;
+        background: white;
+      }
+      .interval-btn.active {
+        background: #2196f3;
+        color: white;
+      }
+      .date-input {
+        margin: 5px;
+        padding: 5px;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+      .section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Time Interval Widget</h1>
+    <p>Demonstrates using preset intervals and custom date ranges.</p>
+
+    <div id="status" class="status">Widget ready</div>
+    <div id="error" class="error" style="display: none"></div>
+
+    <div class="section">
+      <h3>Preset Intervals</h3>
+      <button class="interval-btn" onclick="setInterval('1h')">Last Hour</button>
+      <button class="interval-btn" onclick="setInterval('6h')">Last 6 Hours</button>
+      <button class="interval-btn" onclick="setInterval('24h')">Last 24 Hours</button>
+      <button class="interval-btn" onclick="setInterval('7d')">Last 7 Days</button>
+      <button class="interval-btn" onclick="setInterval('30d')">Last 30 Days</button>
+      <button class="interval-btn" onclick="setInterval('90d')">Last 90 Days</button>
+    </div>
+
+    <div class="section">
+      <h3>Custom Date Range</h3>
+      <label>Start Date:</label>
+      <input type="datetime-local" id="start-date" class="date-input" />
+      <label>End Date:</label>
+      <input type="datetime-local" id="end-date" class="date-input" />
+      <button onclick="setCustomRange()">Apply Custom Range</button>
+    </div>
+
+    <div class="section">
+      <h3>Current Time Range</h3>
+      <p><strong>Start:</strong> <span id="current-start">Not set</span></p>
+      <p><strong>End:</strong> <span id="current-end">Not set</span></p>
+      <p><strong>Duration:</strong> <span id="current-duration">Not set</span></p>
+      <button onclick="requestData()">Request Data for Current Range</button>
+    </div>
+
+    <div class="section">
+      <h3>Data Results</h3>
+      <div id="data-results">No data requested yet</div>
+    </div>
+
+    <script>
+      /**
+       * Time Interval Example
+       * Demonstrates using preset intervals and custom date ranges
+       */
+
+      let currentStartDate = null;
+      let currentEndDate = null;
+      let widgetConfig = null;
+
+      // Handle widget startup
+      window.TagoIO.onStart(function (widget) {
+        console.log("Time Interval Widget started:", widget);
+        widgetConfig = widget;
+
+        // Set default to last 24 hours
+        setInterval("24h");
+
+        document.getElementById("status").textContent =
+          "Widget ready - configured with " + widget.display.variables.length + " variables";
+      });
+
+      // Set preset interval
+      function setInterval(interval) {
+        const now = new Date();
+        let startDate;
+
+        // Calculate start date based on interval
+        switch (interval) {
+          case "1h":
+            startDate = new Date(now.getTime() - 1 * 60 * 60 * 1000);
+            break;
+          case "6h":
+            startDate = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+            break;
+          case "24h":
+            startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            break;
+          case "7d":
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case "30d":
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case "90d":
+            startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            break;
+          default:
+            startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        }
+
+        currentStartDate = startDate;
+        currentEndDate = now;
+
+        // Update button styles
+        document.querySelectorAll(".interval-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        // Update display
+        updateCurrentRange();
+        showMessage(`Set interval to ${interval}`, "status");
+      }
+
+      // Set custom date range
+      function setCustomRange() {
+        const startInput = document.getElementById("start-date");
+        const endInput = document.getElementById("end-date");
+
+        if (!startInput.value || !endInput.value) {
+          showMessage("Please select both start and end dates", "error");
+          return;
+        }
+
+        const startDate = new Date(startInput.value);
+        const endDate = new Date(endInput.value);
+
+        if (startDate >= endDate) {
+          showMessage("Start date must be before end date", "error");
+          return;
+        }
+
+        currentStartDate = startDate;
+        currentEndDate = endDate;
+
+        // Clear preset button styles
+        document.querySelectorAll(".interval-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+
+        // Update display
+        updateCurrentRange();
+        showMessage("Custom date range applied", "status");
+      }
+
+      // Update current range display
+      function updateCurrentRange() {
+        if (currentStartDate && currentEndDate) {
+          document.getElementById("current-start").textContent = currentStartDate.toLocaleString();
+          document.getElementById("current-end").textContent = currentEndDate.toLocaleString();
+
+          const duration = currentEndDate.getTime() - currentStartDate.getTime();
+          const days = Math.floor(duration / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((duration % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
+
+          let durationText = "";
+          if (days > 0) durationText += `${days} days `;
+          if (hours > 0) durationText += `${hours} hours `;
+          if (minutes > 0) durationText += `${minutes} minutes`;
+
+          document.getElementById("current-duration").textContent = durationText || "Less than a minute";
+        }
+      }
+
+      // Request data for current time range
+      function requestData() {
+        if (!currentStartDate || !currentEndDate) {
+          showMessage("Please set a time range first", "error");
+          return;
+        }
+
+        if (!widgetConfig || widgetConfig.display.variables.length === 0) {
+          showMessage("No variables configured for this widget", "error");
+          return;
+        }
+
+        showMessage("Requesting data for time range...", "status");
+
+        // Simulate data request (in real widget, this would use TagoIO.getData or similar)
+        const resultsDiv = document.getElementById("data-results");
+        resultsDiv.textContent = "";
+
+        // Create elements instead of using innerHTML
+        const summaryP = document.createElement("p");
+        const summaryStrong = document.createElement("strong");
+        summaryStrong.textContent = "Data Request Summary:";
+        summaryP.appendChild(summaryStrong);
+        resultsDiv.appendChild(summaryP);
+
+        const timeRangeP = document.createElement("p");
+        timeRangeP.textContent = `Time Range: ${currentStartDate.toLocaleString()} to ${currentEndDate.toLocaleString()}`;
+        resultsDiv.appendChild(timeRangeP);
+
+        const variablesP = document.createElement("p");
+        variablesP.textContent = `Variables: ${widgetConfig.display.variables.length}`;
+        resultsDiv.appendChild(variablesP);
+
+        const variableNamesP = document.createElement("p");
+        variableNamesP.textContent = "Variable Names:";
+        resultsDiv.appendChild(variableNamesP);
+
+        const variablesList = document.createElement("ul");
+        widgetConfig.display.variables.forEach((v) => {
+          const li = document.createElement("li");
+          li.textContent = `${v.variable} (Device: ${v.origin.id})`;
+          variablesList.appendChild(li);
+        });
+        resultsDiv.appendChild(variablesList);
+
+        const noteP = document.createElement("p");
+        const noteEm = document.createElement("em");
+        noteEm.textContent =
+          "In a real implementation, this would fetch actual data from TagoIO using the specified time range.";
+        noteP.appendChild(noteEm);
+        resultsDiv.appendChild(noteP);
+
+        showMessage("Data request completed", "success");
+      }
+
+      // Show message to user
+      function showMessage(text, type) {
+        const statusDiv = document.getElementById("status");
+        const errorDiv = document.getElementById("error");
+
+        if (type === "error") {
+          errorDiv.style.display = "block";
+          errorDiv.textContent = text;
+          setTimeout(() => {
+            errorDiv.style.display = "none";
+          }, 3000);
+        } else {
+          statusDiv.textContent = text;
+          statusDiv.className = "status " + type;
+        }
+      }
+
+      // Initialize default date inputs
+      function initializeDateInputs() {
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        // Format dates for datetime-local input
+        const formatDate = (date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          const hours = String(date.getHours()).padStart(2, "0");
+          const minutes = String(date.getMinutes()).padStart(2, "0");
+          return `${year}-${month}-${day}T${hours}:${minutes}`;
+        };
+
+        document.getElementById("start-date").value = formatDate(yesterday);
+        document.getElementById("end-date").value = formatDate(now);
+      }
+
+      // Handle errors
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        showMessage("Widget error: " + (error.message || "Unknown error"), "error");
+      });
+
+      // Initialize widget
+      window.TagoIO.ready({
+        header: { color: "#FF5722" },
+      });
+
+      // Initialize date inputs when page loads
+      setTimeout(initializeDateInputs, 100);
+    </script>
+  </body>
+</html>

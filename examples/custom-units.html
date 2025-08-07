@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Units Widget</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .reading {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ddd;
+        background: #f9f9f9;
+      }
+      .reading.updated {
+        border-color: #4caf50;
+        background: #e8f5e8;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+      .controls {
+        margin: 15px 0;
+      }
+      .controls select {
+        margin: 5px;
+        padding: 5px;
+      }
+      .controls button {
+        margin: 5px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Custom Units Widget</h1>
+    <p>Demonstrates unit conversion and custom unit display for sensor data.</p>
+
+    <div id="status" class="status">Waiting for data...</div>
+    <div id="error" class="error" style="display: none"></div>
+
+    <div class="controls">
+      <h3>Unit Preferences</h3>
+      <label>Temperature:</label>
+      <select id="temp-unit" onchange="updateUnits()">
+        <option value="°C">Celsius (°C)</option>
+        <option value="°F">Fahrenheit (°F)</option>
+        <option value="K">Kelvin (K)</option>
+      </select>
+
+      <label>Distance:</label>
+      <select id="distance-unit" onchange="updateUnits()">
+        <option value="m">Meters (m)</option>
+        <option value="ft">Feet (ft)</option>
+        <option value="km">Kilometers (km)</option>
+        <option value="mi">Miles (mi)</option>
+      </select>
+
+      <label>Weight:</label>
+      <select id="weight-unit" onchange="updateUnits()">
+        <option value="kg">Kilograms (kg)</option>
+        <option value="lb">Pounds (lb)</option>
+        <option value="g">Grams (g)</option>
+        <option value="oz">Ounces (oz)</option>
+      </select>
+
+      <button onclick="resetToDefaults()">Reset to Defaults</button>
+    </div>
+
+    <div>
+      <h3>Current Readings</h3>
+      <div id="readings-container">No data received yet</div>
+    </div>
+
+    <script>
+      /**
+       * Custom Units Example
+       * Demonstrates unit conversion and custom unit display for sensor data
+       */
+
+      let rawData = [];
+      let unitPreferences = {
+        temperature: "°C",
+        distance: "m",
+        weight: "kg",
+      };
+
+      // Handle widget startup
+      window.TagoIO.onStart(function (widget) {
+        console.log("Custom Units Widget started:", widget);
+        document.getElementById("status").textContent =
+          "Widget ready - configured with " + widget.display.variables.length + " variables";
+      });
+
+      // Handle real-time data updates
+      window.TagoIO.onRealtime(function (data) {
+        console.log("Data received:", data);
+
+        // Process incoming data
+        data.forEach(function (dataGroup) {
+          if (dataGroup.result && Array.isArray(dataGroup.result)) {
+            dataGroup.result.forEach(function (dataPoint) {
+              // Store raw data
+              const existingIndex = rawData.findIndex(
+                (item) => item.variable === dataPoint.variable && item.origin === dataPoint.origin
+              );
+
+              if (existingIndex >= 0) {
+                rawData[existingIndex] = dataPoint;
+              } else {
+                rawData.push(dataPoint);
+              }
+            });
+          }
+        });
+
+        // Update display with converted units
+        updateDisplay();
+        document.getElementById("status").textContent = `Data updated - ${rawData.length} variables`;
+      });
+
+      // Update display with current unit preferences
+      function updateDisplay() {
+        const container = document.getElementById("readings-container");
+
+        if (rawData.length === 0) {
+          container.textContent = "No data received yet";
+          return;
+        }
+
+        container.textContent = "";
+
+        rawData.forEach(function (dataPoint) {
+          const readingDiv = document.createElement("div");
+          readingDiv.className = "reading updated";
+
+          // Convert value based on unit preferences
+          const converted = convertValue(dataPoint);
+
+          // Create elements instead of using innerHTML
+          const variableStrong = document.createElement("strong");
+          variableStrong.textContent = dataPoint.variable;
+          readingDiv.appendChild(variableStrong);
+          readingDiv.appendChild(document.createElement("br"));
+
+          readingDiv.appendChild(document.createTextNode(`Original: ${dataPoint.value} ${dataPoint.unit || ""}`));
+          readingDiv.appendChild(document.createElement("br"));
+
+          readingDiv.appendChild(document.createTextNode(`Converted: ${converted.value} ${converted.unit}`));
+          readingDiv.appendChild(document.createElement("br"));
+
+          const deviceSmall = document.createElement("small");
+          deviceSmall.textContent = `Device: ${dataPoint.origin || "Unknown"} | Time: ${new Date(
+            dataPoint.time
+          ).toLocaleString()}`;
+          readingDiv.appendChild(deviceSmall);
+
+          container.appendChild(readingDiv);
+
+          // Remove updated class after animation
+          setTimeout(() => {
+            readingDiv.classList.remove("updated");
+          }, 2000);
+        });
+      }
+
+      // Convert value based on unit preferences and variable type
+      function convertValue(dataPoint) {
+        const variable = dataPoint.variable.toLowerCase();
+        const value = parseFloat(dataPoint.value);
+        const originalUnit = dataPoint.unit || "";
+
+        // Temperature conversions
+        if (
+          variable.includes("temp") ||
+          originalUnit.includes("°") ||
+          originalUnit.includes("celsius") ||
+          originalUnit.includes("fahrenheit")
+        ) {
+          return convertTemperature(value, originalUnit, unitPreferences.temperature);
+        }
+
+        // Distance conversions
+        if (
+          variable.includes("distance") ||
+          variable.includes("height") ||
+          variable.includes("length") ||
+          originalUnit.includes("m") ||
+          originalUnit.includes("ft") ||
+          originalUnit.includes("km") ||
+          originalUnit.includes("mi")
+        ) {
+          return convertDistance(value, originalUnit, unitPreferences.distance);
+        }
+
+        // Weight conversions
+        if (
+          variable.includes("weight") ||
+          variable.includes("mass") ||
+          originalUnit.includes("kg") ||
+          originalUnit.includes("lb") ||
+          originalUnit.includes("g") ||
+          originalUnit.includes("oz")
+        ) {
+          return convertWeight(value, originalUnit, unitPreferences.weight);
+        }
+
+        // Default: no conversion
+        return {
+          value: value.toFixed(2),
+          unit: originalUnit || "units",
+        };
+      }
+
+      // Temperature conversion functions
+      function convertTemperature(value, fromUnit, toUnit) {
+        let celsius = value;
+
+        // Convert to Celsius first
+        if (fromUnit.includes("°F") || fromUnit.includes("fahrenheit")) {
+          celsius = ((value - 32) * 5) / 9;
+        } else if (fromUnit.includes("K") || fromUnit.includes("kelvin")) {
+          celsius = value - 273.15;
+        }
+
+        // Convert from Celsius to target unit
+        let result = celsius;
+        if (toUnit === "°F") {
+          result = (celsius * 9) / 5 + 32;
+        } else if (toUnit === "K") {
+          result = celsius + 273.15;
+        }
+
+        return {
+          value: result.toFixed(2),
+          unit: toUnit,
+        };
+      }
+
+      // Distance conversion functions
+      function convertDistance(value, fromUnit, toUnit) {
+        let meters = value;
+
+        // Convert to meters first
+        if (fromUnit.includes("ft") || fromUnit.includes("feet")) {
+          meters = value * 0.3048;
+        } else if (fromUnit.includes("km")) {
+          meters = value * 1000;
+        } else if (fromUnit.includes("mi") || fromUnit.includes("mile")) {
+          meters = value * 1609.34;
+        }
+
+        // Convert from meters to target unit
+        let result = meters;
+        if (toUnit === "ft") {
+          result = meters / 0.3048;
+        } else if (toUnit === "km") {
+          result = meters / 1000;
+        } else if (toUnit === "mi") {
+          result = meters / 1609.34;
+        }
+
+        return {
+          value: result.toFixed(2),
+          unit: toUnit,
+        };
+      }
+
+      // Weight conversion functions
+      function convertWeight(value, fromUnit, toUnit) {
+        let kg = value;
+
+        // Convert to kg first
+        if (fromUnit.includes("lb") || fromUnit.includes("pound")) {
+          kg = value * 0.453592;
+        } else if (fromUnit.includes("g") && !fromUnit.includes("kg")) {
+          kg = value / 1000;
+        } else if (fromUnit.includes("oz") || fromUnit.includes("ounce")) {
+          kg = value * 0.0283495;
+        }
+
+        // Convert from kg to target unit
+        let result = kg;
+        if (toUnit === "lb") {
+          result = kg / 0.453592;
+        } else if (toUnit === "g") {
+          result = kg * 1000;
+        } else if (toUnit === "oz") {
+          result = kg / 0.0283495;
+        }
+
+        return {
+          value: result.toFixed(2),
+          unit: toUnit,
+        };
+      }
+
+      // Update unit preferences from controls
+      function updateUnits() {
+        unitPreferences.temperature = document.getElementById("temp-unit").value;
+        unitPreferences.distance = document.getElementById("distance-unit").value;
+        unitPreferences.weight = document.getElementById("weight-unit").value;
+
+        // Update display with new units
+        updateDisplay();
+
+        document.getElementById("status").textContent = "Unit preferences updated";
+      }
+
+      // Reset to default units
+      function resetToDefaults() {
+        unitPreferences = {
+          temperature: "°C",
+          distance: "m",
+          weight: "kg",
+        };
+
+        // Update select controls
+        document.getElementById("temp-unit").value = "°C";
+        document.getElementById("distance-unit").value = "m";
+        document.getElementById("weight-unit").value = "kg";
+
+        // Update display
+        updateDisplay();
+
+        document.getElementById("status").textContent = "Reset to default units";
+      }
+
+      // Handle errors
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        document.getElementById("error").style.display = "block";
+        document.getElementById("error").textContent = "Error: " + (error.message || "Unknown error");
+      });
+
+      // Initialize widget
+      window.TagoIO.ready({
+        header: { color: "#607D8B" },
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Basic Widget</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Basic Custom Widget</h1>
+    <div id="loading">Loading widget...</div>
+    <div id="content" style="display: none">
+      <h3>Widget Information</h3>
+      <p><strong>Widget ID:</strong> <span id="widget-id">-</span></p>
+      <p><strong>Dashboard ID:</strong> <span id="dashboard-id">-</span></p>
+      <p><strong>Widget Label:</strong> <span id="widget-label">-</span></p>
+      <p><strong>Variables Count:</strong> <span id="variables-count">-</span></p>
+
+      <h3>Configured Variables</h3>
+      <ul id="variables-list"></ul>
+    </div>
+    <div id="error" class="error" style="display: none"></div>
+
+    <script>
+      /**
+       * Basic Custom Widget Example
+       * Demonstrates minimal setup and widget initialization
+       */
+
+      // Handle widget startup
+      window.TagoIO.onStart(function (widget) {
+        console.log("Widget started:", widget);
+
+        // Show content, hide loading
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("content").style.display = "block";
+
+        // Display widget information
+        document.getElementById("widget-id").textContent = widget.id || "N/A";
+        document.getElementById("dashboard-id").textContent = widget.dashboard || "N/A";
+        document.getElementById("widget-label").textContent = widget.label || "No label";
+        document.getElementById("variables-count").textContent = widget.display.variables.length;
+
+        // Display variables
+        const variablesList = document.getElementById("variables-list");
+        variablesList.textContent = "";
+
+        if (widget.display.variables.length === 0) {
+          const li = document.createElement("li");
+          li.textContent = "No variables configured";
+          variablesList.appendChild(li);
+        } else {
+          widget.display.variables.forEach(function (variable) {
+            const li = document.createElement("li");
+            const strong = document.createElement("strong");
+            strong.textContent = variable.variable;
+            li.appendChild(strong);
+            li.appendChild(document.createTextNode(` (Device: ${variable.origin.id})`));
+            variablesList.appendChild(li);
+          });
+        }
+      });
+
+      // Handle errors
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        document.getElementById("error").style.display = "block";
+        document.getElementById("error").textContent = "Error: " + (error.message || "Unknown error");
+        document.getElementById("loading").style.display = "none";
+      });
+
+      // Initialize widget
+      window.TagoIO.ready({
+        header: { color: "#2196F3" },
+      });
+    </script>
+  </body>
+</html>

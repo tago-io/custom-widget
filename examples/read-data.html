@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Read Data Widget</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .variable {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ddd;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Read Data Widget</h1>
+    <p>Demonstrates real-time data retrieval from TagoIO devices.</p>
+
+    <div id="status" class="status">Waiting for data...</div>
+    <div id="error" class="error" style="display: none"></div>
+
+    <h3>Real-time Data</h3>
+    <div id="data-container">No data received yet</div>
+
+    <script>
+      /**
+       * Read Data Example
+       * Demonstrates real-time data retrieval using onRealtime callback
+       */
+
+      let dataCount = 0;
+
+      // Handle widget startup
+      window.TagoIO.onStart(function (widget) {
+        console.log("Read Data Widget started:", widget);
+        document.getElementById("status").textContent = "Widget started, waiting for data...";
+      });
+
+      // Handle real-time data updates
+      window.TagoIO.onRealtime(function (data) {
+        console.log("Real-time data received:", data);
+        dataCount++;
+
+        document.getElementById("status").textContent = `Data updates received: ${dataCount}`;
+
+        const container = document.getElementById("data-container");
+        container.textContent = "";
+
+        // Process each data group
+        data.forEach(function (dataGroup, groupIndex) {
+          const groupDiv = document.createElement("div");
+
+          const groupTitle = document.createElement("h4");
+          groupTitle.textContent = `Data Group ${groupIndex + 1}`;
+          groupDiv.appendChild(groupTitle);
+
+          if (dataGroup.result && Array.isArray(dataGroup.result)) {
+            dataGroup.result.forEach(function (dataPoint) {
+              const variableDiv = document.createElement("div");
+              variableDiv.className = "variable";
+
+              // Create elements instead of using innerHTML
+              const variableStrong = document.createElement("strong");
+              variableStrong.textContent = dataPoint.variable || "Unknown";
+              variableDiv.appendChild(variableStrong);
+              variableDiv.appendChild(document.createTextNode(`: ${dataPoint.value} ${dataPoint.unit || ""}`));
+              variableDiv.appendChild(document.createElement("br"));
+
+              const timeSmall = document.createElement("small");
+              timeSmall.textContent = `Time: ${new Date(dataPoint.time).toLocaleString()}`;
+              variableDiv.appendChild(timeSmall);
+              variableDiv.appendChild(document.createElement("br"));
+
+              const deviceSmall = document.createElement("small");
+              deviceSmall.textContent = `Device: ${dataPoint.origin || "Unknown"}`;
+              variableDiv.appendChild(deviceSmall);
+
+              groupDiv.appendChild(variableDiv);
+            });
+          } else {
+            const noDataP = document.createElement("p");
+            noDataP.textContent = "No data points in this group";
+            groupDiv.appendChild(noDataP);
+          }
+
+          container.appendChild(groupDiv);
+        });
+      });
+
+      // Handle errors
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        document.getElementById("error").style.display = "block";
+        document.getElementById("error").textContent = "Error: " + (error.message || "Unknown error");
+      });
+
+      // Initialize widget
+      window.TagoIO.ready({
+        header: { color: "#4CAF50" },
+      });
+    </script>
+  </body>
+</html>
