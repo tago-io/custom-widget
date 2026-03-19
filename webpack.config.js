@@ -9,7 +9,7 @@ module.exports = {
     rules: [
       {
         test: /\.ts$/,
-        loader: `${__dirname}/node_modules/ts-loader`,
+        loader: "ts-loader",
         options: {
           configFile: `${__dirname}/tsconfig.json`,
         },

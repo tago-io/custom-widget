@@ -17,3 +17,12 @@ out/
 yarn.lock
 .cache
 !.github/**
+
+# pnpm
+.pnpm-store/
+
+# Turborepo
+.turbo/
+
+# Biome
+.biome/
