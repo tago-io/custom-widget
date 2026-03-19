@@ -1,10 +1,9 @@
 /******/ (() => { // webpackBootstrap
 /******/ 	"use strict";
-var __webpack_exports__ = {};
 
 // UNUSED EXPORTS: closeModal, deleteData, editData, editResourceData, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage
 
-;// CONCATENATED MODULE: ./src/utils.ts
+;// ./src/utils.ts
 var __assign = (undefined && undefined.__assign) || function () {
     __assign = Object.assign || function(t) {
         for (var s, i = 1, n = arguments.length; i < n; i++) {
@@ -49,7 +48,7 @@ function autoFillRecords(dataRecords, widgetVariables) {
 }
 
 
-;// CONCATENATED MODULE: ./src/custom-widget.ts
+;// ./src/custom-widget.ts
 /**
  * TagoIO Custom Widget SDK
  *

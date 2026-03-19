@@ -110,7 +110,7 @@ describe("sendMessage", () => {
 describe("sendData", () => {
   const mockPostMessage = vi.fn();
   const originalWindowParent = window.parent;
-  global.console.info = vi.fn();
+  globalThis.console.info = vi.fn();
 
   beforeAll(() => {
     window.parent.postMessage = mockPostMessage;

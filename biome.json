@@ -40,7 +40,6 @@
     }
   },
   "files": {
-    "includes": ["src/**"],
-    "experimentalScannerIgnores": ["dist/**", "node_modules/**", "coverage/**"]
+    "includes": ["src/**", "!**/dist", "!**/node_modules", "!**/coverage"]
   }
 }
