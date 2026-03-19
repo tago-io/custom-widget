@@ -52,7 +52,8 @@ let widgetVariables: TWidgetVariable[];
  * Promise/callback pool for tracking async operations
  * Each operation gets a unique key to match requests with responses
  */
-const pool: Array<(data: TData | null, error?: TError) => void> = [];
+type PoolCallback = (data: TData | null, error?: TError) => void;
+const pool: Record<string, PoolCallback | null> = {};
 
 /**
  * Event listener function that receives messages sent by the parent component
@@ -91,7 +92,7 @@ const receiveMessage = (event: TEvent): void => {
 
     // Handle successful operation responses
     if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
-      pool[data.key](data);
+      pool[data.key]!(data as unknown as TData);
     }
 
     // Handle error responses
@@ -100,7 +101,7 @@ const receiveMessage = (event: TEvent): void => {
         funcError(data);
       }
       if (data.key && pool[data.key]) {
-        pool[data.key](null, data);
+        pool[data.key]!(null, data as unknown as TError);
       }
     }
   }
@@ -207,9 +208,8 @@ const onSyncBlueprintDevices = (callback: TSyncBlueprintDevicesCallback) => {
  * @returns Promise when no callback is provided, void when callback is provided
  */
 const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
-  // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
-  pool[uniqueKey] = callback || null;
+  pool[uniqueKey] = (callback as PoolCallback) || null;
   const vars = Array.isArray(variables) ? variables : [variables];
 
   let autoFillArray: TDataRecord[] = [];
@@ -218,7 +218,6 @@ const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
       "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
 
-    // converts the variables to autofill
     autoFillArray = autoFillRecords(vars, widgetVariables);
   } else {
     vars.forEach((vari) => {
@@ -233,12 +232,11 @@ const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
     key: uniqueKey,
   });
 
-  // If a callback is not passed it returns the promise
   if (window.Promise && !callback) {
     return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
-      pool[uniqueKey] = (success: TData, error: TError): void => {
+      pool[uniqueKey] = (success: TData | null, error?: TError): void => {
         if (error) reject(error);
-        resolve(success);
+        resolve(success as TData);
       };
     });
   }
@@ -255,9 +253,8 @@ const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
  * @returns Promise when no callback is provided, void when callback is provided
  */
 const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
-  // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
-  pool[uniqueKey] = callback || null;
+  pool[uniqueKey] = (callback as PoolCallback) || null;
   const vars = Array.isArray(variables) ? variables : [variables];
 
   let autoFillArray: TDataRecord[] = [];
@@ -266,7 +263,6 @@ const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
       "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
 
-    // converts the variables to autofill
     autoFillArray = autoFillRecords(vars, widgetVariables);
   } else {
     vars.forEach((vari) => {
@@ -282,12 +278,11 @@ const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
     key: uniqueKey,
   });
 
-  // If a callback is not passed it returns the promise
   if (window.Promise && !callback) {
     return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
-      pool[uniqueKey] = (success: TData, error: TError): void => {
+      pool[uniqueKey] = (success: TData | null, error?: TError): void => {
         if (error) reject(error);
-        resolve(success);
+        resolve(success as TData);
       };
     });
   }
@@ -307,9 +302,8 @@ const deleteData = (
   variables: TDataRecord | TDataRecord[],
   callback?: TSendDataCallback
 ): Promise<TData> | undefined => {
-  // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
-  pool[uniqueKey] = callback || null;
+  pool[uniqueKey] = (callback as PoolCallback) || null;
   const vars = Array.isArray(variables) ? variables : [variables];
 
   sendMessage({
@@ -318,12 +312,11 @@ const deleteData = (
     key: uniqueKey,
   });
 
-  // If a callback is not passed it returns the promise
   if (window.Promise && !callback) {
     return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
-      pool[uniqueKey] = (success: TData, error: TError): void => {
+      pool[uniqueKey] = (success: TData | null, error?: TError): void => {
         if (error) reject(error);
-        resolve(success);
+        resolve(success as TData);
       };
     });
   }
@@ -344,7 +337,7 @@ const editResourceData = (
   callback?: TSendDataCallback
 ): Promise<TData> | undefined => {
   const uniqueKey: string = shortid.generate();
-  pool[uniqueKey] = callback || null;
+  pool[uniqueKey] = (callback as PoolCallback) || null;
   const variablesToEdit = Array.isArray(variables) ? variables : [variables];
 
   sendMessage({
@@ -355,9 +348,9 @@ const editResourceData = (
 
   if (window.Promise && !callback) {
     return new Promise((resolve: (data: TData) => void, reject: (data: TError) => void) => {
-      pool[uniqueKey] = (success: TData, error: TError): void => {
+      pool[uniqueKey] = (success: TData | null, error?: TError): void => {
         if (error) reject(error);
-        resolve(success);
+        resolve(success as TData);
       };
     });
   }
