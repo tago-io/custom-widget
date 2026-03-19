@@ -1,35 +1,36 @@
 {
-  "name": "@tago-io/custom-widget",
-  "description": "TagoIO Toolkit to build your own widgets",
-  "version": "1.1.0",
-  "main": "./dist/custom-widget.js",
+  "name": "@tago-io/custom-widget-monorepo",
+  "private": true,
+  "description": "TagoIO Custom Widget SDK monorepo",
   "author": "Tago LLC",
   "license": "Apache-2.0",
   "repository": "tago-io/custom-widget",
+  "packageManager": "pnpm@10.13.1",
   "scripts": {
-    "build:scripts": "webpack && MINIMIZE=true webpack",
-    "build:css": "lessc ./src/css/custom-widget.less ./dist/custom-widget.css",
-    "build:cssmin": "cleancss -o ./dist/custom-widget.min.css ./dist/custom-widget.css",
-    "build": "npm run build:scripts && npm run build:css && npm run build:cssmin",
-    "prepare": "npm run build",
-    "test": "vitest",
-    "coverage": "vitest run --coverage",
-    "check:types": "tsc --noEmit",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --write src/",
-    "format": "biome format --write src/"
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "check:types": "turbo run check:types",
+    "lint": "turbo run lint",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build && changeset publish"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.8",
+    "@changesets/cli": "~2.30.0",
     "@vitest/coverage-v8": "4.1.0",
-    "clean-css-cli": "5.6.3",
     "jsdom": "29.0.0",
-    "less": "4.6.4",
-    "ts-loader": "9.5.4",
+    "turbo": "2.8.19",
     "typescript": "5.9.3",
-    "vite": "6.4.1",
-    "vitest": "4.1.0",
-    "webpack": "5.105.4",
-    "webpack-cli": "7.0.2"
+    "vite": "8.0.0",
+    "vitest": "4.1.0"
   }
 }

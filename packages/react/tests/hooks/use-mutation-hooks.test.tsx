@@ -1,0 +1,160 @@
+import { renderHook, act } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
+import { useSendData } from "../../src/hooks/use-send-data.js";
+import { useEditData } from "../../src/hooks/use-edit-data.js";
+import { useDeleteData } from "../../src/hooks/use-delete-data.js";
+import { useEditResourceData } from "../../src/hooks/use-edit-resource-data.js";
+
+let mockPostMessage: ReturnType<typeof vi.fn>;
+
+function wrapper({ children }: { children: ReactNode }) {
+  return <TagoIOProvider>{children}</TagoIOProvider>;
+}
+
+function respondToLastMessage(status: boolean) {
+  const calls = mockPostMessage.mock.calls;
+  const lastCall = calls[calls.length - 1];
+  const key = lastCall[0].key;
+  if (key) {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: { status, key, result: [], ...(status ? {} : { message: "failed" }) },
+      })
+    );
+  }
+}
+
+describe("mutation hooks", () => {
+  beforeEach(() => {
+    mockPostMessage = vi.fn();
+    window.parent.postMessage = mockPostMessage;
+  });
+
+  describe("useSendData", () => {
+    it("sends data and resolves on success", async () => {
+      const { result } = renderHook(() => useSendData(), { wrapper });
+
+      expect(result.current.isSending).toBe(false);
+      expect(result.current.error).toBeNull();
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.sendData({ variable: "temp", value: 42 });
+      });
+
+      expect(result.current.isSending).toBe(true);
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isSending).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("sends data and captures error on failure", async () => {
+      const { result } = renderHook(() => useSendData(), { wrapper });
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.sendData({ variable: "temp", value: 42 }).catch(() => {});
+      });
+
+      await act(async () => {
+        respondToLastMessage(false);
+        await promise!;
+      });
+
+      expect(result.current.isSending).toBe(false);
+      expect(result.current.error).toBeDefined();
+    });
+
+    it("reset clears error state", async () => {
+      const { result } = renderHook(() => useSendData(), { wrapper });
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.sendData({ variable: "temp", value: 42 }).catch(() => {});
+      });
+
+      await act(async () => {
+        respondToLastMessage(false);
+        await promise!;
+      });
+
+      expect(result.current.error).toBeDefined();
+
+      act(() => {
+        result.current.reset();
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.isSending).toBe(false);
+    });
+  });
+
+  describe("useEditData", () => {
+    it("sends edit request", async () => {
+      const { result } = renderHook(() => useEditData(), { wrapper });
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.editData({ variable: "temp", value: 42 });
+      });
+
+      const sentMessage = mockPostMessage.mock.calls[mockPostMessage.mock.calls.length - 1][0];
+      expect(sentMessage.method).toBe("edit");
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isEditing).toBe(false);
+    });
+  });
+
+  describe("useDeleteData", () => {
+    it("sends delete request", async () => {
+      const { result } = renderHook(() => useDeleteData(), { wrapper });
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.deleteData({ variable: "temp", value: 42 });
+      });
+
+      const sentMessage = mockPostMessage.mock.calls[mockPostMessage.mock.calls.length - 1][0];
+      expect(sentMessage.method).toBe("delete");
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isDeleting).toBe(false);
+    });
+  });
+
+  describe("useEditResourceData", () => {
+    it("sends edit-resource request", async () => {
+      const { result } = renderHook(() => useEditResourceData(), { wrapper });
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.editResourceData({ variable: "temp", value: 42 });
+      });
+
+      const sentMessage = mockPostMessage.mock.calls[mockPostMessage.mock.calls.length - 1][0];
+      expect(sentMessage.method).toBe("edit-resource");
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isEditing).toBe(false);
+    });
+  });
+});

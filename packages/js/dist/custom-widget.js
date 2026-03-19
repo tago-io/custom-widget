@@ -4,17 +4,6 @@
 // UNUSED EXPORTS: closeModal, deleteData, editData, editResourceData, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage
 
 ;// ./src/utils.ts
-var __assign = (undefined && undefined.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
 /**
  * Apply the auto-fill logic for the data records to make sure they have the necessary data before submission.
  *
@@ -33,14 +22,19 @@ var __assign = (undefined && undefined.__assign) || function () {
  * @return Array of data records for submission according to the auto-fill logic.
  */
 function autoFillRecords(dataRecords, widgetVariables) {
-    var autoFilledArray = [];
+    const autoFilledArray = [];
     if (!dataRecords || !widgetVariables) {
         return [];
     }
-    dataRecords.forEach(function (dataRecord) {
-        widgetVariables.forEach(function (widgetVar) {
+    dataRecords.forEach((dataRecord) => {
+        widgetVariables.forEach((widgetVar) => {
             if (dataRecord.variable === widgetVar.variable) {
-                autoFilledArray.push(__assign(__assign({ device: widgetVar.origin.id, origin: widgetVar.origin.id }, (widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket })), dataRecord));
+                autoFilledArray.push({
+                    device: widgetVar.origin.id,
+                    origin: widgetVar.origin.id,
+                    ...(widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket }),
+                    ...dataRecord,
+                });
             }
         });
     });
@@ -58,17 +52,6 @@ function autoFillRecords(dataRecords, widgetVariables) {
  * The SDK handles communication between your widget and the TagoIO platform through
  * a postMessage-based messaging system.
  */
-var custom_widget_assign = (undefined && undefined.__assign) || function () {
-    custom_widget_assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return custom_widget_assign.apply(this, arguments);
-};
 
 function generateId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -89,14 +72,14 @@ window.TagoIO = {};
  */
 window.TagoIO.autoFill = true;
 // Internal callback function storage
-var funcRealtime;
-var funcStart;
-var funcError;
-var funcSyncUserInfo;
-var funcSyncBlueprintDevices;
+let funcRealtime;
+let funcStart;
+let funcError;
+let funcSyncUserInfo;
+let funcSyncBlueprintDevices;
 // Widget variables storage - populated when the widget starts
-var widgetVariables;
-var pool = {};
+let widgetVariables;
+const pool = {};
 /**
  * Event listener function that receives messages sent by the parent component
  *
@@ -105,9 +88,8 @@ var pool = {};
  *
  * @param event - Event coming from the parent component containing data and metadata
  */
-var receiveMessage = function (event) {
-    var _a, _b;
-    var data = event.data;
+const receiveMessage = (event) => {
+    const { data } = event;
     if (data) {
         // Handle user information synchronization
         if (data.userInformation && funcSyncUserInfo) {
@@ -130,7 +112,7 @@ var receiveMessage = function (event) {
         }
         // Handle successful operation responses
         if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
-            (_a = pool[data.key]) === null || _a === void 0 ? void 0 : _a.call(pool, data);
+            pool[data.key]?.(data);
         }
         // Handle error responses
         if (data.status === false) {
@@ -138,7 +120,7 @@ var receiveMessage = function (event) {
                 funcError(data);
             }
             if (data.key && pool[data.key]) {
-                (_b = pool[data.key]) === null || _b === void 0 ? void 0 : _b.call(pool, null, data);
+                pool[data.key]?.(null, data);
             }
         }
     }
@@ -153,7 +135,7 @@ window.addEventListener("message", receiveMessage, false);
  *
  * @param message - Message object to send to the parent component
  */
-var sendMessage = function (message) {
+const sendMessage = (message) => {
     window.parent.postMessage(message, "*");
 };
 /**
@@ -164,8 +146,8 @@ var sendMessage = function (message) {
  *
  * @param options - Configuration options for the widget display
  */
-var onReady = function (options) {
-    sendMessage(custom_widget_assign({ loaded: true }, options));
+const onReady = (options) => {
+    sendMessage({ loaded: true, ...options });
 };
 /**
  * Register a callback function to handle widget startup
@@ -175,7 +157,7 @@ var onReady = function (options) {
  *
  * @param callback - Function to call when the widget starts, receives widget configuration
  */
-var onStart = function (callback) {
+const onStart = (callback) => {
     funcStart = callback;
 };
 /**
@@ -186,7 +168,7 @@ var onStart = function (callback) {
  *
  * @param callback - Function to call when real-time data is received
  */
-var onRealtime = function (callback) {
+const onRealtime = (callback) => {
     funcRealtime = callback;
 };
 /**
@@ -197,7 +179,7 @@ var onRealtime = function (callback) {
  *
  * @param callback - Function to call when errors occur
  */
-var onError = function (callback) {
+const onError = (callback) => {
     funcError = callback;
 };
 /**
@@ -208,7 +190,7 @@ var onError = function (callback) {
  *
  * @param callback - Function to call when user information is available
  */
-var onSyncUserInformation = function (callback) {
+const onSyncUserInformation = (callback) => {
     funcSyncUserInfo = callback;
 };
 /**
@@ -219,7 +201,7 @@ var onSyncUserInformation = function (callback) {
  *
  * @param callback - Function to call when blueprint devices information is available
  */
-var onSyncBlueprintDevices = function (callback) {
+const onSyncBlueprintDevices = (callback) => {
     funcSyncBlueprintDevices = callback;
 };
 /**
@@ -235,17 +217,17 @@ var onSyncBlueprintDevices = function (callback) {
  * @param callback - Optional callback function to handle the response
  * @returns Promise when no callback is provided, void when callback is provided
  */
-var sendData = function (variables, callback) {
-    var uniqueKey = generateId();
+const sendData = (variables, callback) => {
+    const uniqueKey = generateId();
     pool[uniqueKey] = callback || null;
-    var vars = Array.isArray(variables) ? variables : [variables];
-    var autoFillArray = [];
+    const vars = Array.isArray(variables) ? variables : [variables];
+    let autoFillArray = [];
     if (window.TagoIO.autoFill) {
         console.info("AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false.");
         autoFillArray = autoFillRecords(vars, widgetVariables);
     }
     else {
-        vars.forEach(function (vari) {
+        vars.forEach((vari) => {
             if (!vari.bucket || !vari.origin) {
                 console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
             }
@@ -256,8 +238,8 @@ var sendData = function (variables, callback) {
         key: uniqueKey,
     });
     if (window.Promise && !callback) {
-        return new Promise(function (resolve, reject) {
-            pool[uniqueKey] = function (success, error) {
+        return new Promise((resolve, reject) => {
+            pool[uniqueKey] = (success, error) => {
                 if (error)
                     reject(error);
                 resolve(success);
@@ -275,17 +257,17 @@ var sendData = function (variables, callback) {
  * @param callback - Optional callback function to handle the response
  * @returns Promise when no callback is provided, void when callback is provided
  */
-var editData = function (variables, callback) {
-    var uniqueKey = generateId();
+const editData = (variables, callback) => {
+    const uniqueKey = generateId();
     pool[uniqueKey] = callback || null;
-    var vars = Array.isArray(variables) ? variables : [variables];
-    var autoFillArray = [];
+    const vars = Array.isArray(variables) ? variables : [variables];
+    let autoFillArray = [];
     if (window.TagoIO.autoFill) {
         console.info("AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false.");
         autoFillArray = autoFillRecords(vars, widgetVariables);
     }
     else {
-        vars.forEach(function (vari) {
+        vars.forEach((vari) => {
             if (!vari.bucket || !vari.origin) {
                 console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
             }
@@ -297,8 +279,8 @@ var editData = function (variables, callback) {
         key: uniqueKey,
     });
     if (window.Promise && !callback) {
-        return new Promise(function (resolve, reject) {
-            pool[uniqueKey] = function (success, error) {
+        return new Promise((resolve, reject) => {
+            pool[uniqueKey] = (success, error) => {
                 if (error)
                     reject(error);
                 resolve(success);
@@ -316,18 +298,18 @@ var editData = function (variables, callback) {
  * @param callback - Optional callback function to handle the response
  * @returns Promise when no callback is provided, void when callback is provided
  */
-var deleteData = function (variables, callback) {
-    var uniqueKey = generateId();
+const deleteData = (variables, callback) => {
+    const uniqueKey = generateId();
     pool[uniqueKey] = callback || null;
-    var vars = Array.isArray(variables) ? variables : [variables];
+    const vars = Array.isArray(variables) ? variables : [variables];
     sendMessage({
         variables: vars,
         method: "delete",
         key: uniqueKey,
     });
     if (window.Promise && !callback) {
-        return new Promise(function (resolve, reject) {
-            pool[uniqueKey] = function (success, error) {
+        return new Promise((resolve, reject) => {
+            pool[uniqueKey] = (success, error) => {
                 if (error)
                     reject(error);
                 resolve(success);
@@ -345,18 +327,18 @@ var deleteData = function (variables, callback) {
  * @param callback - Optional callback function to handle the response
  * @returns Promise when no callback is provided, void when callback is provided
  */
-var editResourceData = function (variables, callback) {
-    var uniqueKey = generateId();
+const editResourceData = (variables, callback) => {
+    const uniqueKey = generateId();
     pool[uniqueKey] = callback || null;
-    var variablesToEdit = Array.isArray(variables) ? variables : [variables];
+    const variablesToEdit = Array.isArray(variables) ? variables : [variables];
     sendMessage({
         variables: variablesToEdit,
         method: "edit-resource",
         key: uniqueKey,
     });
     if (window.Promise && !callback) {
-        return new Promise(function (resolve, reject) {
-            pool[uniqueKey] = function (success, error) {
+        return new Promise((resolve, reject) => {
+            pool[uniqueKey] = (success, error) => {
                 if (error)
                     reject(error);
                 resolve(success);
@@ -372,8 +354,8 @@ var editResourceData = function (variables, callback) {
  *
  * @param url - URL to open in the parent window
  */
-var openLink = function (url) {
-    sendMessage({ method: "open-link", url: url });
+const openLink = (url) => {
+    sendMessage({ method: "open-link", url });
 };
 /**
  * Close the widget modal
@@ -381,7 +363,7 @@ var openLink = function (url) {
  * If your widget is displayed in a modal dialog, this function allows you to
  * programmatically close that modal from within the widget.
  */
-var closeModal = function () {
+const closeModal = () => {
     sendMessage({ method: "close-modal" });
 };
 // Bind functions to the `window.TagoIO` object for access in the Custom Widget code.

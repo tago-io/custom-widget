@@ -1,17 +1,13 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "module": "ES2020",
-    "lib": ["ES2022", "DOM"],
-    "strict": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "moduleResolution": "node",
-    "baseUrl": "./",
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "types": ["vitest/globals"]
+    "rootDir": "./src"
   },
-  "include": ["./src/**/*"]
+  "include": [],
+  "references": [
+    { "path": "./packages/js" },
+    { "path": "./packages/core" },
+    { "path": "./packages/react" }
+  ]
 }

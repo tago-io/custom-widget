@@ -40,6 +40,6 @@
     }
   },
   "files": {
-    "includes": ["src/**", "!**/dist", "!**/node_modules", "!**/coverage"]
+    "includes": ["packages/*/src/**", "packages/*/tests/**", "!**/dist", "!**/node_modules", "!**/coverage"]
   }
 }

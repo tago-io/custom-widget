@@ -26,3 +26,7 @@ yarn.lock
 
 # Biome
 .biome/
+
+# Package build outputs (JS package dist is committed)
+packages/core/dist/
+packages/react/dist/
