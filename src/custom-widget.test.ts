@@ -1,11 +1,12 @@
-import * as shortid from "shortid";
-
 import { closeModal, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage } from "./custom-widget";
 
-// Mock the `shortid` library, but the `generate` method used in `spyOn` later to specify a key value per test.
-vi.mock("shortid", () => ({
-  generate: vi.fn(() => "staticKey"),
-}));
+const mockRandomUUID = vi.fn(() => "staticKey");
+
+Object.defineProperty(globalThis.crypto, "randomUUID", {
+  value: mockRandomUUID,
+  writable: true,
+  configurable: true,
+});
 
 const mockOnStartCallback = vi.fn();
 const mockOnErrorCallback = vi.fn();
@@ -106,29 +107,6 @@ describe("sendMessage", () => {
   });
 });
 
-describe("sendMessage", () => {
-  const mockPostMessage = vi.fn();
-  const originalWindowParent = window.parent;
-
-  beforeAll(() => {
-    window.parent.postMessage = mockPostMessage;
-  });
-
-  beforeEach(() => {
-    mockPostMessage.mockClear();
-  });
-
-  afterAll(() => {
-    window.parent = originalWindowParent;
-  });
-
-  it("sends a message to the parent element", () => {
-    const mockMessage = { key: "testKey" };
-    sendMessage(mockMessage);
-    expect(mockPostMessage).toHaveBeenCalledWith(mockMessage, "*");
-  });
-});
-
 describe("sendData", () => {
   const mockPostMessage = vi.fn();
   const originalWindowParent = window.parent;
@@ -155,8 +133,7 @@ describe("sendData", () => {
   it("sends data to the API with auto-fill disabled, without a callback for sendData", () => {
     window.TagoIO.autoFill = false;
     const key = "keyNoAutoFill";
-    vi.spyOn(shortid, "generate").mockImplementation(() => key);
-    // TODO Fix type for sending data to not require time Partial and definitely not require ID
+    mockRandomUUID.mockReturnValueOnce(key);
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
     const mockMessage = { key: key, variables: [mockDataToSend] };
     const mockReceivedMessage = { data: { status: true, key: key } };
@@ -170,8 +147,7 @@ describe("sendData", () => {
     window.TagoIO.autoFill = false;
     const key = "keyNoAutoFillCallback";
     const mockSendDataCallback = vi.fn();
-    vi.spyOn(shortid, "generate").mockImplementation(() => key);
-    // TODO Fix type for sending data to not require time Partial and definitely not require ID
+    mockRandomUUID.mockReturnValueOnce(key);
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
     const mockMessage = { key: key, variables: [mockDataToSend] };
     const mockReceivedMessage = { data: { status: true, key: key } };
@@ -184,8 +160,7 @@ describe("sendData", () => {
 
   it("sends data to the API with auto-fill enabled, without a callback for sendData", () => {
     const key = "keyAutoFill";
-    vi.spyOn(shortid, "generate").mockImplementation(() => key);
-    // TODO Fix type for sending data to not require time Partial and definitely not require ID
+    mockRandomUUID.mockReturnValueOnce(key);
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
     const mockMessageAutoFilled = {
       key: key,
@@ -201,8 +176,7 @@ describe("sendData", () => {
   it("sends data to the API with auto-fill enabled, with a callback for sendData", () => {
     const key = "keyAutoFillCallback";
     const mockSendDataCallback = vi.fn();
-    vi.spyOn(shortid, "generate").mockImplementation(() => key);
-    // TODO Fix type for sending data to not require time Partial and definitely not require ID
+    mockRandomUUID.mockReturnValueOnce(key);
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
     const mockMessageAutoFilled = {
       key: key,

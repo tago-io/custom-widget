@@ -8,8 +8,14 @@
  * a postMessage-based messaging system.
  */
 
-import * as shortid from "shortid";
 import { autoFillRecords } from "./utils";
+
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
 
 /**
  * Global type declaration for the TagoIO SDK interface
@@ -92,7 +98,7 @@ const receiveMessage = (event: TEvent): void => {
 
     // Handle successful operation responses
     if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
-      pool[data.key]!(data as unknown as TData);
+      pool[data.key]?.(data as unknown as TData);
     }
 
     // Handle error responses
@@ -101,7 +107,7 @@ const receiveMessage = (event: TEvent): void => {
         funcError(data);
       }
       if (data.key && pool[data.key]) {
-        pool[data.key]!(null, data as unknown as TError);
+        pool[data.key]?.(null, data as unknown as TError);
       }
     }
   }
@@ -208,7 +214,7 @@ const onSyncBlueprintDevices = (callback: TSyncBlueprintDevicesCallback) => {
  * @returns Promise when no callback is provided, void when callback is provided
  */
 const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
-  const uniqueKey: string = shortid.generate();
+  const uniqueKey: string = generateId();
   pool[uniqueKey] = (callback as PoolCallback) || null;
   const vars = Array.isArray(variables) ? variables : [variables];
 
@@ -253,7 +259,7 @@ const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
  * @returns Promise when no callback is provided, void when callback is provided
  */
 const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
-  const uniqueKey: string = shortid.generate();
+  const uniqueKey: string = generateId();
   pool[uniqueKey] = (callback as PoolCallback) || null;
   const vars = Array.isArray(variables) ? variables : [variables];
 
@@ -302,7 +308,7 @@ const deleteData = (
   variables: TDataRecord | TDataRecord[],
   callback?: TSendDataCallback
 ): Promise<TData> | undefined => {
-  const uniqueKey: string = shortid.generate();
+  const uniqueKey: string = generateId();
   pool[uniqueKey] = (callback as PoolCallback) || null;
   const vars = Array.isArray(variables) ? variables : [variables];
 
@@ -336,7 +342,7 @@ const editResourceData = (
   variables: TDataRecord | TDataRecord[],
   callback?: TSendDataCallback
 ): Promise<TData> | undefined => {
-  const uniqueKey: string = shortid.generate();
+  const uniqueKey: string = generateId();
   pool[uniqueKey] = (callback as PoolCallback) || null;
   const variablesToEdit = Array.isArray(variables) ? variables : [variables];
 
