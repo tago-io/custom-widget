@@ -130,7 +130,7 @@ describe("sendData", () => {
     window.parent = originalWindowParent;
   });
 
-  it("sends data to the API with auto-fill disabled, without a callback for sendData", () => {
+  it("sends data to the API with auto-fill disabled, without a callback for sendData", async () => {
     window.TagoIO.autoFill = false;
     const key = "keyNoAutoFill";
     mockRandomUUID.mockReturnValueOnce(key);
@@ -140,7 +140,7 @@ describe("sendData", () => {
     const result = sendData(mockDataToSend);
     receiveMessage(mockReceivedMessage);
     expect(mockPostMessage).toHaveBeenCalledWith(mockMessage, "*");
-    expect(result).resolves.toStrictEqual(mockReceivedMessage.data);
+    await expect(result).resolves.toStrictEqual(mockReceivedMessage.data);
   });
 
   it("sends data to the API with auto-fill disabled, with a callback for sendData", () => {
@@ -158,7 +158,7 @@ describe("sendData", () => {
     expect(mockSendDataCallback).toHaveBeenCalledWith(mockReceivedMessage.data);
   });
 
-  it("sends data to the API with auto-fill enabled, without a callback for sendData", () => {
+  it("sends data to the API with auto-fill enabled, without a callback for sendData", async () => {
     const key = "keyAutoFill";
     mockRandomUUID.mockReturnValueOnce(key);
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
@@ -170,7 +170,7 @@ describe("sendData", () => {
     const result = sendData(mockDataToSend);
     receiveMessage(mockReceivedMessage);
     expect(mockPostMessage).toHaveBeenCalledWith(mockMessageAutoFilled, "*");
-    expect(result).resolves.toStrictEqual(mockReceivedMessage.data);
+    await expect(result).resolves.toStrictEqual(mockReceivedMessage.data);
   });
 
   it("sends data to the API with auto-fill enabled, with a callback for sendData", () => {

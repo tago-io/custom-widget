@@ -2,8 +2,12 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Enable Vitest's globals (e.g. describe, it, etc) to be used in tests without importing.
     globals: true,
     environment: "jsdom",
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.test.ts", "src/**/*.d.ts"],
+    },
   },
 });
