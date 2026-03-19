@@ -206,7 +206,7 @@ const onSyncBlueprintDevices = (callback: TSyncBlueprintDevicesCallback) => {
  * @param callback - Optional callback function to handle the response
  * @returns Promise when no callback is provided, void when callback is provided
  */
-const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
+const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
@@ -221,7 +221,7 @@ const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
     // converts the variables to autofill
     autoFillArray = autoFillRecords(vars, widgetVariables);
   } else {
-    vars.map((vari) => {
+    vars.forEach((vari) => {
       if (!vari.bucket || !vari.origin) {
         console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
       }
@@ -254,7 +254,7 @@ const sendData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
  * @param callback - Optional callback function to handle the response
  * @returns Promise when no callback is provided, void when callback is provided
  */
-const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
+const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
@@ -269,7 +269,7 @@ const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
     // converts the variables to autofill
     autoFillArray = autoFillRecords(vars, widgetVariables);
   } else {
-    vars.map((vari) => {
+    vars.forEach((vari) => {
       if (!vari.bucket || !vari.origin) {
         console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
       }
@@ -303,7 +303,10 @@ const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
  * @param callback - Optional callback function to handle the response
  * @returns Promise when no callback is provided, void when callback is provided
  */
-const deleteData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | void => {
+const deleteData = (
+  variables: TDataRecord | TDataRecord[],
+  callback?: TSendDataCallback
+): Promise<TData> | undefined => {
   // generates a unique key to run the callback or promisse
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
@@ -339,7 +342,7 @@ const deleteData = (variables: TDataRecord | TDataRecord[], callback?: TSendData
 const editResourceData = (
   variables: TDataRecord | TDataRecord[],
   callback?: TSendDataCallback
-): Promise<TData> | void => {
+): Promise<TData> | undefined => {
   const uniqueKey: string = shortid.generate();
   pool[uniqueKey] = callback || null;
   const variablesToEdit = Array.isArray(variables) ? variables : [variables];
@@ -402,14 +405,14 @@ window.TagoIO.closeModal = closeModal;
  * where the global window.TagoIO object might not be preferred.
  */
 export {
-  receiveMessage,
-  sendMessage,
-  onStart,
-  onRealtime,
-  onError,
-  sendData,
-  editData,
-  deleteData,
-  editResourceData,
   closeModal,
+  deleteData,
+  editData,
+  editResourceData,
+  onError,
+  onRealtime,
+  onStart,
+  receiveMessage,
+  sendData,
+  sendMessage,
 };

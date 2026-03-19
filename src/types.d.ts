@@ -457,7 +457,7 @@ type TTagoIO = {
    *
    * @return Promise for the request itself or `undefined`.
    */
-  sendData: (dataToSend: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | void;
+  sendData: (dataToSend: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   /**
    * Delete device variables' data on the TagoIO API.
    *
@@ -468,7 +468,7 @@ type TTagoIO = {
    *
    * @return Promise for the request itself or `undefined`.
    */
-  deleteData: (dataToDelete: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | void;
+  deleteData: (dataToDelete: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   /**
    * Edit device variables' data on the TagoIO API.
    *
@@ -479,7 +479,7 @@ type TTagoIO = {
    *
    * @return Promise for the request itself or `undefined`.
    */
-  editData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | void;
+  editData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   /**
    * Edit resource data (e.g devices or users) on the TagoIO API.
    *
@@ -490,7 +490,10 @@ type TTagoIO = {
    *
    * @return Promise for the request itself or `undefined`.
    */
-  editResourceData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | void;
+  editResourceData: (
+    dataToEdit: TDataRecord | TDataRecord[],
+    callback?: TSendDataCallback
+  ) => Promise<TData> | undefined;
   /**
    * Whether the logic to auto-fill device and/or bucket IDs in the data being sent to the API is enabled.
    *

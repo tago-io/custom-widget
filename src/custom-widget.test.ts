@@ -1,6 +1,6 @@
 import * as shortid from "shortid";
 
-import { receiveMessage, onStart, onRealtime, onError, sendMessage, sendData, closeModal } from "./custom-widget";
+import { closeModal, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage } from "./custom-widget";
 
 // Mock the `shortid` library, but the `generate` method used in `spyOn` later to specify a key value per test.
 vi.mock("shortid", () => ({
