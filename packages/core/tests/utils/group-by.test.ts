@@ -1,7 +1,7 @@
-import { groupByVariable } from "../../src/utils/group-by-variable.js";
-import { groupByDevice } from "../../src/utils/group-by-device.js";
-import { getLatestByVariable } from "../../src/utils/get-latest-by-variable.js";
 import type { TDataRecord } from "../../src/types/index.js";
+import { getLatestByVariable } from "../../src/utils/get-latest-by-variable.js";
+import { groupByDevice } from "../../src/utils/group-by-device.js";
+import { groupByVariable } from "../../src/utils/group-by-variable.js";
 
 const records: TDataRecord[] = [
   { id: "1", variable: "temp", value: 20, device: "d1", time: "2024-01-01T00:00:00Z" },

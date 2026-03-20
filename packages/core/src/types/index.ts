@@ -94,8 +94,11 @@ export type TDataRecord = {
   value?: string | number | boolean;
   group?: string;
   device?: string;
+  unit?: string;
+  metadata?: Record<string, any>;
   /** @deprecated Only relevant for Legacy devices. */
   origin?: string;
+  /** @deprecated Only relevant for Legacy devices. */
   bucket?: string;
   time: string;
 };

@@ -7,10 +7,10 @@
   "license": "Apache-2.0",
   "repository": "tago-io/custom-widget",
   "scripts": {
-    "build:scripts": "webpack && MINIMIZE=true webpack",
+    "build:scripts": "tsup",
     "build:css": "lessc ./src/css/custom-widget.less ./dist/custom-widget.css",
     "build:cssmin": "cleancss -o ./dist/custom-widget.min.css ./dist/custom-widget.css",
-    "build": "npm run build:scripts && npm run build:css && npm run build:cssmin",
+    "build": "pnpm run build:scripts && pnpm run build:css && pnpm run build:cssmin",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "check:types": "tsc --noEmit",
@@ -21,8 +21,6 @@
   "devDependencies": {
     "clean-css-cli": "5.6.3",
     "less": "4.6.4",
-    "ts-loader": "9.5.4",
-    "webpack": "5.105.4",
-    "webpack-cli": "7.0.2"
+    "tsup": "8.5.0"
   }
 }
