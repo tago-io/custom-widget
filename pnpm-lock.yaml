@@ -40,6 +40,10 @@ importers:
         version: 8.5.0(postcss@8.5.8)(typescript@5.9.3)
 
   packages/js:
+    dependencies:
+      '@tago-io/custom-widget-core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       clean-css-cli:
         specifier: 5.6.3

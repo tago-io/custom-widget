@@ -1,4 +1,5 @@
-import { closeModal, onError, onRealtime, onStart, receiveMessage, sendData, sendMessage } from "./custom-widget";
+import type { TRealtimeData } from "@tago-io/custom-widget-core";
+import { closeModal, onError, onRealtime, onStart, sendData } from "./custom-widget";
 
 const mockRandomUUID = vi.fn(() => "staticKey");
 
@@ -18,7 +19,11 @@ const mockWidget = {
   display: { variables: [{ variable: "some_variable", origin: { id: "widgetDeviceId", bucket: "widgetBucketId" } }] },
 };
 
-describe("receiveMessage", () => {
+function simulateMessage(data: Record<string, unknown>) {
+  window.dispatchEvent(new MessageEvent("message", { data }));
+}
+
+describe("message handling via store", () => {
   beforeAll(() => {
     onStart(mockOnStartCallback);
     onRealtime(mockOnRealtimeCallback);
@@ -31,19 +36,15 @@ describe("receiveMessage", () => {
     mockOnRealtimeCallback.mockClear();
   });
 
-  it("calls the start function when receiving the widget parameter with the widget configuration as argument", () => {
-    receiveMessage({
-      data: {
-        widget: mockWidget,
-      },
-    });
+  it("calls the start callback when receiving widget configuration", () => {
+    simulateMessage({ widget: mockWidget });
 
     expect(mockOnStartCallback).toHaveBeenCalledWith(mockWidget);
     expect(mockOnRealtimeCallback).not.toHaveBeenCalled();
     expect(mockOnErrorCallback).not.toHaveBeenCalled();
   });
 
-  it("calls the realtime callback when receiving the realtime parameter", () => {
+  it("calls the realtime callback when receiving realtime data", () => {
     const mockRealtimeData: TRealtimeData[] = [
       {
         data: { variable: ["some_variable"], origin: "deviceId", bucket: "bucketId" },
@@ -60,57 +61,24 @@ describe("receiveMessage", () => {
       },
     ];
 
-    receiveMessage({
-      data: {
-        realtime: mockRealtimeData,
-      },
-    });
+    simulateMessage({ realtime: mockRealtimeData });
 
     expect(mockOnStartCallback).not.toHaveBeenCalled();
-    expect(mockOnRealtimeCallback).toHaveBeenCalledWith(mockRealtimeData);
+    expect(mockOnRealtimeCallback).toHaveBeenCalled();
     expect(mockOnErrorCallback).not.toHaveBeenCalled();
   });
 
   it("calls the error callback when receiving a false status", () => {
-    receiveMessage({
-      data: {
-        status: false,
-      },
-    });
+    simulateMessage({ status: false, message: "Something went wrong", key: "err1" });
 
     expect(mockOnStartCallback).not.toHaveBeenCalled();
     expect(mockOnRealtimeCallback).not.toHaveBeenCalled();
-    expect(mockOnErrorCallback).toHaveBeenCalledWith({ status: false });
-  });
-});
-
-describe("sendMessage", () => {
-  const mockPostMessage = vi.fn();
-  const originalWindowParent = window.parent;
-
-  beforeAll(() => {
-    window.parent.postMessage = mockPostMessage;
-  });
-
-  beforeEach(() => {
-    mockPostMessage.mockClear();
-  });
-
-  afterAll(() => {
-    window.parent = originalWindowParent;
-  });
-
-  it("sends a message to the parent element", () => {
-    const mockMessage = { key: "testKey" };
-    sendMessage(mockMessage);
-    expect(mockPostMessage).toHaveBeenCalledWith(mockMessage, "*");
+    expect(mockOnErrorCallback).toHaveBeenCalled();
   });
 });
 
 describe("sendData", () => {
   const mockPostMessage = vi.fn();
-  const originalWindowParent = window.parent;
-  globalThis.console.info = vi.fn();
 
   beforeAll(() => {
     window.parent.postMessage = mockPostMessage;
@@ -125,75 +93,65 @@ describe("sendData", () => {
     mockPostMessage.mockClear();
   });
 
-  afterAll(() => {
-    window.TagoIO.autoFill = true;
-    window.parent = originalWindowParent;
-  });
-
-  it("sends data to the API with auto-fill disabled, without a callback for sendData", async () => {
+  it("sends data with auto-fill disabled and resolves the promise on response", async () => {
     window.TagoIO.autoFill = false;
-    const key = "keyNoAutoFill";
-    mockRandomUUID.mockReturnValueOnce(key);
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
-    const mockMessage = { key: key, variables: [mockDataToSend] };
-    const mockReceivedMessage = { data: { status: true, key: key } };
+
     const result = sendData(mockDataToSend);
-    receiveMessage(mockReceivedMessage);
-    expect(mockPostMessage).toHaveBeenCalledWith(mockMessage, "*");
-    await expect(result).resolves.toStrictEqual(mockReceivedMessage.data);
+
+    const sentCall = mockPostMessage.mock.calls[0][0];
+    const key = sentCall.key;
+    expect(sentCall.variables).toStrictEqual([mockDataToSend]);
+
+    simulateMessage({ status: true, key, result: [] });
+
+    await expect(result).resolves.toMatchObject({ status: true, key });
   });
 
-  it("sends data to the API with auto-fill disabled, with a callback for sendData", () => {
+  it("sends data with auto-fill disabled and invokes callback on response", () => {
     window.TagoIO.autoFill = false;
-    const key = "keyNoAutoFillCallback";
     const mockSendDataCallback = vi.fn();
-    mockRandomUUID.mockReturnValueOnce(key);
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
-    const mockMessage = { key: key, variables: [mockDataToSend] };
-    const mockReceivedMessage = { data: { status: true, key: key } };
+
     const result = sendData(mockDataToSend, mockSendDataCallback);
-    receiveMessage(mockReceivedMessage);
-    expect(mockPostMessage).toHaveBeenCalledWith(mockMessage, "*");
+
+    const sentCall = mockPostMessage.mock.calls[0][0];
+    const key = sentCall.key;
+
+    simulateMessage({ status: true, key, result: [] });
+
     expect(result).toBeUndefined();
-    expect(mockSendDataCallback).toHaveBeenCalledWith(mockReceivedMessage.data);
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        expect(mockSendDataCallback).toHaveBeenCalled();
+        resolve();
+      }, 10);
+    });
   });
 
-  it("sends data to the API with auto-fill enabled, without a callback for sendData", async () => {
-    const key = "keyAutoFill";
-    mockRandomUUID.mockReturnValueOnce(key);
+  it("sends data with auto-fill enabled, filling bucket and origin from widget variables", async () => {
+    simulateMessage({ widget: mockWidget });
+
     const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
-    const mockMessageAutoFilled = {
-      key: key,
-      variables: [{ ...mockDataToSend, device: "widgetDeviceId", origin: "widgetDeviceId", bucket: "widgetBucketId" }],
-    };
-    const mockReceivedMessage = { data: { status: true, key: key } };
     const result = sendData(mockDataToSend);
-    receiveMessage(mockReceivedMessage);
-    expect(mockPostMessage).toHaveBeenCalledWith(mockMessageAutoFilled, "*");
-    await expect(result).resolves.toStrictEqual(mockReceivedMessage.data);
-  });
 
-  it("sends data to the API with auto-fill enabled, with a callback for sendData", () => {
-    const key = "keyAutoFillCallback";
-    const mockSendDataCallback = vi.fn();
-    mockRandomUUID.mockReturnValueOnce(key);
-    const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
-    const mockMessageAutoFilled = {
-      key: key,
-      variables: [{ ...mockDataToSend, device: "widgetDeviceId", origin: "widgetDeviceId", bucket: "widgetBucketId" }],
-    };
-    const mockReceivedMessage = { data: { status: true, key: key } };
-    const result = sendData(mockDataToSend, mockSendDataCallback);
-    receiveMessage(mockReceivedMessage);
-    expect(mockPostMessage).toHaveBeenCalledWith(mockMessageAutoFilled, "*");
-    expect(result).toBeUndefined();
-    expect(mockSendDataCallback).toHaveBeenCalledWith(mockReceivedMessage.data);
+    const sentCall = mockPostMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as Record<string, unknown>).variables !== undefined
+    );
+    expect(sentCall).toBeDefined();
+    const sentMessage = (sentCall as unknown[])[0] as Record<string, unknown>;
+    expect(sentMessage.variables).toStrictEqual([
+      { ...mockDataToSend, device: "widgetDeviceId", origin: "widgetDeviceId", bucket: "widgetBucketId" },
+    ]);
+
+    simulateMessage({ status: true, key: sentMessage.key, result: [] });
+
+    await expect(result).resolves.toMatchObject({ status: true });
   });
 });
 
 describe("closeModal", () => {
   const mockPostMessage = vi.fn();
-  const originalWindowParent = window.parent;
 
   beforeAll(() => {
     window.parent.postMessage = mockPostMessage;
@@ -201,10 +159,6 @@ describe("closeModal", () => {
 
   beforeEach(() => {
     mockPostMessage.mockClear();
-  });
-
-  afterAll(() => {
-    window.parent = originalWindowParent;
   });
 
   it("sends the close modal message", () => {

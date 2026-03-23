@@ -1,5 +1,32 @@
 export type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal";
 
+/** GeoJSON Point location format. */
+export type TLocationGeoJSON = {
+  type: "Point";
+  coordinates: [number, number];
+};
+
+/** Latitude/Longitude location format. Used when sending data to the API. */
+export type TLocationLatLng = {
+  lat: number;
+  lng: number;
+};
+
+/** Metadata for a data record, with well-known keys for TagoIO visualization features. */
+export type TMetadata = {
+  color?: string;
+  x?: string | number;
+  y?: string | number;
+  label?: string;
+  file?: { url: string; md5: string; path: string };
+  icon?: string;
+  fixed_position?: Record<string, { color: string; icon: string; value: string; x: string; y: string }>;
+  sentValues?: Array<{ label: string; value: string | number | boolean }>;
+  old_value?: string | number | boolean;
+  // biome-ignore lint/suspicious/noExplicitAny: Metadata is an open-ended type that allows arbitrary extra fields
+  [key: string]: any;
+};
+
 export type TUserInformation = {
   token: string | null;
   language: string | null;
@@ -14,6 +41,7 @@ export type TDashboardBlueprintDevice = {
   use_item_label_tag?: boolean;
   tag_to_replace?: string;
   conditions: Array<{ key: string; value: string }>;
+  filter_conditions?: Array<{ blueprint_device: string; tag_key: string; type: string }>;
   hide_when_empty?: boolean;
 };
 
@@ -44,6 +72,20 @@ export type TWidgetVariable = {
   };
 };
 
+/** Data query configuration for a widget's variable origin. */
+export type TWidgetData = {
+  origin: string;
+  qty?: number;
+  timezone?: string;
+  variables?: string;
+  /** @deprecated Only for Legacy devices. */
+  bucket?: string;
+  query?: "min" | "max" | "count" | "avg" | "sum";
+  start_date?: string;
+  end_date?: string;
+  overwrite?: boolean;
+};
+
 export type TWidget = {
   id: string;
   dashboard: string;
@@ -56,6 +98,8 @@ export type TWidget = {
     watermark?: boolean;
     user?: { id?: string };
   };
+  data?: TWidgetData[];
+  realtime?: boolean | null;
   label?: string;
   type?: string;
 };
@@ -95,21 +139,26 @@ export type TDataRecord = {
   group?: string;
   device?: string;
   unit?: string;
-  metadata?: Record<string, any>;
+  location?: TLocationGeoJSON;
+  metadata?: TMetadata;
   /** @deprecated Only relevant for Legacy devices. */
   origin?: string;
   /** @deprecated Only relevant for Legacy devices. */
   bucket?: string;
   time: string;
+  /** Server-determined timestamp for when the record was created. */
+  created_at?: string;
 };
 
 /**
  * Input type for mutation hooks. Unlike TDataRecord, `id` and `time` are optional
  * since they are typically server-generated when sending new data.
+ * The `location` field also accepts a LatLng format for convenience.
  */
-export type TDataRecordInput = Omit<TDataRecord, "id" | "time"> & {
+export type TDataRecordInput = Omit<TDataRecord, "id" | "time" | "location"> & {
   id?: string;
   time?: string;
+  location?: TLocationGeoJSON | TLocationLatLng | null;
 };
 
 export type TRealtimeData = {

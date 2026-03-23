@@ -1,79 +1,376 @@
 "use strict";
 (() => {
-  // src/utils.ts
-  function autoFillRecords(dataRecords, widgetVariables2) {
-    const autoFilledArray = [];
-    if (!dataRecords || !widgetVariables2) {
-      return [];
-    }
-    dataRecords.forEach((dataRecord) => {
-      widgetVariables2.forEach((widgetVar) => {
-        if (dataRecord.variable === widgetVar.variable) {
-          autoFilledArray.push({
-            device: widgetVar.origin.id,
-            origin: widgetVar.origin.id,
-            ...widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket },
-            ...dataRecord
-          });
-        }
-      });
-    });
-    return autoFilledArray;
-  }
-
-  // src/custom-widget.ts
+  // ../core/dist/index.js
   function generateId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
       return crypto.randomUUID();
     }
     return Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
-  window.TagoIO = {};
-  window.TagoIO.autoFill = true;
-  var funcRealtime;
-  var funcStart;
-  var funcError;
-  var funcSyncUserInfo;
-  var funcSyncBlueprintDevices;
-  var widgetVariables;
-  var pool = {};
-  var receiveMessage = (event) => {
-    const { data } = event;
-    if (data) {
-      if (data.userInformation && funcSyncUserInfo) {
-        funcSyncUserInfo(data.userInformation);
+  var RequestPool = class {
+    constructor() {
+      this.pending = /* @__PURE__ */ new Map();
+    }
+    add(key, request) {
+      this.pending.set(key, request);
+    }
+    resolve(key, data) {
+      const request = this.pending.get(key);
+      if (!request) return false;
+      this.pending.delete(key);
+      request.resolve(data);
+      return true;
+    }
+    reject(key, error) {
+      const request = this.pending.get(key);
+      if (!request) return false;
+      this.pending.delete(key);
+      request.reject(error);
+      return true;
+    }
+    rejectAll(reason) {
+      for (const [, request] of this.pending) {
+        request.reject(reason);
       }
-      if (data.blueprintDevices && funcSyncBlueprintDevices) {
-        funcSyncBlueprintDevices(data.blueprintDevices);
+      this.pending.clear();
+    }
+    get size() {
+      return this.pending.size;
+    }
+    has(key) {
+      return this.pending.has(key);
+    }
+  };
+  var MessageBridge = class {
+    constructor(options = {}) {
+      this.handlers = /* @__PURE__ */ new Set();
+      this.pool = new RequestPool();
+      this.destroyed = false;
+      this.allowedOrigins = options.allowedOrigins ? new Set(options.allowedOrigins) : null;
+      this.boundReceive = this.handleMessage.bind(this);
+      if (typeof window !== "undefined") {
+        window.addEventListener("message", this.boundReceive, false);
       }
-      if (data.widget) {
-        widgetVariables = data.widget.display.variables;
-        if (funcStart) {
-          funcStart(data.widget);
+    }
+    handleMessage(event) {
+      if (this.destroyed) return;
+      if (this.allowedOrigins && !this.allowedOrigins.has(event.origin)) {
+        return;
+      }
+      const data = event.data;
+      if (!data) return;
+      if (data.status !== void 0 && data.key) {
+        if (data.status === true) {
+          this.pool.resolve(data.key, data);
+        } else {
+          this.pool.reject(data.key, data);
         }
       }
-      if (data.realtime && funcRealtime) {
-        funcRealtime(data.realtime);
+      for (const handler of this.handlers) {
+        handler(data);
       }
-      if (data.status && data.key && pool[data.key] && typeof pool[data.key] === "function") {
-        pool[data.key]?.(data);
+    }
+    send(message) {
+      if (this.destroyed) return;
+      if (typeof window === "undefined") return;
+      window.parent.postMessage(message, "*");
+    }
+    sendWithResponse(message) {
+      const key = generateId();
+      const messageWithKey = { ...message, key };
+      return new Promise((resolve, reject) => {
+        this.pool.add(key, { resolve, reject });
+        this.send(messageWithKey);
+      });
+    }
+    onMessage(handler) {
+      this.handlers.add(handler);
+      return () => {
+        this.handlers.delete(handler);
+      };
+    }
+    destroy() {
+      this.destroyed = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("message", this.boundReceive, false);
       }
-      if (data.status === false) {
-        if (funcError) {
-          funcError(data);
+      this.pool.rejectAll(new Error("MessageBridge destroyed"));
+      this.handlers.clear();
+    }
+    get pendingCount() {
+      return this.pool.size;
+    }
+  };
+  function replaceStrategy(_existing, incoming) {
+    return incoming;
+  }
+  function appendStrategy(existing, incoming, maxRecords) {
+    const combined = [...existing, ...incoming];
+    if (combined.length <= maxRecords) return combined;
+    return combined.slice(combined.length - maxRecords);
+  }
+  function recordsEqual(a, b) {
+    return a.id === b.id && a.value === b.value && a.time === b.time && a.variable === b.variable;
+  }
+  function mergeStrategy(existing, incoming) {
+    if (existing.length === 0) return incoming;
+    if (incoming.length === 0) return existing;
+    const existingMap = /* @__PURE__ */ new Map();
+    for (const block of existing) {
+      const key = realtimeBlockKey(block);
+      existingMap.set(key, block);
+    }
+    let changed = false;
+    const result = [];
+    const processedKeys = /* @__PURE__ */ new Set();
+    for (const incomingBlock of incoming) {
+      const key = realtimeBlockKey(incomingBlock);
+      processedKeys.add(key);
+      const existingBlock = existingMap.get(key);
+      if (!existingBlock) {
+        result.push(incomingBlock);
+        changed = true;
+        continue;
+      }
+      const mergedRecords = mergeRecords(existingBlock.result ?? [], incomingBlock.result ?? []);
+      const dataChanged = mergedRecords !== existingBlock.result;
+      if (dataChanged) {
+        result.push({ ...incomingBlock, result: mergedRecords });
+        changed = true;
+      } else {
+        result.push(existingBlock);
+      }
+    }
+    for (const [key, block] of existingMap) {
+      if (!processedKeys.has(key)) {
+        result.push(block);
+      }
+    }
+    return changed || result.length !== existing.length ? result : existing;
+  }
+  function mergeRecords(existing, incoming) {
+    if (incoming.length === 0) return existing;
+    const existingById = /* @__PURE__ */ new Map();
+    for (const record of existing) {
+      existingById.set(record.id, record);
+    }
+    let changed = false;
+    const result = [];
+    for (const existingRecord of existing) {
+      const incomingMatch = incoming.find((r) => r.id === existingRecord.id);
+      if (incomingMatch) {
+        if (recordsEqual(existingRecord, incomingMatch)) {
+          result.push(existingRecord);
+        } else {
+          result.push(incomingMatch);
+          changed = true;
         }
-        if (data.key && pool[data.key]) {
-          pool[data.key]?.(null, data);
+      } else {
+        result.push(existingRecord);
+      }
+    }
+    for (const incomingRecord of incoming) {
+      if (!existingById.has(incomingRecord.id)) {
+        result.push(incomingRecord);
+        changed = true;
+      }
+    }
+    return changed ? result : existing;
+  }
+  function realtimeBlockKey(block) {
+    const vars = block.data?.variable?.join(",") ?? "";
+    const origin = block.data?.origin ?? "";
+    return `${vars}|${origin}`;
+  }
+  var INITIAL_STATE = {
+    widget: null,
+    realtimeData: [],
+    userInformation: null,
+    blueprintDevices: null,
+    errors: [],
+    isReady: false,
+    realtimeEventCount: 0,
+    lastRealtimeAt: null
+  };
+  var SERVER_SNAPSHOT = { ...INITIAL_STATE };
+  var WidgetStore = class {
+    constructor(options = {}) {
+      this.state = { ...INITIAL_STATE };
+      this.listeners = /* @__PURE__ */ new Set();
+      this.initialized = false;
+      this.unsubBridge = null;
+      this.handleInbound = (data) => {
+        if (data.userInformation) {
+          this.updateState({ userInformation: data.userInformation });
+        }
+        if (data.blueprintDevices) {
+          this.updateState({ blueprintDevices: data.blueprintDevices });
+        }
+        if (data.widget) {
+          this.updateState({
+            widget: data.widget,
+            isReady: true
+          });
+        }
+        if (data.realtime) {
+          this.updateRealtime(data.realtime);
+        }
+        if (data.status === false) {
+          const error = data;
+          this.updateState({
+            errors: [...this.state.errors, error]
+          });
+        }
+      };
+      this.subscribe = (callback) => {
+        this.listeners.add(callback);
+        return () => {
+          this.listeners.delete(callback);
+        };
+      };
+      this.getSnapshot = () => {
+        return this.state;
+      };
+      this.getServerSnapshot = () => {
+        return SERVER_SNAPSHOT;
+      };
+      this.strategy = options.realtimeStrategy ?? "merge";
+      this.maxRecords = options.realtimeMaxRecords ?? 1e3;
+      this.readyOptions = options.readyOptions ?? {};
+      this.bridge = new MessageBridge({
+        allowedOrigins: options.allowedOrigins
+      });
+      if (typeof window !== "undefined") {
+        this.unsubBridge = this.bridge.onMessage(this.handleInbound);
+      }
+    }
+    updateRealtime(incoming) {
+      let newData;
+      switch (this.strategy) {
+        case "replace":
+          newData = replaceStrategy(this.state.realtimeData, incoming);
+          break;
+        case "append":
+          newData = appendStrategy(this.state.realtimeData, incoming, this.maxRecords);
+          break;
+        default:
+          newData = mergeStrategy(this.state.realtimeData, incoming);
+          break;
+      }
+      this.state = {
+        ...this.state,
+        realtimeData: newData,
+        realtimeEventCount: this.state.realtimeEventCount + 1,
+        lastRealtimeAt: Date.now()
+      };
+      this.emit();
+    }
+    updateState(partial) {
+      this.state = { ...this.state, ...partial };
+      this.emit();
+    }
+    emit() {
+      for (const listener of this.listeners) {
+        listener();
+      }
+    }
+    initialize() {
+      if (this.initialized) return;
+      this.initialized = true;
+      this.bridge.send({ loaded: true, ...this.readyOptions });
+    }
+    destroy() {
+      this.unsubBridge?.();
+      this.bridge.destroy();
+      this.listeners.clear();
+      this.initialized = false;
+    }
+    sendData(records) {
+      const vars = Array.isArray(records) ? records : [records];
+      return this.bridge.sendWithResponse({ variables: vars });
+    }
+    editData(records) {
+      const vars = Array.isArray(records) ? records : [records];
+      return this.bridge.sendWithResponse({ variables: vars, method: "edit" });
+    }
+    deleteData(records) {
+      const vars = Array.isArray(records) ? records : [records];
+      return this.bridge.sendWithResponse({ variables: vars, method: "delete" });
+    }
+    editResourceData(records) {
+      const vars = Array.isArray(records) ? records : [records];
+      return this.bridge.sendWithResponse({ variables: vars, method: "edit-resource" });
+    }
+    openLink(url) {
+      this.bridge.send({ method: "open-link", url });
+    }
+    closeModal() {
+      this.bridge.send({ method: "close-modal" });
+    }
+    clearErrors() {
+      this.updateState({ errors: [] });
+    }
+    clearRealtimeData() {
+      this.updateState({
+        realtimeData: [],
+        realtimeEventCount: 0,
+        lastRealtimeAt: null
+      });
+    }
+    getBridge() {
+      return this.bridge;
+    }
+  };
+  function autoFillRecords(dataRecords, widgetVariables) {
+    if (!dataRecords || !widgetVariables) return [];
+    const result = [];
+    for (const record of dataRecords) {
+      for (const widgetVar of widgetVariables) {
+        if (record.variable === widgetVar.variable) {
+          result.push({
+            device: widgetVar.origin.id,
+            origin: widgetVar.origin.id,
+            ...widgetVar.origin.bucket && { bucket: widgetVar.origin.bucket },
+            ...record
+          });
         }
       }
     }
-  };
-  window.addEventListener("message", receiveMessage, false);
-  var sendMessage = (message) => {
-    window.parent.postMessage(message, "*");
-  };
+    return result;
+  }
+
+  // src/custom-widget.ts
+  var store = new WidgetStore();
+  window.TagoIO = {};
+  window.TagoIO.autoFill = true;
+  var funcRealtime = null;
+  var funcStart = null;
+  var funcError = null;
+  var funcSyncUserInfo = null;
+  var funcSyncBlueprintDevices = null;
+  var prevState = store.getSnapshot();
+  store.subscribe(() => {
+    const state = store.getSnapshot();
+    if (state.userInformation && state.userInformation !== prevState.userInformation && funcSyncUserInfo) {
+      funcSyncUserInfo(state.userInformation);
+    }
+    if (state.blueprintDevices && state.blueprintDevices !== prevState.blueprintDevices && funcSyncBlueprintDevices) {
+      funcSyncBlueprintDevices(state.blueprintDevices);
+    }
+    if (state.widget && state.widget !== prevState.widget && funcStart) {
+      funcStart(state.widget);
+    }
+    if (state.realtimeData !== prevState.realtimeData && state.realtimeData.length > 0 && funcRealtime) {
+      funcRealtime(state.realtimeData);
+    }
+    if (state.errors.length > prevState.errors.length && funcError) {
+      const newError = state.errors[state.errors.length - 1];
+      funcError(newError);
+    }
+    prevState = state;
+  });
   var onReady = (options) => {
-    sendMessage({ loaded: true, ...options });
+    store.getBridge().send({ loaded: true, ...options });
   };
   var onStart = (callback) => {
     funcStart = callback;
@@ -90,108 +387,56 @@
   var onSyncBlueprintDevices = (callback) => {
     funcSyncBlueprintDevices = callback;
   };
-  var sendData = (variables, callback) => {
-    const uniqueKey = generateId();
-    pool[uniqueKey] = callback || null;
+  function getWidgetVariables() {
+    return store.getSnapshot().widget?.display?.variables ?? [];
+  }
+  function prepareRecords(variables) {
     const vars = Array.isArray(variables) ? variables : [variables];
-    let autoFillArray = [];
     if (window.TagoIO.autoFill) {
       console.info(
         "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
       );
-      autoFillArray = autoFillRecords(vars, widgetVariables);
-    } else {
-      vars.forEach((vari) => {
-        if (!vari.bucket || !vari.origin) {
-          console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
-        }
-      });
+      return autoFillRecords(vars, getWidgetVariables());
     }
-    sendMessage({
-      variables: window.TagoIO.autoFill ? autoFillArray : vars,
-      key: uniqueKey
-    });
-    if (window.Promise && !callback) {
-      return new Promise((resolve, reject) => {
-        pool[uniqueKey] = (success, error) => {
-          if (error) reject(error);
-          resolve(success);
-        };
-      });
+    for (const v of vars) {
+      if (!v.bucket || !v.origin) {
+        console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
+      }
     }
+    return vars;
+  }
+  function wrapMutation(method, records, callback) {
+    const promise = method.call(store, records);
+    if (callback) {
+      promise.then(
+        (data) => callback(data),
+        (error) => callback(null, error)
+      );
+      return void 0;
+    }
+    return promise;
+  }
+  var sendData = (variables, callback) => {
+    const records = prepareRecords(variables);
+    return wrapMutation(store.sendData.bind(store), records, callback);
   };
   var editData = (variables, callback) => {
-    const uniqueKey = generateId();
-    pool[uniqueKey] = callback || null;
-    const vars = Array.isArray(variables) ? variables : [variables];
-    let autoFillArray = [];
-    if (window.TagoIO.autoFill) {
-      console.info(
-        "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
-      );
-      autoFillArray = autoFillRecords(vars, widgetVariables);
-    } else {
-      vars.forEach((vari) => {
-        if (!vari.bucket || !vari.origin) {
-          console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
-        }
-      });
-    }
-    sendMessage({
-      variables: window.TagoIO.autoFill ? autoFillArray : vars,
-      method: "edit",
-      key: uniqueKey
-    });
-    if (window.Promise && !callback) {
-      return new Promise((resolve, reject) => {
-        pool[uniqueKey] = (success, error) => {
-          if (error) reject(error);
-          resolve(success);
-        };
-      });
-    }
+    const records = prepareRecords(variables);
+    return wrapMutation(store.editData.bind(store), records, callback);
   };
   var deleteData = (variables, callback) => {
-    const uniqueKey = generateId();
-    pool[uniqueKey] = callback || null;
     const vars = Array.isArray(variables) ? variables : [variables];
-    sendMessage({
-      variables: vars,
-      method: "delete",
-      key: uniqueKey
-    });
-    if (window.Promise && !callback) {
-      return new Promise((resolve, reject) => {
-        pool[uniqueKey] = (success, error) => {
-          if (error) reject(error);
-          resolve(success);
-        };
-      });
-    }
+    return wrapMutation(store.deleteData.bind(store), vars, callback);
   };
   var editResourceData = (variables, callback) => {
-    const uniqueKey = generateId();
-    pool[uniqueKey] = callback || null;
-    const variablesToEdit = Array.isArray(variables) ? variables : [variables];
-    sendMessage({
-      variables: variablesToEdit,
-      method: "edit-resource",
-      key: uniqueKey
-    });
-    if (window.Promise && !callback) {
-      return new Promise((resolve, reject) => {
-        pool[uniqueKey] = (success, error) => {
-          if (error) reject(error);
-          resolve(success);
-        };
-      });
-    }
+    const vars = Array.isArray(variables) ? variables : [variables];
+    return wrapMutation(store.editResourceData.bind(store), vars, callback);
   };
   var openLink = (url) => {
-    sendMessage({ method: "open-link", url });
+    store.openLink(url);
   };
   var closeModal = () => {
-    sendMessage({ method: "close-modal" });
+    store.closeModal();
   };
   window.TagoIO.ready = onReady;
   window.TagoIO.onStart = onStart;

@@ -9,6 +9,7 @@ export default defineConfig([
     clean: true,
     outDir: "dist",
     outExtension: () => ({ js: ".js" }),
+    noExternal: ["@tago-io/custom-widget-core"],
   },
   {
     entry: { "custom-widget.min": "src/custom-widget.ts" },
@@ -18,5 +19,6 @@ export default defineConfig([
     outDir: "dist",
     clean: false,
     outExtension: () => ({ js: ".js" }),
+    noExternal: ["@tago-io/custom-widget-core"],
   },
 ]);

@@ -31,7 +31,7 @@ describe("WidgetStore", () => {
 
   beforeEach(() => {
     mockPostMessage = vi.fn();
-    window.parent.postMessage = mockPostMessage;
+    window.parent.postMessage = mockPostMessage as typeof window.parent.postMessage;
     store = new WidgetStore();
   });
 
