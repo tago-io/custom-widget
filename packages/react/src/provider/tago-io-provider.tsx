@@ -1,5 +1,6 @@
 import { type StoreOptions, WidgetStore } from "@tago-io/custom-widget-core";
 import { type ReactNode, useEffect, useRef } from "react";
+
 import { StoreContext, type StoreContextValue } from "./store-context.js";
 
 export interface TagoIOProviderProps extends StoreOptions {

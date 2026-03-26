@@ -1,4 +1,6 @@
 import type { TRealtimeData } from "@tago-io/custom-widget-core";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { closeModal, onError, onRealtime, onStart, sendData } from "./custom-widget";
 
 const mockRandomUUID = vi.fn(() => "staticKey");

@@ -35,7 +35,7 @@ export class MessageBridge {
     if (!data) return;
 
     if (data.status !== undefined && data.key) {
-      if (data.status === true) {
+      if (data.status) {
         this.pool.resolve(data.key, data as unknown as TData);
       } else {
         this.pool.reject(data.key, data as unknown as TError);

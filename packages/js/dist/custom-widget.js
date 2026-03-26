@@ -60,7 +60,7 @@
       const data = event.data;
       if (!data) return;
       if (data.status !== void 0 && data.key) {
-        if (data.status === true) {
+        if (data.status) {
           this.pool.resolve(data.key, data);
         } else {
           this.pool.reject(data.key, data);

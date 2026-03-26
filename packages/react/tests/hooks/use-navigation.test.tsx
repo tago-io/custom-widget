@@ -1,18 +1,19 @@
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { useNavigation } from "../../src/hooks/use-navigation.js";
+import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <TagoIOProvider>{children}</TagoIOProvider>;
 }
 
 describe("useNavigation", () => {
-  let mockPostMessage: ReturnType<typeof vi.fn>;
+  let postMessageSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    mockPostMessage = vi.fn();
-    window.parent.postMessage = mockPostMessage;
+    postMessageSpy = vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
   });
 
   it("openLink sends open-link message", () => {
@@ -22,7 +23,7 @@ describe("useNavigation", () => {
       result.current.openLink("https://admin.tago.io/dashboards/info/abc123");
     });
 
-    expect(mockPostMessage).toHaveBeenCalledWith(
+    expect(postMessageSpy).toHaveBeenCalledWith(
       { method: "open-link", url: "https://admin.tago.io/dashboards/info/abc123" },
       "*"
     );
@@ -35,6 +36,6 @@ describe("useNavigation", () => {
       result.current.closeModal();
     });
 
-    expect(mockPostMessage).toHaveBeenCalledWith({ method: "close-modal" }, "*");
+    expect(postMessageSpy).toHaveBeenCalledWith({ method: "close-modal" }, "*");
   });
 });

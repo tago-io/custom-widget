@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import type { TDataRecord } from "../../src/types/index.js";
 import { getLatestByVariable } from "../../src/utils/get-latest-by-variable.js";
 import { groupByDevice } from "../../src/utils/group-by-device.js";

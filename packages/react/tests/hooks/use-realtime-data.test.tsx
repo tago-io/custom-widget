@@ -1,8 +1,10 @@
+import type { TRealtimeData } from "@tago-io/custom-widget-core";
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { useRealtimeData } from "../../src/hooks/use-realtime-data.js";
-import type { TRealtimeData } from "@tago-io/custom-widget-core";
+import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
 
 const mockRealtime: TRealtimeData[] = [
   {

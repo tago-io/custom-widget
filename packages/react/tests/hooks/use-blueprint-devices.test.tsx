@@ -1,8 +1,10 @@
+import type { TBlueprintDevicesSyncData } from "@tago-io/custom-widget-core";
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { useBlueprintDevices } from "../../src/hooks/use-blueprint-devices.js";
-import type { TBlueprintDevicesSyncData } from "@tago-io/custom-widget-core";
+import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
 
 const mockBlueprintDevices: TBlueprintDevicesSyncData = {
   selected: {
@@ -35,9 +37,7 @@ describe("useBlueprintDevices", () => {
     const { result } = renderHook(() => useBlueprintDevices(), { wrapper });
 
     act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", { data: { blueprintDevices: mockBlueprintDevices } })
-      );
+      window.dispatchEvent(new MessageEvent("message", { data: { blueprintDevices: mockBlueprintDevices } }));
     });
 
     expect(result.current.blueprintDevices).toEqual(mockBlueprintDevices);

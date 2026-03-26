@@ -3,7 +3,7 @@ import { createContext } from "react";
 
 export interface StoreContextValue {
   store: WidgetStore;
-  dictionaryClass: unknown | null;
+  dictionaryClass: unknown;
 }
 
 export const StoreContext = createContext<StoreContextValue | null>(null);

@@ -8,8 +8,8 @@
  * hooks to access widget configuration and live data.
  */
 
-import React from "react";
 import { TagoIOProvider, useWidget, useRealtimeData } from "@tago-io/custom-widget-react";
+import React from "react";
 
 function App() {
   return (
@@ -30,9 +30,7 @@ function Dashboard() {
   return (
     <div style={{ fontFamily: "Arial, sans-serif", padding: 20 }}>
       <h1>{widget?.label || "My Widget"}</h1>
-      <p style={{ background: "#f0f0f0", padding: 10 }}>
-        Data updates received: {eventCount}
-      </p>
+      <p style={{ background: "#f0f0f0", padding: 10 }}>Data updates received: {eventCount}</p>
 
       {records.length === 0 ? (
         <p>No data received yet.</p>
@@ -47,12 +45,9 @@ function Dashboard() {
                 marginBottom: 8,
               }}
             >
-              <strong>{record.variable}</strong>: {record.value}{" "}
-              {record.unit || ""}
+              <strong>{record.variable}</strong>: {record.value} {record.unit || ""}
               <br />
-              <small>
-                Time: {new Date(record.time).toLocaleString()}
-              </small>
+              <small>Time: {new Date(record.time).toLocaleString()}</small>
             </li>
           ))}
         </ul>

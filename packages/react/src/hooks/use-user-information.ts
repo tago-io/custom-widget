@@ -1,4 +1,5 @@
 import type { TUserInformation, WidgetState } from "@tago-io/custom-widget-core";
+
 import { useStoreSelector } from "./use-store-selector.js";
 
 export interface UseUserInformationReturn {

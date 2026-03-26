@@ -1,3 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { WidgetStore } from "../../src/store/widget-store.js";
 import type { TRealtimeData, TUserInformation, TWidget, TBlueprintDevicesSyncData } from "../../src/types/index.js";
 

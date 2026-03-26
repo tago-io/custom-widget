@@ -1,5 +1,6 @@
 import type { TDataRecord, TRealtimeData, WidgetState } from "@tago-io/custom-widget-core";
 import { useCallback, useRef } from "react";
+
 import { useStore, useStoreSelector } from "./use-store-selector.js";
 
 export interface UseRealtimeDataOptions {

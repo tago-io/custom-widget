@@ -2,7 +2,14 @@
   "name": "@tago-io/custom-widget-core",
   "version": "0.1.0",
   "description": "Framework-agnostic core for TagoIO Custom Widget SDKs",
+  "license": "Apache-2.0",
+  "author": "Tago LLC",
+  "repository": "tago-io/custom-widget",
+  "files": [
+    "dist"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,15 +25,12 @@
       }
     }
   },
-  "sideEffects": false,
-  "files": ["dist"],
-  "author": "Tago LLC",
-  "license": "Apache-2.0",
-  "repository": "tago-io/custom-widget",
   "scripts": {
     "build": "tsup",
-    "test": "vitest run",
-    "check:types": "tsc --noEmit"
+    "test": "vp test run",
+    "check:types": "tsc --noEmit",
+    "lint": "vp lint src/",
+    "format": "vp fmt src/"
   },
   "devDependencies": {
     "tsup": "8.5.0"

@@ -1,5 +1,7 @@
-import type { TDataRecord, TRealtimeData } from "../../src/types/index.js";
+import { describe, expect, it } from "vite-plus/test";
+
 import { appendStrategy, mergeStrategy, replaceStrategy } from "../../src/store/realtime-strategies.js";
+import type { TDataRecord, TRealtimeData } from "../../src/types/index.js";
 
 const record = (id: string, variable: string, value: string | number, time = "2024-01-01T00:00:00Z"): TDataRecord => ({
   id,

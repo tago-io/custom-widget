@@ -37,7 +37,10 @@ type TTagoIO = {
   sendData: (dataToSend: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   deleteData: (dataToDelete: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   editData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
-  editResourceData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
+  editResourceData: (
+    dataToEdit: TDataRecord | TDataRecord[],
+    callback?: TSendDataCallback
+  ) => Promise<TData> | undefined;
   autoFill: boolean;
   ready: (options: TReadyOptions) => void;
   openLink: (url: string) => void;
@@ -164,12 +167,18 @@ const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
   return wrapMutation(store.editData.bind(store), records, callback);
 };
 
-const deleteData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
+const deleteData = (
+  variables: TDataRecord | TDataRecord[],
+  callback?: TSendDataCallback
+): Promise<TData> | undefined => {
   const vars = Array.isArray(variables) ? variables : [variables];
   return wrapMutation(store.deleteData.bind(store), vars, callback);
 };
 
-const editResourceData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
+const editResourceData = (
+  variables: TDataRecord | TDataRecord[],
+  callback?: TSendDataCallback
+): Promise<TData> | undefined => {
   const vars = Array.isArray(variables) ? variables : [variables];
   return wrapMutation(store.editResourceData.bind(store), vars, callback);
 };

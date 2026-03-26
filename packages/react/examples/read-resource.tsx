@@ -8,13 +8,8 @@
  * useBlueprintDevices gives you the blueprint device configurations and selections.
  */
 
+import { TagoIOProvider, useWidget, useUserInformation, useBlueprintDevices } from "@tago-io/custom-widget-react";
 import React from "react";
-import {
-  TagoIOProvider,
-  useWidget,
-  useUserInformation,
-  useBlueprintDevices,
-} from "@tago-io/custom-widget-react";
 
 function App() {
   return (
@@ -47,10 +42,18 @@ function ResourceViewer() {
       {/* Widget Configuration */}
       <div style={sectionStyle}>
         <h3>Widget Configuration</h3>
-        <p><strong>Widget ID:</strong> {widget?.id}</p>
-        <p><strong>Dashboard ID:</strong> {widget?.dashboard}</p>
-        <p><strong>Label:</strong> {widget?.label || "No label"}</p>
-        <p><strong>Variables:</strong></p>
+        <p>
+          <strong>Widget ID:</strong> {widget?.id}
+        </p>
+        <p>
+          <strong>Dashboard ID:</strong> {widget?.dashboard}
+        </p>
+        <p>
+          <strong>Label:</strong> {widget?.label || "No label"}
+        </p>
+        <p>
+          <strong>Variables:</strong>
+        </p>
         {variables.length > 0 ? (
           <ul>
             {variables.map((v) => (
@@ -67,9 +70,15 @@ function ResourceViewer() {
       {/* User Information */}
       <div style={sectionStyle}>
         <h3>User Information</h3>
-        <p><strong>Language:</strong> {language || "Not available"}</p>
-        <p><strong>Has Token:</strong> {token ? "Yes" : "No"}</p>
-        <p><strong>Run URL:</strong> {runURL || "Not available"}</p>
+        <p>
+          <strong>Language:</strong> {language || "Not available"}
+        </p>
+        <p>
+          <strong>Has Token:</strong> {token ? "Yes" : "No"}
+        </p>
+        <p>
+          <strong>Run URL:</strong> {runURL || "Not available"}
+        </p>
       </div>
 
       {/* Blueprint Devices */}
@@ -89,10 +98,14 @@ function ResourceViewer() {
 
         {Object.keys(selected).length > 0 && (
           <>
-            <p><strong>Selected devices:</strong></p>
+            <p>
+              <strong>Selected devices:</strong>
+            </p>
             <ul>
               {Object.entries(selected).map(([key, entry]) => (
-                <li key={key}>{key}: {entry?.name ?? "None"}</li>
+                <li key={key}>
+                  {key}: {entry?.name ?? "None"}
+                </li>
               ))}
             </ul>
           </>

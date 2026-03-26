@@ -1,5 +1,7 @@
-import { formatValue } from "../../src/utils/format-value.js";
+import { describe, expect, it } from "vite-plus/test";
+
 import { formatDate } from "../../src/utils/format-date.js";
+import { formatValue } from "../../src/utils/format-value.js";
 
 describe("formatValue", () => {
   it("formats a number", () => {

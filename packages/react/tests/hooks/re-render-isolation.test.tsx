@@ -1,10 +1,12 @@
+import type { TRealtimeData, TUserInformation, TWidget } from "@tago-io/custom-widget-core";
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
-import { useWidget } from "../../src/hooks/use-widget.js";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { useRealtimeData } from "../../src/hooks/use-realtime-data.js";
 import { useUserInformation } from "../../src/hooks/use-user-information.js";
-import type { TRealtimeData, TUserInformation, TWidget } from "@tago-io/custom-widget-core";
+import { useWidget } from "../../src/hooks/use-widget.js";
+import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
 
 const mockWidget: TWidget = {
   id: "w1",
@@ -37,7 +39,7 @@ describe("re-render isolation", () => {
   it("useWidget does NOT re-render when realtime data arrives", () => {
     let widgetRenderCount = 0;
 
-    const { result } = renderHook(
+    const { result: _result } = renderHook(
       () => {
         widgetRenderCount++;
         return useWidget();
@@ -118,7 +120,7 @@ describe("re-render isolation", () => {
       { wrapper }
     );
 
-    const initialCount = selectorRenderCount;
+    const _initialCount = selectorRenderCount;
 
     act(() => {
       window.dispatchEvent(new MessageEvent("message", { data: { realtime: mockRealtime } }));

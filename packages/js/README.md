@@ -11,20 +11,21 @@ Include the SDK directly in your HTML file:
 ```html
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>My Custom Widget</title>
     <script src="https://admin.tago.io/dist/custom-widget.min.js"></script>
-    <link rel="stylesheet" href="https://admin.tago.io/dist/custom-widget.min.css"> <!-- OPTIONAL -->
-</head>
-<body>
+    <link rel="stylesheet" href="https://admin.tago.io/dist/custom-widget.min.css" />
+    <!-- OPTIONAL -->
+  </head>
+  <body>
     <script>
-        window.TagoIO.onStart(function(widget) {
-            console.log('Widget started!', widget);
-        });
+      window.TagoIO.onStart(function (widget) {
+        console.log("Widget started!", widget);
+      });
 
-        window.TagoIO.ready();
+      window.TagoIO.ready();
     </script>
-</body>
+  </body>
 </html>
 ```
 
@@ -53,16 +54,16 @@ Every custom widget follows the same basic pattern:
 
 ```javascript
 // 1. Set up your callbacks first
-window.TagoIO.onStart(function(widget) {
-    console.log('Widget config:', widget);
+window.TagoIO.onStart(function (widget) {
+  console.log("Widget config:", widget);
 });
 
-window.TagoIO.onRealtime(function(data) {
-    console.log('New data:', data);
+window.TagoIO.onRealtime(function (data) {
+  console.log("New data:", data);
 });
 
-window.TagoIO.onError(function(error) {
-    console.error('Error:', error);
+window.TagoIO.onError(function (error) {
+  console.error("Error:", error);
 });
 
 // 2. Signal that your widget is ready
@@ -75,52 +76,52 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 ### Initialization
 
-| Function | Direction | Description |
-|----------|-----------|-------------|
-| `TagoIO.ready(options)` | You send | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget. |
-| `TagoIO.onStart(callback)` | You receive | Called when TagoIO starts your widget. Provides configuration, variables, and settings. |
-| `TagoIO.onError(callback)` | You receive | Called when API errors or widget issues occur. |
+| Function                   | Direction   | Description                                                                                |
+| -------------------------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `TagoIO.ready(options)`    | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget. |
+| `TagoIO.onStart(callback)` | You receive | Called when TagoIO starts your widget. Provides configuration, variables, and settings.    |
+| `TagoIO.onError(callback)` | You receive | Called when API errors or widget issues occur.                                             |
 
 ### Data Operations
 
 > **Note**: These operations only work with data that is within the Custom Widget's configured settings and permissions.
 
-| Function | Direction | Description |
-|----------|-----------|-------------|
-| `TagoIO.sendData(data, callback)` | You send | Send data to TagoIO devices |
-| `TagoIO.editData(data, callback)` | You send | Edit existing device data |
-| `TagoIO.deleteData(data, callback)` | You send | Delete device data |
-| `TagoIO.editResourceData(data, callback)` | You send | Edit platform resources |
+| Function                                  | Direction | Description                 |
+| ----------------------------------------- | --------- | --------------------------- |
+| `TagoIO.sendData(data, callback)`         | You send  | Send data to TagoIO devices |
+| `TagoIO.editData(data, callback)`         | You send  | Edit existing device data   |
+| `TagoIO.deleteData(data, callback)`       | You send  | Delete device data          |
+| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resources     |
 
 ### Real-time Events
 
-| Function | Direction | Description |
-|----------|-----------|-------------|
-| `TagoIO.onRealtime(callback)` | You receive | Called when new data arrives from connected devices |
-| `TagoIO.onSyncUserInformation(callback)` | You receive | Called when user context or authentication updates |
-| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Called when blueprint device configurations change |
+| Function                                  | Direction   | Description                                         |
+| ----------------------------------------- | ----------- | --------------------------------------------------- |
+| `TagoIO.onRealtime(callback)`             | You receive | Called when new data arrives from connected devices |
+| `TagoIO.onSyncUserInformation(callback)`  | You receive | Called when user context or authentication updates  |
+| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Called when blueprint device configurations change  |
 
 ### Utilities
 
-| Function | Description |
-|----------|-------------|
-| `TagoIO.openLink(url)` | Navigate to other dashboards or external links |
-| `TagoIO.closeModal()` | Close widget modal (for header button widgets) |
-| `TagoIO.autoFill` | Boolean flag to enable/disable automatic device/bucket ID filling |
+| Function               | Description                                                       |
+| ---------------------- | ----------------------------------------------------------------- |
+| `TagoIO.openLink(url)` | Navigate to other dashboards or external links                    |
+| `TagoIO.closeModal()`  | Close widget modal (for header button widgets)                    |
+| `TagoIO.autoFill`      | Boolean flag to enable/disable automatic device/bucket ID filling |
 
 ## Working with Real-time Data
 
 ```javascript
-window.TagoIO.onRealtime(function(data) {
-    data.forEach(function(dataGroup) {
-        if (dataGroup.result) {
-            dataGroup.result.forEach(function(dataPoint) {
-                console.log('Variable:', dataPoint.variable);
-                console.log('Value:', dataPoint.value);
-                console.log('Time:', dataPoint.time);
-            });
-        }
-    });
+window.TagoIO.onRealtime(function (data) {
+  data.forEach(function (dataGroup) {
+    if (dataGroup.result) {
+      dataGroup.result.forEach(function (dataPoint) {
+        console.log("Variable:", dataPoint.variable);
+        console.log("Value:", dataPoint.value);
+        console.log("Time:", dataPoint.time);
+      });
+    }
+  });
 });
 ```
 
@@ -128,36 +129,36 @@ window.TagoIO.onRealtime(function(data) {
 
 ```javascript
 async function sendSensorData() {
-    try {
-        const result = await window.TagoIO.sendData({
-            variable: 'temperature',
-            value: 25.5,
-            unit: '°C',
-            time: new Date().toISOString()
-        });
-        console.log('Data sent successfully:', result);
-    } catch (error) {
-        console.error('Failed to send data:', error);
-    }
+  try {
+    const result = await window.TagoIO.sendData({
+      variable: "temperature",
+      value: 25.5,
+      unit: "°C",
+      time: new Date().toISOString(),
+    });
+    console.log("Data sent successfully:", result);
+  } catch (error) {
+    console.error("Failed to send data:", error);
+  }
 }
 ```
 
 ## Blueprint Devices
 
 ```javascript
-window.TagoIO.onSyncBlueprintDevices(function(blueprintData) {
-    console.log('Blueprint settings:', blueprintData.settings);
-    console.log('Selected devices:', blueprintData.selected);
+window.TagoIO.onSyncBlueprintDevices(function (blueprintData) {
+  console.log("Blueprint settings:", blueprintData.settings);
+  console.log("Selected devices:", blueprintData.selected);
 });
 ```
 
 ## User Information
 
 ```javascript
-window.TagoIO.onSyncUserInformation(function(userInfo) {
-    console.log('User language:', userInfo.language);
-    console.log('Has token:', !!userInfo.token);
-    console.log('Run URL:', userInfo.runURL);
+window.TagoIO.onSyncUserInformation(function (userInfo) {
+  console.log("User language:", userInfo.language);
+  console.log("Has token:", !!userInfo.token);
+  console.log("Run URL:", userInfo.runURL);
 });
 ```
 
@@ -165,7 +166,7 @@ window.TagoIO.onSyncUserInformation(function(userInfo) {
 
 ```javascript
 // Navigate to another dashboard
-window.TagoIO.openLink('https://admin.tago.io/dashboards/info/dashboard-id');
+window.TagoIO.openLink("https://admin.tago.io/dashboards/info/dashboard-id");
 
 // Close modal (for header button widgets)
 window.TagoIO.closeModal();
@@ -179,9 +180,9 @@ The SDK includes TypeScript definitions. For TypeScript projects:
 import "@tago-io/custom-widget";
 
 window.TagoIO.onStart((widget: TWidget) => {
-    widget.display.variables.forEach((variable: TWidgetVariable) => {
-        console.log(`Variable: ${variable.variable}, Device: ${variable.origin.id}`);
-    });
+  widget.display.variables.forEach((variable: TWidgetVariable) => {
+    console.log(`Variable: ${variable.variable}, Device: ${variable.origin.id}`);
+  });
 });
 ```
 
@@ -190,9 +191,9 @@ window.TagoIO.onStart((widget: TWidget) => {
 Always handle errors so your widget doesn't break silently:
 
 ```javascript
-window.TagoIO.onError(function(error) {
-    console.error('Widget error:', error);
-    // Show something to the user so they know what happened
+window.TagoIO.onError(function (error) {
+  console.error("Widget error:", error);
+  // Show something to the user so they know what happened
 });
 ```
 
@@ -207,15 +208,15 @@ window.TagoIO.onError(function(error) {
 
 This package includes 7 HTML examples in the [`examples/`](./examples/) folder:
 
-| Example | What it shows |
-|---------|---------------|
-| `basic-widget.html` | Minimal setup and widget lifecycle |
-| `read-data.html` | Displaying real-time device data |
+| Example              | What it shows                             |
+| -------------------- | ----------------------------------------- |
+| `basic-widget.html`  | Minimal setup and widget lifecycle        |
+| `read-data.html`     | Displaying real-time device data          |
 | `read-resource.html` | Accessing user info and blueprint devices |
-| `read-entity.html` | Complex structured data handling |
-| `send-data.html` | Sending data back to devices |
-| `time-interval.html` | Time-based data analysis |
-| `custom-units.html` | Unit conversions and formatting |
+| `read-entity.html`   | Complex structured data handling          |
+| `send-data.html`     | Sending data back to devices              |
+| `time-interval.html` | Time-based data analysis                  |
+| `custom-units.html`  | Unit conversions and formatting           |
 
 ## External Project Examples
 

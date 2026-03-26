@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import { shallowEqual } from "../../src/utils/shallow-equal.js";
 
 describe("shallowEqual", () => {

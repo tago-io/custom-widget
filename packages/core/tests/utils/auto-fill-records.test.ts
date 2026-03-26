@@ -1,5 +1,7 @@
-import { autoFillRecords } from "../../src/utils/auto-fill-records.js";
+import { describe, expect, it } from "vite-plus/test";
+
 import type { TDataRecordInput, TWidgetVariable } from "../../src/types/index.js";
+import { autoFillRecords } from "../../src/utils/auto-fill-records.js";
 
 const widgetVars: TWidgetVariable[] = [
   { variable: "temp", origin: { id: "dev1", bucket: "bucket1" } },

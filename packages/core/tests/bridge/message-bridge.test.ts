@@ -1,3 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { MessageBridge } from "../../src/bridge/message-bridge.js";
 
 describe("MessageBridge", () => {
