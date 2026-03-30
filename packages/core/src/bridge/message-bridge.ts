@@ -82,4 +82,8 @@ export class MessageBridge {
   get pendingCount(): number {
     return this.pool.size;
   }
+
+  get isDestroyed(): boolean {
+    return this.destroyed;
+  }
 }

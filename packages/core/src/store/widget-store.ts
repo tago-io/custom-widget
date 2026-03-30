@@ -33,16 +33,16 @@ export class WidgetStore {
   private strategy: RealtimeStrategy;
   private maxRecords: number;
   private readyOptions: TReadyOptions;
+  private bridgeOptions: { allowedOrigins?: string[] };
   private unsubBridge: (() => void) | null = null;
 
   constructor(options: StoreOptions = {}) {
     this.strategy = options.realtimeStrategy ?? "merge";
     this.maxRecords = options.realtimeMaxRecords ?? 1000;
     this.readyOptions = options.readyOptions ?? {};
+    this.bridgeOptions = { allowedOrigins: options.allowedOrigins };
 
-    this.bridge = new MessageBridge({
-      allowedOrigins: options.allowedOrigins,
-    });
+    this.bridge = new MessageBridge(this.bridgeOptions);
 
     if (typeof window !== "undefined") {
       this.unsubBridge = this.bridge.onMessage(this.handleInbound);
@@ -130,6 +130,15 @@ export class WidgetStore {
   initialize(): void {
     if (this.initialized) return;
     this.initialized = true;
+
+    // Recreate bridge if it was destroyed (e.g. React StrictMode remount)
+    if (this.bridge.isDestroyed) {
+      this.bridge = new MessageBridge(this.bridgeOptions);
+      if (typeof window !== "undefined") {
+        this.unsubBridge = this.bridge.onMessage(this.handleInbound);
+      }
+    }
+
     this.bridge.send({ loaded: true, ...this.readyOptions });
   }
 
@@ -150,9 +159,9 @@ export class WidgetStore {
     return this.bridge.sendWithResponse({ variables: vars, method: "edit" });
   }
 
-  deleteData(records: TDataRecordInput | TDataRecordInput[]): Promise<TData> {
+  deleteData(records: string | string[]): Promise<TData> {
     const vars = Array.isArray(records) ? records : [records];
-    return this.bridge.sendWithResponse({ variables: vars, method: "delete" });
+    return this.bridge.sendWithResponse({ variables: vars as unknown as TDataRecordInput[], method: "delete" });
   }
 
   editResourceData(records: TDataRecordInput | TDataRecordInput[]): Promise<TData> {
@@ -166,6 +175,10 @@ export class WidgetStore {
 
   closeModal(): void {
     this.bridge.send({ method: "close-modal" });
+  }
+
+  runAnalysis(scope?: unknown): void {
+    this.bridge.send({ method: "run-analysis", scope });
   }
 
   clearErrors(): void {

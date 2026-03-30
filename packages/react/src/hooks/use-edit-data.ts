@@ -1,7 +1,8 @@
-import type { TData, TDataRecordInput, TError } from "@tago-io/custom-widget-core";
+import { type TData, type TDataRecordInput, type TError, autoFillRecords } from "@tago-io/custom-widget-core";
 import { useCallback, useRef, useState } from "react";
 
 import { useStore } from "./use-store-selector.js";
+import { useWidget } from "./use-widget.js";
 
 export interface UseEditDataReturn {
   editData: (records: TDataRecordInput | TDataRecordInput[]) => Promise<TData>;
@@ -12,6 +13,7 @@ export interface UseEditDataReturn {
 
 export function useEditData(): UseEditDataReturn {
   const { store } = useStore();
+  const { variables } = useWidget();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<TError | null>(null);
   const mountedRef = useRef(true);
@@ -21,7 +23,9 @@ export function useEditData(): UseEditDataReturn {
       setIsEditing(true);
       setError(null);
       try {
-        const result = await store.editData(records);
+        const vars = Array.isArray(records) ? records : [records];
+        const filled = autoFillRecords(vars, variables);
+        const result = await store.editData(filled);
         if (mountedRef.current) setIsEditing(false);
         return result;
       } catch (err) {
@@ -32,7 +36,7 @@ export function useEditData(): UseEditDataReturn {
         throw err;
       }
     },
-    [store]
+    [store, variables]
   );
 
   const reset = useCallback(() => {

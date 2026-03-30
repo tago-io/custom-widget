@@ -1,4 +1,4 @@
-export type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal";
+export type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal" | "run-analysis";
 
 /** GeoJSON Point location format. */
 export type TLocationGeoJSON = {
@@ -27,10 +27,20 @@ export type TMetadata = {
   [key: string]: any;
 };
 
+export type TUserPreferences = {
+  timezone?: string;
+  language?: string;
+  date_format?: string;
+  time_format?: string;
+  decimal_separator?: string;
+};
+
 export type TUserInformation = {
   token: string | null;
   language: string | null;
   runURL: string | null;
+  custom_preferences?: Record<string, string>;
+  preferences?: TUserPreferences;
 };
 
 export type TDashboardBlueprintDevice = {
@@ -188,6 +198,7 @@ export type TMessage = {
   options?: TReadyOptions;
   url?: string;
   method?: TMethod;
+  scope?: unknown;
 };
 
 export type WidgetState = {

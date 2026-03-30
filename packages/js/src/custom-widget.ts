@@ -35,7 +35,7 @@ type TTagoIO = {
   onSyncUserInformation: (callback: TUserInformationCallback) => void;
   onSyncBlueprintDevices: (callback: TSyncBlueprintDevicesCallback) => void;
   sendData: (dataToSend: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
-  deleteData: (dataToDelete: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
+  deleteData: (dataToDelete: string | string[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   editData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   editResourceData: (
     dataToEdit: TDataRecord | TDataRecord[],
@@ -45,6 +45,7 @@ type TTagoIO = {
   ready: (options: TReadyOptions) => void;
   openLink: (url: string) => void;
   closeModal: () => void;
+  runAnalysis: (scope?: unknown) => void;
 };
 
 declare global {
@@ -167,12 +168,19 @@ const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
   return wrapMutation(store.editData.bind(store), records, callback);
 };
 
-const deleteData = (
-  variables: TDataRecord | TDataRecord[],
-  callback?: TSendDataCallback
-): Promise<TData> | undefined => {
+const deleteData = (variables: string | string[], callback?: TSendDataCallback): Promise<TData> | undefined => {
   const vars = Array.isArray(variables) ? variables : [variables];
-  return wrapMutation(store.deleteData.bind(store), vars, callback);
+  const promise = store.deleteData(vars);
+
+  if (callback) {
+    promise.then(
+      (data) => callback(data),
+      (error) => callback(null, error as TError)
+    );
+    return undefined;
+  }
+
+  return promise;
 };
 
 const editResourceData = (
@@ -180,7 +188,17 @@ const editResourceData = (
   callback?: TSendDataCallback
 ): Promise<TData> | undefined => {
   const vars = Array.isArray(variables) ? variables : [variables];
-  return wrapMutation(store.editResourceData.bind(store), vars, callback);
+  const promise = store.editResourceData(vars);
+
+  if (callback) {
+    promise.then(
+      (data) => callback(data),
+      (error) => callback(null, error as TError)
+    );
+    return undefined;
+  }
+
+  return promise;
 };
 
 const openLink: TTagoIO["openLink"] = (url) => {
@@ -189,6 +207,10 @@ const openLink: TTagoIO["openLink"] = (url) => {
 
 const closeModal: TTagoIO["closeModal"] = () => {
   store.closeModal();
+};
+
+const runAnalysis: TTagoIO["runAnalysis"] = (scope) => {
+  store.runAnalysis(scope);
 };
 
 window.TagoIO.ready = onReady;
@@ -203,6 +225,7 @@ window.TagoIO.deleteData = deleteData;
 window.TagoIO.editResourceData = editResourceData;
 window.TagoIO.openLink = openLink;
 window.TagoIO.closeModal = closeModal;
+window.TagoIO.runAnalysis = runAnalysis;
 
 export {
   closeModal,
@@ -215,6 +238,7 @@ export {
   onSyncBlueprintDevices,
   onSyncUserInformation,
   openLink,
+  runAnalysis,
   sendData,
 };
 

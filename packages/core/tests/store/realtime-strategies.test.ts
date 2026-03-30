@@ -82,11 +82,22 @@ describe("mergeStrategy", () => {
     const r2 = record("2", "humidity", 60);
     const existing = [block(["temp", "humidity"], "d1", [r1, r2])];
     const r1Updated = record("1", "temp", 25);
-    const incoming = [block(["temp", "humidity"], "d1", [r1Updated])];
+    const incoming = [block(["temp", "humidity"], "d1", [r1Updated, r2])];
 
     const result = mergeStrategy(existing, incoming);
-    expect(result[0].result![1]).toBe(r2);
     expect(result[0].result![0]).toBe(r1Updated);
+    expect(result[0].result![1]).toBe(r2);
+  });
+
+  it("removes records not present in incoming (deleted)", () => {
+    const r1 = record("1", "temp", 20);
+    const r2 = record("2", "temp", 30);
+    const existing = [block(["temp"], "d1", [r1, r2])];
+    const incoming = [block(["temp"], "d1", [r2])];
+
+    const result = mergeStrategy(existing, incoming);
+    expect(result[0].result).toHaveLength(1);
+    expect(result[0].result![0]).toBe(r2);
   });
 
   it("adds new blocks that don't exist in existing", () => {

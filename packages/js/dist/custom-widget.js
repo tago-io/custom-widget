@@ -100,6 +100,9 @@
     get pendingCount() {
       return this.pool.size;
     }
+    get isDestroyed() {
+      return this.destroyed;
+    }
   };
   function replaceStrategy(_existing, incoming) {
     return incoming;
@@ -150,14 +153,14 @@
   }
   function mergeRecords(existing, incoming) {
     if (incoming.length === 0) return existing;
-    const existingById = /* @__PURE__ */ new Map();
-    for (const record of existing) {
-      existingById.set(record.id, record);
+    const incomingById = /* @__PURE__ */ new Map();
+    for (const record of incoming) {
+      incomingById.set(record.id, record);
     }
     let changed = false;
     const result = [];
     for (const existingRecord of existing) {
-      const incomingMatch = incoming.find((r) => r.id === existingRecord.id);
+      const incomingMatch = incomingById.get(existingRecord.id);
       if (incomingMatch) {
         if (recordsEqual(existingRecord, incomingMatch)) {
           result.push(existingRecord);
@@ -165,15 +168,17 @@
           result.push(incomingMatch);
           changed = true;
         }
+        incomingById.delete(existingRecord.id);
       } else {
-        result.push(existingRecord);
-      }
-    }
-    for (const incomingRecord of incoming) {
-      if (!existingById.has(incomingRecord.id)) {
-        result.push(incomingRecord);
         changed = true;
       }
+    }
+    for (const [, record] of incomingById) {
+      result.push(record);
+      changed = true;
+    }
+    if (changed) {
+      result.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
     }
     return changed ? result : existing;
   }
@@ -237,9 +242,8 @@
       this.strategy = options.realtimeStrategy ?? "merge";
       this.maxRecords = options.realtimeMaxRecords ?? 1e3;
       this.readyOptions = options.readyOptions ?? {};
-      this.bridge = new MessageBridge({
-        allowedOrigins: options.allowedOrigins
-      });
+      this.bridgeOptions = { allowedOrigins: options.allowedOrigins };
+      this.bridge = new MessageBridge(this.bridgeOptions);
       if (typeof window !== "undefined") {
         this.unsubBridge = this.bridge.onMessage(this.handleInbound);
       }
@@ -277,6 +281,12 @@
     initialize() {
       if (this.initialized) return;
       this.initialized = true;
+      if (this.bridge.isDestroyed) {
+        this.bridge = new MessageBridge(this.bridgeOptions);
+        if (typeof window !== "undefined") {
+          this.unsubBridge = this.bridge.onMessage(this.handleInbound);
+        }
+      }
       this.bridge.send({ loaded: true, ...this.readyOptions });
     }
     destroy() {
@@ -306,6 +316,9 @@
     }
     closeModal() {
       this.bridge.send({ method: "close-modal" });
+    }
+    runAnalysis(scope) {
+      this.bridge.send({ method: "run-analysis", scope });
     }
     clearErrors() {
       this.updateState({ errors: [] });
@@ -426,17 +439,36 @@
   };
   var deleteData = (variables, callback) => {
     const vars = Array.isArray(variables) ? variables : [variables];
-    return wrapMutation(store.deleteData.bind(store), vars, callback);
+    const promise = store.deleteData(vars);
+    if (callback) {
+      promise.then(
+        (data) => callback(data),
+        (error) => callback(null, error)
+      );
+      return void 0;
+    }
+    return promise;
   };
   var editResourceData = (variables, callback) => {
     const vars = Array.isArray(variables) ? variables : [variables];
-    return wrapMutation(store.editResourceData.bind(store), vars, callback);
+    const promise = store.editResourceData(vars);
+    if (callback) {
+      promise.then(
+        (data) => callback(data),
+        (error) => callback(null, error)
+      );
+      return void 0;
+    }
+    return promise;
   };
   var openLink = (url) => {
     store.openLink(url);
   };
   var closeModal = () => {
     store.closeModal();
+  };
+  var runAnalysis = (scope) => {
+    store.runAnalysis(scope);
   };
   window.TagoIO.ready = onReady;
   window.TagoIO.onStart = onStart;
@@ -450,4 +482,5 @@
   window.TagoIO.editResourceData = editResourceData;
   window.TagoIO.openLink = openLink;
   window.TagoIO.closeModal = closeModal;
+  window.TagoIO.runAnalysis = runAnalysis;
 })();

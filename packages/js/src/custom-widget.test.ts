@@ -1,7 +1,7 @@
 import type { TRealtimeData } from "@tago-io/custom-widget-core";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { closeModal, onError, onRealtime, onStart, sendData } from "./custom-widget";
+import { closeModal, onError, onRealtime, onStart, runAnalysis, sendData } from "./custom-widget";
 
 const mockRandomUUID = vi.fn(() => "staticKey");
 
@@ -166,5 +166,38 @@ describe("closeModal", () => {
   it("sends the close modal message", () => {
     closeModal();
     expect(mockPostMessage).toHaveBeenCalledWith({ method: "close-modal" }, "*");
+  });
+});
+
+describe("runAnalysis", () => {
+  const mockPostMessage = vi.fn();
+
+  beforeAll(() => {
+    window.parent.postMessage = mockPostMessage;
+  });
+
+  beforeEach(() => {
+    mockPostMessage.mockClear();
+  });
+
+  it("sends run-analysis message without scope", () => {
+    runAnalysis();
+    expect(mockPostMessage).toHaveBeenCalledWith({ method: "run-analysis", scope: undefined }, "*");
+  });
+
+  it("sends run-analysis message with scope", () => {
+    const scope = [
+      {
+        variable: "command",
+        value: "restart",
+        metadata: {
+          ports: [1, 2, 3],
+          devices: ["device-abc", "device-def"],
+        },
+      },
+    ];
+
+    runAnalysis(scope);
+    expect(mockPostMessage).toHaveBeenCalledWith({ method: "run-analysis", scope }, "*");
   });
 });
