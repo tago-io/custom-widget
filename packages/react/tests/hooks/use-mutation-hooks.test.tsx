@@ -118,16 +118,23 @@ describe("mutation hooks", () => {
   });
 
   describe("useDeleteData", () => {
-    it("sends delete request", async () => {
+    it("sends delete request with id:device payload format", async () => {
       const { result } = renderHook(() => useDeleteData(), { wrapper });
 
       let promise: Promise<unknown>;
       act(() => {
-        promise = result.current.deleteData({ variable: "temp", value: 42 });
+        promise = result.current.deleteData({
+          id: "rec-1",
+          device: "dev-1",
+          variable: "temp",
+          value: 42,
+          time: "2024-01-01T00:00:00Z",
+        });
       });
 
       const sentMessage = postMessageSpy.mock.calls[postMessageSpy.mock.calls.length - 1][0] as Record<string, unknown>;
       expect(sentMessage.method).toBe("delete");
+      expect(sentMessage.variables).toEqual(["rec-1:dev-1"]);
 
       await act(async () => {
         respondToLastMessage(true);
