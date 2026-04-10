@@ -43,7 +43,11 @@ export class MessageBridge {
     }
 
     for (const handler of this.handlers) {
-      handler(data);
+      try {
+        handler(data);
+      } catch (err) {
+        console.error("[TagoIO Widget] Message handler threw an error:", err);
+      }
     }
   }
 

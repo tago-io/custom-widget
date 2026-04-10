@@ -107,6 +107,23 @@ describe("MessageBridge", () => {
     });
   });
 
+  describe("handler error isolation", () => {
+    it("continues calling remaining handlers if one throws", () => {
+      const handler1 = vi.fn(() => {
+        throw new Error("handler1 failed");
+      });
+      const handler2 = vi.fn();
+
+      bridge.onMessage(handler1);
+      bridge.onMessage(handler2);
+
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: {} } }));
+
+      expect(handler1).toHaveBeenCalled();
+      expect(handler2).toHaveBeenCalled();
+    });
+  });
+
   describe("sendWithResponse", () => {
     it("resolves when a matching success response arrives", async () => {
       const promise = bridge.sendWithResponse({ variables: [] });
