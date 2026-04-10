@@ -109,6 +109,7 @@ describe("MessageBridge", () => {
 
   describe("handler error isolation", () => {
     it("continues calling remaining handlers if one throws", () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const handler1 = vi.fn(() => {
         throw new Error("handler1 failed");
       });
@@ -121,6 +122,8 @@ describe("MessageBridge", () => {
 
       expect(handler1).toHaveBeenCalled();
       expect(handler2).toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith("[TagoIO Widget] Message handler threw an error:", expect.any(Error));
+      consoleSpy.mockRestore();
     });
   });
 
