@@ -17,6 +17,7 @@ out/
 yarn.lock
 .cache
 !.github/**
+docs/
 
 # pnpm
 .pnpm-store/
