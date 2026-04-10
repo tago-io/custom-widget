@@ -95,9 +95,24 @@ describe("sendData", () => {
     mockPostMessage.mockClear();
   });
 
+  it("throws when autoFill is disabled and records lack bucket/origin", () => {
+    window.TagoIO.autoFill = false;
+
+    expect(() => {
+      void sendData({ id: "r1", variable: "temp", value: 42, time: "t1" } as never);
+    }).toThrow("bucket");
+  });
+
   it("sends data with auto-fill disabled and resolves the promise on response", async () => {
     window.TagoIO.autoFill = false;
-    const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
+    const mockDataToSend = {
+      id: "asd",
+      variable: "some_variable",
+      value: "new value",
+      time: "timestamp",
+      bucket: "b1",
+      origin: "o1",
+    };
 
     const result = sendData(mockDataToSend);
 
@@ -113,7 +128,14 @@ describe("sendData", () => {
   it("sends data with auto-fill disabled and invokes callback on response", () => {
     window.TagoIO.autoFill = false;
     const mockSendDataCallback = vi.fn();
-    const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
+    const mockDataToSend = {
+      id: "asd",
+      variable: "some_variable",
+      value: "new value",
+      time: "timestamp",
+      bucket: "b1",
+      origin: "o1",
+    };
 
     const result = sendData(mockDataToSend, mockSendDataCallback);
 

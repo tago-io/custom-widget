@@ -132,10 +132,12 @@ function prepareRecords(variables: TDataRecord | TDataRecord[]): TDataRecordInpu
     return autoFillRecords(vars, getWidgetVariables());
   }
 
-  for (const v of vars) {
-    if (!v.bucket || !v.origin) {
-      console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
-    }
+  const invalid = vars.filter((v) => !v.bucket || !v.origin);
+  if (invalid.length > 0) {
+    throw new Error(
+      `AutoFill is disabled. ${invalid.length} record(s) missing required "bucket" or "origin" fields. ` +
+        "Either enable autoFill or provide these fields."
+    );
   }
   return vars;
 }
