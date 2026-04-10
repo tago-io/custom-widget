@@ -118,6 +118,29 @@ describe("mergeStrategy", () => {
     expect(result[1]).toBe(existingBlock);
   });
 
+  it("sorts merged records by time descending", () => {
+    const existing = [
+      block(["temp"], "d1", [
+        record("1", "temp", 20, "2024-01-01T00:00:00Z"),
+        record("2", "temp", 25, "2024-01-03T00:00:00Z"),
+      ]),
+    ];
+    const incoming = [
+      block(["temp"], "d1", [
+        record("1", "temp", 22, "2024-01-01T00:00:00Z"),
+        record("2", "temp", 25, "2024-01-03T00:00:00Z"),
+        record("3", "temp", 30, "2024-01-02T00:00:00Z"),
+      ]),
+    ];
+
+    const result = mergeStrategy(existing, incoming);
+    const records = result[0].result!;
+    expect(records).toHaveLength(3);
+    expect(records[0].id).toBe("2"); // Jan 3 (newest)
+    expect(records[1].id).toBe("3"); // Jan 2
+    expect(records[2].id).toBe("1"); // Jan 1 (oldest)
+  });
+
   it("returns same reference when nothing changed", () => {
     const r1 = record("1", "temp", 20);
     const existing = [block(["temp"], "d1", [r1])];
