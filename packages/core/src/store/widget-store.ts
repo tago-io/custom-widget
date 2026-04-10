@@ -50,30 +50,34 @@ export class WidgetStore {
   }
 
   private handleInbound = (data: InboundMessage): void => {
+    const partial: Partial<WidgetState> = {};
+
     if (data.userInformation) {
-      this.updateState({ userInformation: data.userInformation });
+      partial.userInformation = data.userInformation;
     }
 
     if (data.blueprintDevices) {
-      this.updateState({ blueprintDevices: data.blueprintDevices });
+      partial.blueprintDevices = data.blueprintDevices;
     }
 
     if (data.widget) {
-      this.updateState({
-        widget: data.widget,
-        isReady: true,
-      });
-    }
-
-    if (data.realtime) {
-      this.updateRealtime(data.realtime);
+      partial.widget = data.widget;
+      partial.isReady = true;
     }
 
     if (data.status === false) {
       const error = data as unknown as TError;
-      this.updateState({
-        errors: [...this.state.errors, error],
-      });
+      partial.errors = [...this.state.errors, error];
+    }
+
+    if (Object.keys(partial).length > 0) {
+      this.state = { ...this.state, ...partial };
+    }
+
+    if (data.realtime) {
+      this.updateRealtime(data.realtime);
+    } else if (Object.keys(partial).length > 0) {
+      this.emit();
     }
   };
 
