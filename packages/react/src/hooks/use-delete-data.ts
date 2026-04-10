@@ -1,5 +1,5 @@
 import type { TData, TDataRecord, TError } from "@tago-io/custom-widget-core";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useStore } from "./use-store-selector.js";
 
@@ -23,6 +23,12 @@ export function useDeleteData(): UseDeleteDataReturn {
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<TError | null>(null);
   const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const deleteData = useCallback(
     async (records: TDataRecord | TDataRecord[]) => {

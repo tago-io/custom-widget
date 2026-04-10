@@ -1,5 +1,5 @@
 import { type TData, type TDataRecordInput, type TError, autoFillRecords } from "@tago-io/custom-widget-core";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useStore } from "./use-store-selector.js";
 import { useWidget } from "./use-widget.js";
@@ -17,6 +17,12 @@ export function useSendData(): UseSendDataReturn {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<TError | null>(null);
   const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const sendData = useCallback(
     async (records: TDataRecordInput | TDataRecordInput[]) => {

@@ -1,5 +1,5 @@
 import type { TData, TDataRecordInput, TError } from "@tago-io/custom-widget-core";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useStore } from "./use-store-selector.js";
 
@@ -15,6 +15,12 @@ export function useEditResourceData(): UseEditResourceDataReturn {
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<TError | null>(null);
   const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const editResourceData = useCallback(
     async (records: TDataRecordInput | TDataRecordInput[]) => {
