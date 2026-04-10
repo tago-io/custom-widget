@@ -95,12 +95,12 @@ describe("sendData", () => {
     mockPostMessage.mockClear();
   });
 
-  it("throws when autoFill is disabled and records lack bucket/origin", () => {
+  it("throws when autoFill is disabled and records lack origin", () => {
     window.TagoIO.autoFill = false;
 
     expect(() => {
       void sendData({ id: "r1", variable: "temp", value: 42, time: "t1" } as never);
-    }).toThrow("bucket");
+    }).toThrow("origin");
   });
 
   it("sends data with auto-fill disabled and resolves the promise on response", async () => {
@@ -110,7 +110,6 @@ describe("sendData", () => {
       variable: "some_variable",
       value: "new value",
       time: "timestamp",
-      bucket: "b1",
       origin: "o1",
     };
 
@@ -133,7 +132,6 @@ describe("sendData", () => {
       variable: "some_variable",
       value: "new value",
       time: "timestamp",
-      bucket: "b1",
       origin: "o1",
     };
 

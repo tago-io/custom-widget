@@ -127,16 +127,16 @@ function prepareRecords(variables: TDataRecord | TDataRecord[]): TDataRecordInpu
 
   if (window.TagoIO.autoFill) {
     console.info(
-      "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
+      "AutoFill is enabled, the origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
     return autoFillRecords(vars, getWidgetVariables());
   }
 
-  const invalid = vars.filter((v) => !v.bucket || !v.origin);
+  const invalid = vars.filter((v) => !v.origin);
   if (invalid.length > 0) {
     throw new Error(
-      `AutoFill is disabled. ${invalid.length} record(s) missing required "bucket" or "origin" fields. ` +
-        "Either enable autoFill or provide these fields."
+      `AutoFill is disabled. ${invalid.length} record(s) missing required "origin" field. ` +
+        "Either enable autoFill or provide this field."
     );
   }
   return vars;
