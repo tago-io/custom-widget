@@ -155,4 +155,4 @@ Apache-2.0 — see [LICENSE.md](LICENSE.md) for details.
 
 ---
 
-**Made by [Tago LLC](https://tago.io)**
+**Made by [TagoIO Inc.](https://tago.io)**

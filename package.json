@@ -3,7 +3,7 @@
   "private": true,
   "description": "TagoIO Custom Widget SDK monorepo",
   "license": "Apache-2.0",
-  "author": "Tago LLC",
+  "author": "TagoIO Inc.",
   "repository": "tago-io/custom-widget",
   "type": "module",
   "scripts": {
