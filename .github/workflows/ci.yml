@@ -19,15 +19,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
         with:
-          cache: true
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Build
         run: pnpm build
 
-      - name: Lint & Format & Type Check
-        run: vp check
+      - name: Lint & Format
+        run: pnpm check
 
       - name: Test
-        run: vp test
+        run: pnpm vp test run
