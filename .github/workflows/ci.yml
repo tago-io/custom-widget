@@ -23,11 +23,11 @@ jobs:
         with:
           cache: true
 
+      - name: Build
+        run: pnpm build
+
       - name: Lint & Format & Type Check
         run: vp check
 
       - name: Test
         run: vp test
-
-      - name: Build
-        run: pnpm build
