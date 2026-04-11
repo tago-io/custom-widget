@@ -1,6 +1,6 @@
 {
   "name": "@tago-io/custom-widget",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "TagoIO Toolkit to build your own widgets",
   "keywords": [
     "custom-widget",
