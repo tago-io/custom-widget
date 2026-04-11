@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Read Entity Widget</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .entity {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ddd;
+        background: #f9f9f9;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+      .controls {
+        margin: 15px 0;
+      }
+      .controls input,
+      .controls select {
+        margin: 5px;
+        padding: 5px;
+      }
+      .controls button {
+        margin: 5px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Read Entity Widget</h1>
+    <p>Demonstrates working with structured entity-like data from TagoIO devices.</p>
+
+    <div id="status" class="status">Waiting for entity data...</div>
+    <div id="error" class="error" style="display: none"></div>
+
+    <div class="controls">
+      <input type="text" id="search-input" placeholder="Search entities..." />
+      <button onclick="clearSearch()">Clear</button>
+      <select id="group-filter" onchange="applyFilters()">
+        <option value="">All Groups</option>
+      </select>
+      <select id="type-filter" onchange="applyFilters()">
+        <option value="">All Types</option>
+      </select>
+    </div>
+
+    <div class="controls">
+      <button onclick="toggleView('list')" id="list-btn">List View</button>
+      <button onclick="toggleView('grouped')" id="grouped-btn">Grouped View</button>
+    </div>
+
+    <div>
+      <strong>Stats:</strong>
+      Total: <span id="total-entities">0</span> | Filtered: <span id="filtered-entities">0</span> | Groups:
+      <span id="unique-groups">0</span>
+    </div>
+
+    <div id="data-container">No entity data available</div>
+
+    <script>
+      /**
+       * Read Entity Example
+       * Demonstrates working with structured entity-like data from TagoIO devices
+       */
+
+      let entityData = [];
+      let filteredData = [];
+      let currentFilter = "";
+      let currentView = "list";
+
+      // Handle widget startup
+      window.TagoIO.onStart(function (widget) {
+        console.log("Entity Reader Widget started:", widget);
+        updateStats();
+        showView();
+      });
+
+      // Handle real-time data updates - treat as entity data
+      window.TagoIO.onRealtime(function (data) {
+        console.log("Entity data received:", data);
+
+        // Process incoming data as entities
+        const newEntities = [];
+        data.forEach(function (dataGroup) {
+          if (dataGroup.result && Array.isArray(dataGroup.result)) {
+            dataGroup.result.forEach(function (dataPoint) {
+              newEntities.push(processAsEntity(dataPoint));
+            });
+          }
+        });
+
+        // Update entity data
+        entityData = entityData.concat(newEntities);
+
+        // Keep only last 100 entities
+        if (entityData.length > 100) {
+          entityData = entityData.slice(-100);
+        }
+
+        // Update display
+        updateFilterOptions();
+        applyFilters();
+        updateStats();
+        document.getElementById("status").textContent = `Received ${newEntities.length} new entities`;
+      });
+
+      // Process a data point as an entity
+      function processAsEntity(dataPoint) {
+        return {
+          id: dataPoint.id || generateId(),
+          name: dataPoint.variable || "Unknown Entity",
+          type: determineEntityType(dataPoint),
+          group: dataPoint.group || "default",
+          value: dataPoint.value,
+          unit: dataPoint.unit,
+          time: dataPoint.time,
+          metadata: dataPoint.metadata || {},
+          properties: extractProperties(dataPoint),
+          receivedAt: new Date(),
+        };
+      }
+
+      // Determine entity type based on data point
+      function determineEntityType(dataPoint) {
+        if (typeof dataPoint.value === "number") return "numeric";
+        if (typeof dataPoint.value === "boolean") return "boolean";
+        if (dataPoint.location) return "location";
+        return "text";
+      }
+
+      // Extract properties from data point
+      function extractProperties(dataPoint) {
+        const properties = {};
+        if (dataPoint.value !== undefined) properties.value = dataPoint.value;
+        if (dataPoint.unit) properties.unit = dataPoint.unit;
+        if (dataPoint.time) properties.timestamp = new Date(dataPoint.time).toLocaleString();
+        if (dataPoint.location) {
+          properties.latitude = dataPoint.location.lat;
+          properties.longitude = dataPoint.location.lng;
+        }
+        // Add metadata properties
+        if (dataPoint.metadata) {
+          Object.keys(dataPoint.metadata).forEach((key) => {
+            properties[key] = dataPoint.metadata[key];
+          });
+        }
+        return properties;
+      }
+
+      // Generate unique ID
+      function generateId() {
+        return "entity_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+      }
+
+      // Update filter options
+      function updateFilterOptions() {
+        const groupFilter = document.getElementById("group-filter");
+        const typeFilter = document.getElementById("type-filter");
+
+        // Get unique groups and types
+        const groups = [...new Set(entityData.map((e) => e.group))];
+        const types = [...new Set(entityData.map((e) => e.type))];
+
+        // Update group filter
+        const currentGroupValue = groupFilter.value;
+        groupFilter.textContent = "";
+
+        const allGroupsOption = document.createElement("option");
+        allGroupsOption.value = "";
+        allGroupsOption.textContent = "All Groups";
+        groupFilter.appendChild(allGroupsOption);
+
+        groups.forEach((group) => {
+          const option = document.createElement("option");
+          option.value = group;
+          option.textContent = group;
+          if (group === currentGroupValue) option.selected = true;
+          groupFilter.appendChild(option);
+        });
+
+        // Update type filter
+        const currentTypeValue = typeFilter.value;
+        typeFilter.textContent = "";
+
+        const allTypesOption = document.createElement("option");
+        allTypesOption.value = "";
+        allTypesOption.textContent = "All Types";
+        typeFilter.appendChild(allTypesOption);
+
+        types.forEach((type) => {
+          const option = document.createElement("option");
+          option.value = type;
+          option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+          if (type === currentTypeValue) option.selected = true;
+          typeFilter.appendChild(option);
+        });
+      }
+
+      // Apply all filters
+      function applyFilters() {
+        const groupFilter = document.getElementById("group-filter");
+        const typeFilter = document.getElementById("type-filter");
+        const searchInput = document.getElementById("search-input");
+
+        currentFilter = searchInput.value.toLowerCase();
+        let filtered = [...entityData];
+
+        // Apply search filter
+        if (currentFilter) {
+          filtered = filtered.filter(
+            (entity) =>
+              entity.name.toLowerCase().includes(currentFilter) ||
+              entity.group.toLowerCase().includes(currentFilter) ||
+              entity.type.toLowerCase().includes(currentFilter) ||
+              JSON.stringify(entity.properties).toLowerCase().includes(currentFilter)
+          );
+        }
+
+        // Apply group filter
+        if (groupFilter.value) {
+          filtered = filtered.filter((entity) => entity.group === groupFilter.value);
+        }
+
+        // Apply type filter
+        if (typeFilter.value) {
+          filtered = filtered.filter((entity) => entity.type === typeFilter.value);
+        }
+
+        filteredData = filtered;
+        showView();
+        updateStats();
+      }
+
+      // Clear search
+      function clearSearch() {
+        document.getElementById("search-input").value = "";
+        applyFilters();
+      }
+
+      // Toggle view mode
+      function toggleView(viewType) {
+        currentView = viewType;
+        document.querySelectorAll("#list-btn, #grouped-btn").forEach((btn) => (btn.style.fontWeight = "normal"));
+        document.getElementById(viewType + "-btn").style.fontWeight = "bold";
+        showView();
+      }
+
+      // Show current view
+      function showView() {
+        const container = document.getElementById("data-container");
+
+        if (filteredData.length === 0) {
+          container.textContent = "";
+          const noDataDiv = document.createElement("div");
+          noDataDiv.textContent = "No entity data available";
+          container.appendChild(noDataDiv);
+          return;
+        }
+
+        if (currentView === "grouped") {
+          showGroupedView(container);
+        } else {
+          showListView(container);
+        }
+      }
+
+      // Show list view
+      function showListView(container) {
+        container.textContent = "";
+        filteredData.forEach(function (entity) {
+          const entityDiv = document.createElement("div");
+          entityDiv.className = "entity";
+
+          // Create elements instead of using innerHTML
+          const nameStrong = document.createElement("strong");
+          nameStrong.textContent = entity.name;
+          entityDiv.appendChild(nameStrong);
+          entityDiv.appendChild(document.createTextNode(` (${entity.type})`));
+          entityDiv.appendChild(document.createElement("br"));
+
+          entityDiv.appendChild(document.createTextNode(`Group: ${entity.group}`));
+          entityDiv.appendChild(document.createElement("br"));
+
+          entityDiv.appendChild(document.createTextNode(`Value: ${entity.value} ${entity.unit || ""}`));
+          entityDiv.appendChild(document.createElement("br"));
+
+          entityDiv.appendChild(document.createTextNode(`Time: ${new Date(entity.time).toLocaleString()}`));
+          entityDiv.appendChild(document.createElement("br"));
+
+          entityDiv.appendChild(document.createTextNode(`Properties: ${Object.keys(entity.properties).length} items`));
+
+          container.appendChild(entityDiv);
+        });
+      }
+
+      // Show grouped view
+      function showGroupedView(container) {
+        // Group entities by group
+        const groupedEntities = {};
+        filteredData.forEach((entity) => {
+          if (!groupedEntities[entity.group]) {
+            groupedEntities[entity.group] = [];
+          }
+          groupedEntities[entity.group].push(entity);
+        });
+
+        container.textContent = "";
+        Object.entries(groupedEntities).forEach(function ([group, entities]) {
+          const groupDiv = document.createElement("div");
+
+          // Create group title instead of using innerHTML
+          const groupTitle = document.createElement("h4");
+          groupTitle.textContent = `${group} (${entities.length} entities)`;
+          groupDiv.appendChild(groupTitle);
+
+          entities.forEach(function (entity) {
+            const entityDiv = document.createElement("div");
+            entityDiv.className = "entity";
+            entityDiv.style.marginLeft = "20px";
+
+            // Create elements instead of using innerHTML
+            const nameStrong = document.createElement("strong");
+            nameStrong.textContent = entity.name;
+            entityDiv.appendChild(nameStrong);
+            entityDiv.appendChild(document.createTextNode(` (${entity.type})`));
+            entityDiv.appendChild(document.createElement("br"));
+
+            entityDiv.appendChild(document.createTextNode(`Value: ${entity.value} ${entity.unit || ""}`));
+            entityDiv.appendChild(document.createElement("br"));
+
+            entityDiv.appendChild(document.createTextNode(`Time: ${new Date(entity.time).toLocaleString()}`));
+
+            groupDiv.appendChild(entityDiv);
+          });
+
+          container.appendChild(groupDiv);
+        });
+      }
+
+      // Update statistics
+      function updateStats() {
+        document.getElementById("total-entities").textContent = entityData.length;
+        document.getElementById("filtered-entities").textContent = filteredData.length;
+
+        const uniqueGroups = [...new Set(entityData.map((e) => e.group))];
+        document.getElementById("unique-groups").textContent = uniqueGroups.length;
+      }
+
+      // Setup search functionality
+      document.getElementById("search-input").addEventListener("input", applyFilters);
+
+      // Handle errors
+      window.TagoIO.onError(function (error) {
+        console.error("Entity reader error:", error);
+        document.getElementById("error").style.display = "block";
+        document.getElementById("error").textContent = "Error: " + (error.message || "Unknown error");
+      });
+
+      // Initialize widget
+      window.TagoIO.ready({
+        header: { color: "#2196F3" },
+      });
+    </script>
+  </body>
+</html>
