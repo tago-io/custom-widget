@@ -1,10 +1,24 @@
 {
   "name": "@tago-io/custom-widget-core",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "Framework-agnostic core for TagoIO Custom Widget SDKs",
+  "keywords": [
+    "custom-widget",
+    "dashboard",
+    "iot",
+    "tago",
+    "tagoio",
+    "widget"
+  ],
+  "homepage": "https://github.com/tago-io/custom-widget#readme",
+  "bugs": "https://github.com/tago-io/custom-widget/issues",
   "license": "Apache-2.0",
   "author": "Tago LLC",
-  "repository": "tago-io/custom-widget",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tago-io/custom-widget.git",
+    "directory": "packages/core"
+  },
   "files": [
     "dist"
   ],
@@ -24,6 +38,10 @@
         "default": "./dist/index.cjs"
       }
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsup",

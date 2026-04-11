@@ -2,11 +2,33 @@
   "name": "@tago-io/custom-widget",
   "version": "2.0.0",
   "description": "TagoIO Toolkit to build your own widgets",
+  "keywords": [
+    "custom-widget",
+    "dashboard",
+    "iot",
+    "javascript",
+    "tago",
+    "tagoio",
+    "widget"
+  ],
+  "homepage": "https://github.com/tago-io/custom-widget#readme",
+  "bugs": "https://github.com/tago-io/custom-widget/issues",
   "license": "Apache-2.0",
   "author": "Tago LLC",
-  "repository": "tago-io/custom-widget",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tago-io/custom-widget.git",
+    "directory": "packages/js"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/custom-widget.js",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build:scripts": "tsup",
     "build:css": "lessc ./src/css/custom-widget.less ./dist/custom-widget.css",
