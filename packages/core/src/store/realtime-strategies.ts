@@ -78,16 +78,16 @@ export function mergeStrategy(existing: TRealtimeData[], incoming: TRealtimeData
 function mergeRecords(existing: TDataRecord[], incoming: TDataRecord[]): TDataRecord[] {
   if (incoming.length === 0) return existing;
 
-  const existingById = new Map<string, TDataRecord>();
-  for (const record of existing) {
-    existingById.set(record.id, record);
+  const incomingById = new Map<string, TDataRecord>();
+  for (const record of incoming) {
+    incomingById.set(record.id, record);
   }
 
   let changed = false;
   const result: TDataRecord[] = [];
 
   for (const existingRecord of existing) {
-    const incomingMatch = incoming.find((r) => r.id === existingRecord.id);
+    const incomingMatch = incomingById.get(existingRecord.id);
     if (incomingMatch) {
       if (recordsEqual(existingRecord, incomingMatch)) {
         result.push(existingRecord);
@@ -95,16 +95,20 @@ function mergeRecords(existing: TDataRecord[], incoming: TDataRecord[]): TDataRe
         result.push(incomingMatch);
         changed = true;
       }
+      incomingById.delete(existingRecord.id);
     } else {
-      result.push(existingRecord);
+      // Record no longer in incoming — it was deleted
+      changed = true;
     }
   }
 
-  for (const incomingRecord of incoming) {
-    if (!existingById.has(incomingRecord.id)) {
-      result.push(incomingRecord);
-      changed = true;
-    }
+  for (const [, record] of incomingById) {
+    result.push(record);
+    changed = true;
+  }
+
+  if (changed) {
+    result.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
   }
 
   return changed ? result : existing;

@@ -1,7 +1,9 @@
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { useWidgetErrors } from "../../src/hooks/use-widget-errors.js";
+import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <TagoIOProvider>{children}</TagoIOProvider>;

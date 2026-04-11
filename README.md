@@ -4,11 +4,11 @@ Build custom widgets that run inside TagoIO Dashboards. A custom widget is a web
 
 This repository provides two SDKs — pick the one that fits your project:
 
-| | JavaScript SDK | React SDK |
-|---|---|---|
-| **Best for** | Plain HTML, vanilla JS, or any framework | React applications |
-| **Package** | `@tago-io/custom-widget` | `@tago-io/custom-widget-react` |
-| **Approach** | Callbacks on `window.TagoIO` | Hooks and a Provider component |
+|              | JavaScript SDK                           | React SDK                      |
+| ------------ | ---------------------------------------- | ------------------------------ |
+| **Best for** | Plain HTML, vanilla JS, or any framework | React applications             |
+| **Package**  | `@tago-io/custom-widget`                 | `@tago-io/custom-widget-react` |
+| **Approach** | Callbacks on `window.TagoIO`             | Hooks and a Provider component |
 
 ## Quick Start — JavaScript
 
@@ -17,15 +17,15 @@ No build step needed. Add the script tag and start coding:
 ```html
 <script src="https://admin.tago.io/dist/custom-widget.min.js"></script>
 <script>
-    window.TagoIO.onStart(function(widget) {
-        console.log('Widget started!', widget);
-    });
+  window.TagoIO.onStart(function (widget) {
+    console.log("Widget started!", widget);
+  });
 
-    window.TagoIO.onRealtime(function(data) {
-        console.log('New data:', data);
-    });
+  window.TagoIO.onRealtime(function (data) {
+    console.log("New data:", data);
+  });
 
-    window.TagoIO.ready();
+  window.TagoIO.ready();
 </script>
 ```
 
@@ -63,7 +63,9 @@ function Dashboard() {
       <h1>{widget?.label}</h1>
       <ul>
         {records.map((r) => (
-          <li key={r.id}>{r.variable}: {r.value}</li>
+          <li key={r.id}>
+            {r.variable}: {r.value}
+          </li>
         ))}
       </ul>
     </div>

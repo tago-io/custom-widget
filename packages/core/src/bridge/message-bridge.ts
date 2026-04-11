@@ -35,7 +35,7 @@ export class MessageBridge {
     if (!data) return;
 
     if (data.status !== undefined && data.key) {
-      if (data.status === true) {
+      if (data.status) {
         this.pool.resolve(data.key, data as unknown as TData);
       } else {
         this.pool.reject(data.key, data as unknown as TError);
@@ -43,7 +43,11 @@ export class MessageBridge {
     }
 
     for (const handler of this.handlers) {
-      handler(data);
+      try {
+        handler(data);
+      } catch (err) {
+        console.error("[TagoIO Widget] Message handler threw an error:", err);
+      }
     }
   }
 
@@ -81,5 +85,9 @@ export class MessageBridge {
 
   get pendingCount(): number {
     return this.pool.size;
+  }
+
+  get isDestroyed(): boolean {
+    return this.destroyed;
   }
 }

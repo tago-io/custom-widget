@@ -1,5 +1,6 @@
 import type { WidgetState } from "@tago-io/custom-widget-core";
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { useStore, useStoreSelector } from "./use-store-selector.js";
 
 export interface UseDictionaryOptions {
@@ -10,7 +11,7 @@ export interface UseDictionaryOptions {
 export interface UseDictionaryReturn {
   t: (text: string) => Promise<string>;
   tSync: (text: string) => string;
-  dictionary: unknown | null;
+  dictionary: unknown;
   isLoading: boolean;
   language: string | null;
   error: Error | null;
@@ -23,7 +24,7 @@ export function useDictionary(options?: UseDictionaryOptions): UseDictionaryRetu
   const detectedLanguage = useStoreSelector(languageSelector);
   const language = options?.language ?? detectedLanguage;
 
-  const [dictionary, setDictionary] = useState<unknown | null>(null);
+  const [dictionary, setDictionary] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const mountedRef = useRef(true);

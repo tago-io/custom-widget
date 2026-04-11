@@ -1,5 +1,7 @@
-import type { TDataRecord, TRealtimeData } from "../../src/types/index.js";
+import { describe, expect, it } from "vite-plus/test";
+
 import { appendStrategy, mergeStrategy, replaceStrategy } from "../../src/store/realtime-strategies.js";
+import type { TDataRecord, TRealtimeData } from "../../src/types/index.js";
 
 const record = (id: string, variable: string, value: string | number, time = "2024-01-01T00:00:00Z"): TDataRecord => ({
   id,
@@ -80,11 +82,22 @@ describe("mergeStrategy", () => {
     const r2 = record("2", "humidity", 60);
     const existing = [block(["temp", "humidity"], "d1", [r1, r2])];
     const r1Updated = record("1", "temp", 25);
-    const incoming = [block(["temp", "humidity"], "d1", [r1Updated])];
+    const incoming = [block(["temp", "humidity"], "d1", [r1Updated, r2])];
 
     const result = mergeStrategy(existing, incoming);
-    expect(result[0].result![1]).toBe(r2);
     expect(result[0].result![0]).toBe(r1Updated);
+    expect(result[0].result![1]).toBe(r2);
+  });
+
+  it("removes records not present in incoming (deleted)", () => {
+    const r1 = record("1", "temp", 20);
+    const r2 = record("2", "temp", 30);
+    const existing = [block(["temp"], "d1", [r1, r2])];
+    const incoming = [block(["temp"], "d1", [r2])];
+
+    const result = mergeStrategy(existing, incoming);
+    expect(result[0].result).toHaveLength(1);
+    expect(result[0].result![0]).toBe(r2);
   });
 
   it("adds new blocks that don't exist in existing", () => {
@@ -103,6 +116,29 @@ describe("mergeStrategy", () => {
     const result = mergeStrategy(existing, incoming);
     expect(result).toHaveLength(2);
     expect(result[1]).toBe(existingBlock);
+  });
+
+  it("sorts merged records by time descending", () => {
+    const existing = [
+      block(["temp"], "d1", [
+        record("1", "temp", 20, "2024-01-01T00:00:00Z"),
+        record("2", "temp", 25, "2024-01-03T00:00:00Z"),
+      ]),
+    ];
+    const incoming = [
+      block(["temp"], "d1", [
+        record("1", "temp", 22, "2024-01-01T00:00:00Z"),
+        record("2", "temp", 25, "2024-01-03T00:00:00Z"),
+        record("3", "temp", 30, "2024-01-02T00:00:00Z"),
+      ]),
+    ];
+
+    const result = mergeStrategy(existing, incoming);
+    const records = result[0].result!;
+    expect(records).toHaveLength(3);
+    expect(records[0].id).toBe("2"); // Jan 3 (newest)
+    expect(records[1].id).toBe("3"); // Jan 2
+    expect(records[2].id).toBe("1"); // Jan 1 (oldest)
   });
 
   it("returns same reference when nothing changed", () => {

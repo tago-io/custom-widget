@@ -2,19 +2,35 @@
   "name": "@tago-io/custom-widget-monorepo",
   "private": true,
   "description": "TagoIO Custom Widget SDK monorepo",
-  "author": "Tago LLC",
   "license": "Apache-2.0",
+  "author": "Tago LLC",
   "repository": "tago-io/custom-widget",
-  "packageManager": "pnpm@10.13.1",
+  "type": "module",
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
     "check:types": "turbo run check:types",
     "lint": "turbo run lint",
+    "format": "turbo run format",
+    "check": "vp check",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run build && changeset publish"
+    "release": "turbo run build && changeset publish",
+    "prepare": "vp config"
   },
+  "devDependencies": {
+    "@changesets/cli": "~2.30.0",
+    "jsdom": "29.0.0",
+    "turbo": "2.8.19",
+    "typescript": "5.9.3",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.13.1",
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
@@ -22,15 +38,5 @@
     "ignoredBuiltDependencies": [
       "esbuild"
     ]
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.4.8",
-    "@changesets/cli": "~2.30.0",
-    "@vitest/coverage-v8": "4.1.0",
-    "jsdom": "29.0.0",
-    "turbo": "2.8.19",
-    "typescript": "5.9.3",
-    "vite": "8.0.0",
-    "vitest": "4.1.0"
   }
 }

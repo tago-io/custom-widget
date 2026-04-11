@@ -4,6 +4,7 @@ import type {
   TDashboardSelectedBlueprintDevices,
   WidgetState,
 } from "@tago-io/custom-widget-core";
+
 import { useStoreSelector } from "./use-store-selector.js";
 
 export interface UseBlueprintDevicesReturn {

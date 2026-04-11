@@ -1,5 +1,6 @@
 import type { WidgetState } from "@tago-io/custom-widget-core";
 import { useCallback, useContext, useRef, useSyncExternalStore } from "react";
+
 import { StoreContext } from "../provider/store-context.js";
 
 export function useStore() {

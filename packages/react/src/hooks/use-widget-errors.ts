@@ -1,5 +1,6 @@
 import type { TError, WidgetState } from "@tago-io/custom-widget-core";
 import { useCallback } from "react";
+
 import { useStore, useStoreSelector } from "./use-store-selector.js";
 
 export interface UseWidgetErrorsReturn {

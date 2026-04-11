@@ -36,7 +36,9 @@ function Dashboard() {
       <h1>{widget?.label}</h1>
       <ul>
         {records.map((r) => (
-          <li key={r.id}>{r.variable}: {r.value}</li>
+          <li key={r.id}>
+            {r.variable}: {r.value}
+          </li>
         ))}
       </ul>
     </div>
@@ -48,11 +50,11 @@ function Dashboard() {
 
 ```tsx
 <TagoIOProvider
-  realtimeStrategy="merge"           // "replace" | "append" | "merge" (default: "merge")
-  realtimeMaxRecords={1000}          // max records for "append" strategy
-  allowedOrigins={["https://admin.tago.io"]}  // optional origin validation
+  realtimeStrategy="merge" // "replace" | "append" | "merge" (default: "merge")
+  realtimeMaxRecords={1000} // max records for "append" strategy
+  allowedOrigins={["https://admin.tago.io"]} // optional origin validation
   readyOptions={{ header: { color: "#333" } }}
-  dictionary={Dictionary}            // optional: Dictionary class from @tago-io/sdk
+  dictionary={Dictionary} // optional: Dictionary class from @tago-io/sdk
 >
   <App />
 </TagoIOProvider>
@@ -62,14 +64,14 @@ function Dashboard() {
 
 ### Receiving Data
 
-| Hook | Description |
-|------|-------------|
-| `useWidget()` | Widget config, loading state, variables, IDs |
+| Hook                        | Description                                        |
+| --------------------------- | -------------------------------------------------- |
+| `useWidget()`               | Widget config, loading state, variables, IDs       |
 | `useRealtimeData(options?)` | Realtime data with optional selector for filtering |
-| `useUserInformation()` | User token, language, runURL |
-| `useBlueprintDevices()` | Blueprint device selections and settings |
-| `useWidgetErrors()` | Error accumulation with clear |
-| `useWidgetData()` | Convenience: combines widget + realtime + errors |
+| `useUserInformation()`      | User token, language, runURL                       |
+| `useBlueprintDevices()`     | Blueprint device selections and settings           |
+| `useWidgetErrors()`         | Error accumulation with clear                      |
+| `useWidgetData()`           | Convenience: combines widget + realtime + errors   |
 
 ### Selective Subscriptions
 
@@ -78,18 +80,18 @@ Components only re-render when their specific data slice changes:
 ```tsx
 // Only re-renders when temperature data changes
 const { records } = useRealtimeData({
-  selector: (data) => data.filter(d => d.data?.variable?.includes("temperature")),
+  selector: (data) => data.filter((d) => d.data?.variable?.includes("temperature")),
 });
 ```
 
 ### Mutations
 
-| Hook | Description |
-|------|-------------|
-| `useSendData()` | Send data records to devices |
-| `useEditData()` | Edit existing data records |
-| `useDeleteData()` | Delete data records |
-| `useEditResourceData()` | Edit resource-level data |
+| Hook                    | Description                  |
+| ----------------------- | ---------------------------- |
+| `useSendData()`         | Send data records to devices |
+| `useEditData()`         | Edit existing data records   |
+| `useDeleteData()`       | Delete data records          |
+| `useEditResourceData()` | Edit resource-level data     |
 
 Each returns `{ mutationFn, isMutating, error, reset }`.
 

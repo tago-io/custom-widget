@@ -1,4 +1,5 @@
 import type { TWidget, TWidgetVariable } from "@tago-io/custom-widget-core";
+
 import { useStoreSelector } from "./use-store-selector.js";
 
 export interface UseWidgetReturn {

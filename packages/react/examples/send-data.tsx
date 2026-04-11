@@ -8,8 +8,8 @@
  * and error states so you can show feedback to the user.
  */
 
-import React, { useState } from "react";
 import { TagoIOProvider, useSendData, useWidget } from "@tago-io/custom-widget-react";
+import React, { useState } from "react";
 
 function App() {
   return (
@@ -55,20 +55,12 @@ function SendForm() {
 
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>
-            Variable Name
-          </label>
-          <input
-            value={variable}
-            onChange={(e) => setVariable(e.target.value)}
-            style={{ padding: 5, width: 200 }}
-          />
+          <label style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>Variable Name</label>
+          <input value={variable} onChange={(e) => setVariable(e.target.value)} style={{ padding: 5, width: 200 }} />
         </div>
 
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>
-            Value
-          </label>
+          <label style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>Value</label>
           <input
             type="number"
             value={value}
@@ -78,14 +70,8 @@ function SendForm() {
         </div>
 
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>
-            Unit
-          </label>
-          <input
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            style={{ padding: 5, width: 200 }}
-          />
+          <label style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>Unit</label>
+          <input value={unit} onChange={(e) => setUnit(e.target.value)} style={{ padding: 5, width: 200 }} />
         </div>
 
         <button
@@ -98,9 +84,7 @@ function SendForm() {
       </form>
 
       {success && (
-        <p style={{ color: "green", background: "#f0fff0", padding: 10, marginTop: 10 }}>
-          Data sent successfully!
-        </p>
+        <p style={{ color: "green", background: "#f0fff0", padding: 10, marginTop: 10 }}>Data sent successfully!</p>
       )}
 
       {error && (

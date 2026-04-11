@@ -1,21 +1,23 @@
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
-import { useSendData } from "../../src/hooks/use-send-data.js";
-import { useEditData } from "../../src/hooks/use-edit-data.js";
-import { useDeleteData } from "../../src/hooks/use-delete-data.js";
-import { useEditResourceData } from "../../src/hooks/use-edit-resource-data.js";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-let mockPostMessage: ReturnType<typeof vi.fn>;
+import { useDeleteData } from "../../src/hooks/use-delete-data.js";
+import { useEditData } from "../../src/hooks/use-edit-data.js";
+import { useEditResourceData } from "../../src/hooks/use-edit-resource-data.js";
+import { useSendData } from "../../src/hooks/use-send-data.js";
+import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
+
+let postMessageSpy: ReturnType<typeof vi.spyOn>;
 
 function wrapper({ children }: { children: ReactNode }) {
   return <TagoIOProvider>{children}</TagoIOProvider>;
 }
 
 function respondToLastMessage(status: boolean) {
-  const calls = mockPostMessage.mock.calls;
+  const calls = postMessageSpy.mock.calls;
   const lastCall = calls[calls.length - 1];
-  const key = lastCall[0].key;
+  const key = (lastCall[0] as Record<string, unknown>).key;
   if (key) {
     window.dispatchEvent(
       new MessageEvent("message", {
@@ -27,8 +29,7 @@ function respondToLastMessage(status: boolean) {
 
 describe("mutation hooks", () => {
   beforeEach(() => {
-    mockPostMessage = vi.fn();
-    window.parent.postMessage = mockPostMessage;
+    postMessageSpy = vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
   });
 
   describe("useSendData", () => {
@@ -104,7 +105,7 @@ describe("mutation hooks", () => {
         promise = result.current.editData({ variable: "temp", value: 42 });
       });
 
-      const sentMessage = mockPostMessage.mock.calls[mockPostMessage.mock.calls.length - 1][0];
+      const sentMessage = postMessageSpy.mock.calls[postMessageSpy.mock.calls.length - 1][0] as Record<string, unknown>;
       expect(sentMessage.method).toBe("edit");
 
       await act(async () => {
@@ -117,16 +118,23 @@ describe("mutation hooks", () => {
   });
 
   describe("useDeleteData", () => {
-    it("sends delete request", async () => {
+    it("sends delete request with id:device payload format", async () => {
       const { result } = renderHook(() => useDeleteData(), { wrapper });
 
       let promise: Promise<unknown>;
       act(() => {
-        promise = result.current.deleteData({ variable: "temp", value: 42 });
+        promise = result.current.deleteData({
+          id: "rec-1",
+          device: "dev-1",
+          variable: "temp",
+          value: 42,
+          time: "2024-01-01T00:00:00Z",
+        });
       });
 
-      const sentMessage = mockPostMessage.mock.calls[mockPostMessage.mock.calls.length - 1][0];
+      const sentMessage = postMessageSpy.mock.calls[postMessageSpy.mock.calls.length - 1][0] as Record<string, unknown>;
       expect(sentMessage.method).toBe("delete");
+      expect(sentMessage.variables).toEqual(["rec-1:dev-1"]);
 
       await act(async () => {
         respondToLastMessage(true);
@@ -146,7 +154,7 @@ describe("mutation hooks", () => {
         promise = result.current.editResourceData({ variable: "temp", value: 42 });
       });
 
-      const sentMessage = mockPostMessage.mock.calls[mockPostMessage.mock.calls.length - 1][0];
+      const sentMessage = postMessageSpy.mock.calls[postMessageSpy.mock.calls.length - 1][0] as Record<string, unknown>;
       expect(sentMessage.method).toBe("edit-resource");
 
       await act(async () => {

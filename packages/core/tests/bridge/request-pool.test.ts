@@ -1,3 +1,5 @@
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { RequestPool } from "../../src/bridge/request-pool.js";
 import type { TData, TError } from "../../src/types/index.js";
 

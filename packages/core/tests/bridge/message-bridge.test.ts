@@ -1,3 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { MessageBridge } from "../../src/bridge/message-bridge.js";
 
 describe("MessageBridge", () => {
@@ -102,6 +104,26 @@ describe("MessageBridge", () => {
       );
 
       expect(handler).toHaveBeenCalled();
+    });
+  });
+
+  describe("handler error isolation", () => {
+    it("continues calling remaining handlers if one throws", () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const handler1 = vi.fn(() => {
+        throw new Error("handler1 failed");
+      });
+      const handler2 = vi.fn();
+
+      bridge.onMessage(handler1);
+      bridge.onMessage(handler2);
+
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: {} } }));
+
+      expect(handler1).toHaveBeenCalled();
+      expect(handler2).toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith("[TagoIO Widget] Message handler threw an error:", expect.any(Error));
+      consoleSpy.mockRestore();
     });
   });
 

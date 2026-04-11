@@ -35,13 +35,17 @@ type TTagoIO = {
   onSyncUserInformation: (callback: TUserInformationCallback) => void;
   onSyncBlueprintDevices: (callback: TSyncBlueprintDevicesCallback) => void;
   sendData: (dataToSend: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
-  deleteData: (dataToDelete: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
+  deleteData: (dataToDelete: string | string[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   editData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
-  editResourceData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
+  editResourceData: (
+    dataToEdit: TDataRecord | TDataRecord[],
+    callback?: TSendDataCallback
+  ) => Promise<TData> | undefined;
   autoFill: boolean;
   ready: (options: TReadyOptions) => void;
   openLink: (url: string) => void;
   closeModal: () => void;
+  runAnalysis: (scope?: unknown) => void;
 };
 
 declare global {
@@ -123,15 +127,17 @@ function prepareRecords(variables: TDataRecord | TDataRecord[]): TDataRecordInpu
 
   if (window.TagoIO.autoFill) {
     console.info(
-      "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
+      "AutoFill is enabled, the origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
     );
     return autoFillRecords(vars, getWidgetVariables());
   }
 
-  for (const v of vars) {
-    if (!v.bucket || !v.origin) {
-      console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
-    }
+  const invalid = vars.filter((v) => !v.origin);
+  if (invalid.length > 0) {
+    throw new Error(
+      `AutoFill is disabled. ${invalid.length} record(s) missing required "origin" field. ` +
+        "Either enable autoFill or provide this field."
+    );
   }
   return vars;
 }
@@ -164,14 +170,37 @@ const editData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCa
   return wrapMutation(store.editData.bind(store), records, callback);
 };
 
-const deleteData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
+const deleteData = (variables: string | string[], callback?: TSendDataCallback): Promise<TData> | undefined => {
   const vars = Array.isArray(variables) ? variables : [variables];
-  return wrapMutation(store.deleteData.bind(store), vars, callback);
+  const promise = store.deleteData(vars);
+
+  if (callback) {
+    promise.then(
+      (data) => callback(data),
+      (error) => callback(null, error as TError)
+    );
+    return undefined;
+  }
+
+  return promise;
 };
 
-const editResourceData = (variables: TDataRecord | TDataRecord[], callback?: TSendDataCallback): Promise<TData> | undefined => {
+const editResourceData = (
+  variables: TDataRecord | TDataRecord[],
+  callback?: TSendDataCallback
+): Promise<TData> | undefined => {
   const vars = Array.isArray(variables) ? variables : [variables];
-  return wrapMutation(store.editResourceData.bind(store), vars, callback);
+  const promise = store.editResourceData(vars);
+
+  if (callback) {
+    promise.then(
+      (data) => callback(data),
+      (error) => callback(null, error as TError)
+    );
+    return undefined;
+  }
+
+  return promise;
 };
 
 const openLink: TTagoIO["openLink"] = (url) => {
@@ -180,6 +209,10 @@ const openLink: TTagoIO["openLink"] = (url) => {
 
 const closeModal: TTagoIO["closeModal"] = () => {
   store.closeModal();
+};
+
+const runAnalysis: TTagoIO["runAnalysis"] = (scope) => {
+  store.runAnalysis(scope);
 };
 
 window.TagoIO.ready = onReady;
@@ -194,6 +227,7 @@ window.TagoIO.deleteData = deleteData;
 window.TagoIO.editResourceData = editResourceData;
 window.TagoIO.openLink = openLink;
 window.TagoIO.closeModal = closeModal;
+window.TagoIO.runAnalysis = runAnalysis;
 
 export {
   closeModal,
@@ -206,6 +240,7 @@ export {
   onSyncBlueprintDevices,
   onSyncUserInformation,
   openLink,
+  runAnalysis,
   sendData,
 };
 

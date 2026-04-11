@@ -11,6 +11,7 @@
     "check:types": {
       "dependsOn": ["^build"]
     },
-    "lint": {}
+    "lint": {},
+    "format": {}
   }
 }

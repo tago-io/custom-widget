@@ -20,8 +20,8 @@ The central state manager. Handles communication with the TagoIO platform via po
 import { WidgetStore } from "@tago-io/custom-widget-core";
 
 const store = new WidgetStore({
-  realtimeStrategy: "merge",    // "replace" | "append" | "merge"
-  realtimeMaxRecords: 1000,     // max records for "append" strategy
+  realtimeStrategy: "merge", // "replace" | "append" | "merge"
+  realtimeMaxRecords: 1000, // max records for "append" strategy
   allowedOrigins: ["https://admin.tago.io"], // optional origin validation
   readyOptions: { header: { color: "#333" } },
 });

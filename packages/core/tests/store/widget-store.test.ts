@@ -1,3 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
 import { WidgetStore } from "../../src/store/widget-store.js";
 import type { TRealtimeData, TUserInformation, TWidget, TBlueprintDevicesSyncData } from "../../src/types/index.js";
 
@@ -71,6 +73,23 @@ describe("WidgetStore", () => {
       store.initialize();
       expect(mockPostMessage).toHaveBeenCalledTimes(1);
     });
+
+    it("recreates bridge after destroy and reinitialize (StrictMode)", () => {
+      store.initialize();
+      expect(mockPostMessage).toHaveBeenCalledTimes(1);
+
+      store.destroy();
+
+      store.initialize();
+      expect(mockPostMessage).toHaveBeenCalledTimes(2);
+
+      // Verify new bridge receives messages
+      const listener = vi.fn();
+      store.subscribe(listener);
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget } }));
+      expect(listener).toHaveBeenCalled();
+      expect(store.getSnapshot().widget).toEqual(mockWidget);
+    });
   });
 
   describe("subscription", () => {
@@ -134,6 +153,22 @@ describe("WidgetStore", () => {
       const state = store.getSnapshot();
       expect(state.errors).toHaveLength(1);
       expect(state.errors[0].message).toBe("Something failed");
+    });
+
+    it("emits only once for a combined widget + userInformation message", () => {
+      const listener = vi.fn();
+      store.subscribe(listener);
+
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { widget: mockWidget, userInformation: mockUserInfo },
+        })
+      );
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      const state = store.getSnapshot();
+      expect(state.widget).toEqual(mockWidget);
+      expect(state.userInformation).toEqual(mockUserInfo);
     });
   });
 
@@ -204,10 +239,11 @@ describe("WidgetStore", () => {
       expect(sentMessage.method).toBe("edit");
     });
 
-    it("deleteData sends with method delete", () => {
-      store.deleteData({ variable: "temp", value: 42 }).catch(() => {});
+    it("deleteData sends string payload with method delete", () => {
+      store.deleteData("rec-1:dev-1").catch(() => {});
       const sentMessage = mockPostMessage.mock.calls[0][0];
       expect(sentMessage.method).toBe("delete");
+      expect(sentMessage.variables).toEqual(["rec-1:dev-1"]);
     });
 
     it("editResourceData sends with method edit-resource", () => {

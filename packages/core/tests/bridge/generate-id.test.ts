@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vite-plus/test";
+
 import { generateId } from "../../src/bridge/generate-id.js";
 
 describe("generateId", () => {

@@ -1,5 +1,7 @@
 import type { TRealtimeData } from "@tago-io/custom-widget-core";
-import { closeModal, onError, onRealtime, onStart, sendData } from "./custom-widget";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { closeModal, onError, onRealtime, onStart, runAnalysis, sendData } from "./custom-widget";
 
 const mockRandomUUID = vi.fn(() => "staticKey");
 
@@ -93,9 +95,23 @@ describe("sendData", () => {
     mockPostMessage.mockClear();
   });
 
+  it("throws when autoFill is disabled and records lack origin", () => {
+    window.TagoIO.autoFill = false;
+
+    expect(() => {
+      void sendData({ id: "r1", variable: "temp", value: 42, time: "t1" } as never);
+    }).toThrow("origin");
+  });
+
   it("sends data with auto-fill disabled and resolves the promise on response", async () => {
     window.TagoIO.autoFill = false;
-    const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
+    const mockDataToSend = {
+      id: "asd",
+      variable: "some_variable",
+      value: "new value",
+      time: "timestamp",
+      origin: "o1",
+    };
 
     const result = sendData(mockDataToSend);
 
@@ -111,7 +127,13 @@ describe("sendData", () => {
   it("sends data with auto-fill disabled and invokes callback on response", () => {
     window.TagoIO.autoFill = false;
     const mockSendDataCallback = vi.fn();
-    const mockDataToSend = { id: "asd", variable: "some_variable", value: "new value", time: "timestamp" };
+    const mockDataToSend = {
+      id: "asd",
+      variable: "some_variable",
+      value: "new value",
+      time: "timestamp",
+      origin: "o1",
+    };
 
     const result = sendData(mockDataToSend, mockSendDataCallback);
 
@@ -164,5 +186,38 @@ describe("closeModal", () => {
   it("sends the close modal message", () => {
     closeModal();
     expect(mockPostMessage).toHaveBeenCalledWith({ method: "close-modal" }, "*");
+  });
+});
+
+describe("runAnalysis", () => {
+  const mockPostMessage = vi.fn();
+
+  beforeAll(() => {
+    window.parent.postMessage = mockPostMessage;
+  });
+
+  beforeEach(() => {
+    mockPostMessage.mockClear();
+  });
+
+  it("sends run-analysis message without scope", () => {
+    runAnalysis();
+    expect(mockPostMessage).toHaveBeenCalledWith({ method: "run-analysis", scope: undefined }, "*");
+  });
+
+  it("sends run-analysis message with scope", () => {
+    const scope = [
+      {
+        variable: "command",
+        value: "restart",
+        metadata: {
+          ports: [1, 2, 3],
+          devices: ["device-abc", "device-def"],
+        },
+      },
+    ];
+
+    runAnalysis(scope);
+    expect(mockPostMessage).toHaveBeenCalledWith({ method: "run-analysis", scope }, "*");
   });
 });
