@@ -7,11 +7,12 @@ import type {
 } from "@tago-io/custom-widget-core";
 import { useCallback, useRef } from "react";
 
-import { useStoreSelector } from "./use-store-selector.js";
+import { useStore, useStoreSelector } from "./use-store-selector.js";
 
 export interface UseResourceDataReturn {
   resources: TResourceGroup[];
   getByType: (type: TResourceType) => TResourceGroup[];
+  refresh: () => void;
   eventCount: number;
   lastUpdatedAt: Date | null;
 }
@@ -33,6 +34,7 @@ type ResourceSelection = {
 };
 
 export function useResourceData(): UseResourceDataReturn {
+  const { store } = useStore();
   const prevDataRef = useRef<TRealtimeData[]>([]);
   const prevGroupsRef = useRef<TResourceGroup[]>([]);
 
@@ -67,9 +69,14 @@ export function useResourceData(): UseResourceDataReturn {
     [resources]
   );
 
+  const refresh = useCallback(() => {
+    store.refreshResources();
+  }, [store]);
+
   return {
     resources,
     getByType,
+    refresh,
     eventCount: selected.eventCount,
     lastUpdatedAt: selected.lastRealtimeAt ? new Date(selected.lastRealtimeAt) : null,
   };

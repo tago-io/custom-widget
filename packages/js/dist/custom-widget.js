@@ -338,6 +338,13 @@
     runAnalysis(scope) {
       this.bridge.send({ method: "run-analysis", scope });
     }
+    /**
+     * Ask the parent to re-fetch this widget's resource collections and push a fresh
+     * `realtime` payload back. Fire-and-forget: the updated data arrives via onRealtime.
+     */
+    refreshResources() {
+      this.bridge.send({ method: "refresh-resources" });
+    }
     clearErrors() {
       this.updateState({ errors: [] });
     }
@@ -489,6 +496,9 @@
   var runAnalysis = (scope) => {
     store.runAnalysis(scope);
   };
+  var refreshResources = () => {
+    store.refreshResources();
+  };
   window.TagoIO.ready = onReady;
   window.TagoIO.onStart = onStart;
   window.TagoIO.onRealtime = onRealtime;
@@ -502,4 +512,5 @@
   window.TagoIO.openLink = openLink;
   window.TagoIO.closeModal = closeModal;
   window.TagoIO.runAnalysis = runAnalysis;
+  window.TagoIO.refreshResources = refreshResources;
 })();

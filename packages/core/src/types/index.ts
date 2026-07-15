@@ -1,4 +1,12 @@
-export type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal" | "run-analysis";
+export type TMethod =
+  | "delete"
+  | "edit"
+  | "edit-resource"
+  | "send"
+  | "open-link"
+  | "close-modal"
+  | "run-analysis"
+  | "refresh-resources";
 
 /** GeoJSON Point location format. */
 export type TLocationGeoJSON = {

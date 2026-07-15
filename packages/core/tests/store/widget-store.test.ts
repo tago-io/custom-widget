@@ -265,6 +265,13 @@ describe("WidgetStore", () => {
     });
   });
 
+  describe("resources", () => {
+    it("refreshResources sends refresh-resources message", () => {
+      store.refreshResources();
+      expect(mockPostMessage).toHaveBeenCalledWith({ method: "refresh-resources" }, "*");
+    });
+  });
+
   describe("destroy", () => {
     it("stops processing messages after destroy", () => {
       const listener = vi.fn();

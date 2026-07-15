@@ -64,15 +64,15 @@ function Dashboard() {
 
 ### Receiving Data
 
-| Hook                        | Description                                        |
-| --------------------------- | -------------------------------------------------- |
-| `useWidget()`               | Widget config, loading state, variables, IDs       |
-| `useRealtimeData(options?)` | Realtime data with optional selector for filtering |
-| `useResourceData()`         | Platform resources: device list, users, entities   |
-| `useUserInformation()`      | User token, language, runURL                       |
-| `useBlueprintDevices()`     | Blueprint device selections and settings           |
-| `useWidgetErrors()`         | Error accumulation with clear                      |
-| `useWidgetData()`           | Convenience: combines widget + realtime + errors   |
+| Hook                        | Description                                                     |
+| --------------------------- | --------------------------------------------------------------- |
+| `useWidget()`               | Widget config, loading state, variables, IDs                    |
+| `useRealtimeData(options?)` | Realtime data with optional selector for filtering              |
+| `useResourceData()`         | Platform resources (device list, users, entities) + `refresh()` |
+| `useUserInformation()`      | User token, language, runURL                                    |
+| `useBlueprintDevices()`     | Blueprint device selections and settings                        |
+| `useWidgetErrors()`         | Error accumulation with clear                                   |
+| `useWidgetData()`           | Convenience: combines widget + realtime + errors                |
 
 ### Selective Subscriptions
 

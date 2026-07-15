@@ -71,4 +71,14 @@ describe("useResourceData", () => {
     expect(result.current.resources).toHaveLength(1);
     expect(result.current.resources[0].resource.type).toBe("entity_list");
   });
+
+  it("refresh() asks the parent to re-fetch resources", () => {
+    const { result } = renderHook(() => useResourceData(), { wrapper });
+
+    act(() => {
+      result.current.refresh();
+    });
+
+    expect(window.parent.postMessage).toHaveBeenCalledWith({ method: "refresh-resources" }, "*");
+  });
 });

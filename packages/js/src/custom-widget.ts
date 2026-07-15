@@ -46,6 +46,7 @@ type TTagoIO = {
   openLink: (url: string) => void;
   closeModal: () => void;
   runAnalysis: (scope?: unknown) => void;
+  refreshResources: () => void;
 };
 
 declare global {
@@ -215,6 +216,10 @@ const runAnalysis: TTagoIO["runAnalysis"] = (scope) => {
   store.runAnalysis(scope);
 };
 
+const refreshResources: TTagoIO["refreshResources"] = () => {
+  store.refreshResources();
+};
+
 window.TagoIO.ready = onReady;
 window.TagoIO.onStart = onStart;
 window.TagoIO.onRealtime = onRealtime;
@@ -228,6 +233,7 @@ window.TagoIO.editResourceData = editResourceData;
 window.TagoIO.openLink = openLink;
 window.TagoIO.closeModal = closeModal;
 window.TagoIO.runAnalysis = runAnalysis;
+window.TagoIO.refreshResources = refreshResources;
 
 export {
   closeModal,
@@ -240,6 +246,7 @@ export {
   onSyncBlueprintDevices,
   onSyncUserInformation,
   openLink,
+  refreshResources,
   runAnalysis,
   sendData,
 };

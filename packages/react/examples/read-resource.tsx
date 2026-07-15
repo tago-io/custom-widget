@@ -86,7 +86,7 @@ function ResourceGroupCard({ group, position }: { group: TResourceGroup; positio
 
 function ResourceViewer() {
   const { isLoading } = useWidget();
-  const { resources, eventCount } = useResourceData();
+  const { resources, eventCount, refresh } = useResourceData();
 
   if (isLoading) {
     return <p style={{ padding: 20 }}>Loading widget...</p>;
@@ -95,7 +95,12 @@ function ResourceViewer() {
   return (
     <div style={{ fontFamily: "Arial, sans-serif", padding: 20 }}>
       <h1>Resource Viewer</h1>
-      <p style={{ background: "#f0f0f0", padding: 10 }}>Updates received: {eventCount}</p>
+      <p style={{ background: "#f0f0f0", padding: 10 }}>
+        Updates received: {eventCount}{" "}
+        <button type="button" onClick={refresh} style={{ marginLeft: 8 }}>
+          Refresh
+        </button>
+      </p>
 
       {resources.length === 0 ? (
         <p>No resources received yet.</p>
