@@ -14,10 +14,9 @@ export interface UseWidgetDataReturn {
 function flattenRecords(state: WidgetState): TDataRecord[] {
   const records: TDataRecord[] = [];
   for (const block of state.realtimeData) {
-    if (block.result) {
-      for (const record of block.result) {
-        records.push(record);
-      }
+    if (block.resource || !block.result) continue;
+    for (const record of block.result as TDataRecord[]) {
+      records.push(record);
     }
   }
   return records;

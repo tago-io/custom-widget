@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Read Widget Info Widget</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .info-section {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Read Widget Info Widget</h1>
+    <p>Shows widget configuration, the current user's information, and blueprint devices.</p>
+    <p>To read platform resources (device list, users, entities), see <code>read-resource.html</code>.</p>
+
+    <div id="error" class="error" style="display: none"></div>
+
+    <div class="info-section">
+      <h3>Widget Configuration</h3>
+      <div id="widget-config">Loading widget configuration...</div>
+    </div>
+
+    <div class="info-section">
+      <h3>User Information</h3>
+      <div id="user-info">Loading user information...</div>
+    </div>
+
+    <div class="info-section">
+      <h3>Blueprint Devices</h3>
+      <div id="blueprint-info">Loading blueprint information...</div>
+    </div>
+
+    <script>
+      /**
+       * Read Widget Info Example
+       * Uses onStart (widget config), onSyncUserInformation, and onSyncBlueprintDevices.
+       */
+
+      function addRow(parent, label, value) {
+        const p = document.createElement("p");
+        const strong = document.createElement("strong");
+        strong.textContent = `${label}: `;
+        p.appendChild(strong);
+        p.appendChild(document.createTextNode(value));
+        parent.appendChild(p);
+      }
+
+      window.TagoIO.onStart(function (widget) {
+        console.log("Read Widget Info Widget started:", widget);
+        const configDiv = document.getElementById("widget-config");
+        configDiv.textContent = "";
+        addRow(configDiv, "Widget ID", widget.id);
+        addRow(configDiv, "Dashboard ID", widget.dashboard);
+        addRow(configDiv, "Label", widget.label || "No label");
+
+        const variables = (widget.display && widget.display.variables) || [];
+        addRow(configDiv, "Variables Count", String(variables.length));
+        const list = document.createElement("ul");
+        variables.forEach(function (v) {
+          const li = document.createElement("li");
+          li.textContent = `${v.variable} (Device: ${v.origin.id})`;
+          list.appendChild(li);
+        });
+        configDiv.appendChild(list);
+      });
+
+      window.TagoIO.onSyncUserInformation(function (userInfo) {
+        console.log("User information received:", userInfo);
+        const userDiv = document.getElementById("user-info");
+        userDiv.textContent = "";
+        addRow(userDiv, "Language", userInfo.language || "Not available");
+        addRow(userDiv, "Has Token", userInfo.token ? "Yes" : "No");
+        addRow(userDiv, "Run URL", userInfo.runURL || "Not available");
+      });
+
+      window.TagoIO.onSyncBlueprintDevices(function (blueprintDevices) {
+        console.log("Blueprint devices received:", blueprintDevices);
+        const blueprintDiv = document.getElementById("blueprint-info");
+        blueprintDiv.textContent = "";
+
+        const settings = (blueprintDevices && blueprintDevices.settings) || [];
+        if (settings.length === 0) {
+          const none = document.createElement("p");
+          none.textContent = "No blueprint devices available";
+          blueprintDiv.appendChild(none);
+          return;
+        }
+
+        const list = document.createElement("ul");
+        settings.forEach(function (device) {
+          const li = document.createElement("li");
+          const strong = document.createElement("strong");
+          strong.textContent = device.name;
+          li.appendChild(strong);
+          li.appendChild(document.createTextNode(` (ID: ${device.id})`));
+          list.appendChild(li);
+        });
+        blueprintDiv.appendChild(list);
+
+        const selected = (blueprintDevices && blueprintDevices.selected) || {};
+        const selectedKeys = Object.keys(selected);
+        if (selectedKeys.length > 0) {
+          const title = document.createElement("p");
+          const strong = document.createElement("strong");
+          strong.textContent = "Selected devices:";
+          title.appendChild(strong);
+          blueprintDiv.appendChild(title);
+
+          const selectedList = document.createElement("ul");
+          selectedKeys.forEach(function (key) {
+            const entry = selected[key];
+            const li = document.createElement("li");
+            li.textContent = `${key}: ${(entry && entry.name) || "None"}`;
+            selectedList.appendChild(li);
+          });
+          blueprintDiv.appendChild(selectedList);
+        }
+      });
+
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        document.getElementById("error").style.display = "block";
+        document.getElementById("error").textContent = "Error: " + (error.message || "Unknown error");
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#9C27B0" },
+      });
+    </script>
+  </body>
+</html>

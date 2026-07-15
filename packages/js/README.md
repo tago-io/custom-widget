@@ -206,17 +206,18 @@ window.TagoIO.onError(function (error) {
 
 ## Examples
 
-This package includes 7 HTML examples in the [`examples/`](./examples/) folder:
+This package includes 8 HTML examples in the [`examples/`](./examples/) folder:
 
-| Example              | What it shows                             |
-| -------------------- | ----------------------------------------- |
-| `basic-widget.html`  | Minimal setup and widget lifecycle        |
-| `read-data.html`     | Displaying real-time device data          |
-| `read-resource.html` | Accessing user info and blueprint devices |
-| `read-entity.html`   | Complex structured data handling          |
-| `send-data.html`     | Sending data back to devices              |
-| `time-interval.html` | Time-based data analysis                  |
-| `custom-units.html`  | Unit conversions and formatting           |
+| Example                 | What it shows                                          |
+| ----------------------- | ------------------------------------------------------ |
+| `basic-widget.html`     | Minimal setup and widget lifecycle                     |
+| `read-data.html`        | Displaying real-time device data                       |
+| `read-resource.html`    | Read platform resources (device list, users, entities) |
+| `read-widget-info.html` | Widget config, user info, and blueprint devices        |
+| `read-entity.html`      | Complex structured data handling                       |
+| `send-data.html`        | Sending data back to devices                           |
+| `time-interval.html`    | Time-based data analysis                               |
+| `custom-units.html`     | Unit conversions and formatting                        |
 
 ## External Project Examples
 

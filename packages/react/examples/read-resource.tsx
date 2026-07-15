@@ -1,14 +1,17 @@
 /**
  * Read Resource Example
  *
- * Shows how to access user information and blueprint devices.
+ * Shows how to read platform resources (device list, users, entities, entity lists)
+ * that the dashboard pushes to the widget through the realtime channel.
  * This is the React equivalent of the JavaScript "read-resource.html" example.
  *
- * useUserInformation gives you the current user's language, token, and run URL.
- * useBlueprintDevices gives you the blueprint device configurations and selections.
+ * Resource blocks arrive on the realtime channel carrying a `resource` descriptor
+ * instead of `data`. useResourceData() exposes only those blocks, grouped and typed.
+ * For widget config / user info / blueprint devices, see "read-widget-info.tsx".
  */
 
-import { TagoIOProvider, useWidget, useUserInformation, useBlueprintDevices } from "@tago-io/custom-widget-react";
+import type { TResourceGroup } from "@tago-io/custom-widget-react";
+import { TagoIOProvider, useResourceData, useWidget } from "@tago-io/custom-widget-react";
 import React from "react";
 
 function App() {
@@ -19,98 +22,92 @@ function App() {
   );
 }
 
+function formatValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (value === null || value === undefined) return String(value);
+  return JSON.stringify(value);
+}
+
+function ResourceRequest({ resource }: { resource: TResourceGroup["resource"] }) {
+  const rows: Array<[string, string]> = [];
+  if (resource.id) rows.push(["id", resource.id]);
+  if (resource.index) rows.push(["index", resource.index]);
+  if (resource.view?.length) rows.push(["view", resource.view.join(", ")]);
+  if (resource.editable?.length) rows.push(["editable", resource.editable.join(", ")]);
+  if (resource.filter !== undefined) rows.push(["filter", formatValue(resource.filter)]);
+  if (resource.amount !== undefined) rows.push(["amount", String(resource.amount)]);
+  if (resource.orderBy) rows.push(["orderBy", resource.orderBy]);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>
+      {rows.map(([key, value]) => (
+        <div key={key}>
+          <strong>{key}:</strong> {value}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResourceGroupCard({ group, position }: { group: TResourceGroup; position: number }) {
+  return (
+    <section style={{ border: "1px solid #ddd", borderRadius: 4, marginBottom: 16 }}>
+      <div style={{ padding: "8px 12px", background: "#f5f5f5", display: "flex", gap: 8 }}>
+        <strong>Group #{position + 1}</strong>
+        <span style={{ textTransform: "uppercase", fontSize: 12, color: "#8a4b9c" }}>{group.resource.type}</span>
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "#777" }}>
+          {group.result.length} item{group.result.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div style={{ padding: 12 }}>
+        <ResourceRequest resource={group.resource} />
+        {group.result.length === 0 ? (
+          <p style={{ fontStyle: "italic", color: "#777" }}>No items</p>
+        ) : (
+          group.result.map((item, itemIndex) => (
+            <div key={itemIndex} style={{ border: "1px solid #eee", borderRadius: 3, padding: 8, marginBottom: 6 }}>
+              {Object.entries(item).map(([key, value]) => (
+                <div key={key} style={{ fontSize: 13 }}>
+                  <strong>{key}:</strong> {formatValue(value)}
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ResourceViewer() {
-  const { widget, isLoading, variables } = useWidget();
-  const { language, token, runURL } = useUserInformation();
-  const { settings, selected } = useBlueprintDevices();
+  const { isLoading } = useWidget();
+  const { resources, eventCount } = useResourceData();
 
   if (isLoading) {
     return <p style={{ padding: 20 }}>Loading widget...</p>;
   }
 
-  const sectionStyle = {
-    margin: "20px 0",
-    padding: 15,
-    background: "#f9f9f9",
-    border: "1px solid #ddd",
-  };
-
   return (
     <div style={{ fontFamily: "Arial, sans-serif", padding: 20 }}>
       <h1>Resource Viewer</h1>
+      <p style={{ background: "#f0f0f0", padding: 10 }}>Updates received: {eventCount}</p>
 
-      {/* Widget Configuration */}
-      <div style={sectionStyle}>
-        <h3>Widget Configuration</h3>
-        <p>
-          <strong>Widget ID:</strong> {widget?.id}
-        </p>
-        <p>
-          <strong>Dashboard ID:</strong> {widget?.dashboard}
-        </p>
-        <p>
-          <strong>Label:</strong> {widget?.label || "No label"}
-        </p>
-        <p>
-          <strong>Variables:</strong>
-        </p>
-        {variables.length > 0 ? (
-          <ul>
-            {variables.map((v) => (
-              <li key={`${v.origin.id}-${v.variable}`}>
-                {v.variable} (Device: {v.origin.id})
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No variables configured.</p>
-        )}
-      </div>
-
-      {/* User Information */}
-      <div style={sectionStyle}>
-        <h3>User Information</h3>
-        <p>
-          <strong>Language:</strong> {language || "Not available"}
-        </p>
-        <p>
-          <strong>Has Token:</strong> {token ? "Yes" : "No"}
-        </p>
-        <p>
-          <strong>Run URL:</strong> {runURL || "Not available"}
-        </p>
-      </div>
-
-      {/* Blueprint Devices */}
-      <div style={sectionStyle}>
-        <h3>Blueprint Devices</h3>
-        {settings.length > 0 ? (
-          <ul>
-            {settings.map((device) => (
-              <li key={device.id}>
-                <strong>{device.name}</strong> (ID: {device.id})
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No blueprint devices available.</p>
-        )}
-
-        {Object.keys(selected).length > 0 && (
-          <>
-            <p>
-              <strong>Selected devices:</strong>
-            </p>
-            <ul>
-              {Object.entries(selected).map(([key, entry]) => (
-                <li key={key}>
-                  {key}: {entry?.name ?? "None"}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
+      {resources.length === 0 ? (
+        <p>No resources received yet.</p>
+      ) : (
+        resources.map((group, position) => (
+          <ResourceGroupCard
+            key={`${group.resource.type}-${group.resource.id ?? position}`}
+            group={group}
+            position={position}
+          />
+        ))
+      )}
     </div>
   );
 }

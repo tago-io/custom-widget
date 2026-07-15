@@ -18,10 +18,9 @@ export interface UseRealtimeDataReturn {
 function flattenRecords(data: TRealtimeData[]): TDataRecord[] {
   const records: TDataRecord[] = [];
   for (const block of data) {
-    if (block.result) {
-      for (const record of block.result) {
-        records.push(record);
-      }
+    if (block.resource || !block.result) continue;
+    for (const record of block.result as TDataRecord[]) {
+      records.push(record);
     }
   }
   return records;

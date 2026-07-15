@@ -68,6 +68,7 @@ function Dashboard() {
 | --------------------------- | -------------------------------------------------- |
 | `useWidget()`               | Widget config, loading state, variables, IDs       |
 | `useRealtimeData(options?)` | Realtime data with optional selector for filtering |
+| `useResourceData()`         | Platform resources: device list, users, entities   |
 | `useUserInformation()`      | User token, language, runURL                       |
 | `useBlueprintDevices()`     | Blueprint device selections and settings           |
 | `useWidgetErrors()`         | Error accumulation with clear                      |
@@ -120,7 +121,8 @@ The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy
 
 - **[read-data.tsx](./examples/read-data.tsx)** — Display real-time data from devices
 - **[send-data.tsx](./examples/send-data.tsx)** — Send data back to devices with a form
-- **[read-resource.tsx](./examples/read-resource.tsx)** — Access user info and blueprint devices
+- **[read-resource.tsx](./examples/read-resource.tsx)** — Read platform resources (device list, users, entities)
+- **[read-widget-info.tsx](./examples/read-widget-info.tsx)** — Widget config, user info, and blueprint devices
 
 ## Re-exports
 

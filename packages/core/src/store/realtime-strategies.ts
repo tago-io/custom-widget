@@ -49,13 +49,24 @@ export function mergeStrategy(existing: TRealtimeData[], incoming: TRealtimeData
     processedKeys.add(key);
     const existingBlock = existingMap.get(key);
 
+    // Resource blocks are full snapshots: replace wholesale. They carry no id/time, so the
+    // record-level merge (which matches by id and sorts by time) does not apply to them.
+    if (incomingBlock.resource) {
+      result.push(incomingBlock);
+      if (incomingBlock !== existingBlock) changed = true;
+      continue;
+    }
+
     if (!existingBlock) {
       result.push(incomingBlock);
       changed = true;
       continue;
     }
 
-    const mergedRecords = mergeRecords(existingBlock.result ?? [], incomingBlock.result ?? []);
+    const mergedRecords = mergeRecords(
+      (existingBlock.result ?? []) as TDataRecord[],
+      (incomingBlock.result ?? []) as TDataRecord[]
+    );
     const dataChanged = mergedRecords !== existingBlock.result;
 
     if (dataChanged) {
@@ -115,9 +126,13 @@ function mergeRecords(existing: TDataRecord[], incoming: TDataRecord[]): TDataRe
 }
 
 function realtimeBlockKey(block: TRealtimeData): string {
+  if (block.resource) {
+    const { type, id, index } = block.resource;
+    return `resource:${type}:${id ?? ""}:${index ?? ""}`;
+  }
   const vars = block.data?.variable?.join(",") ?? "";
   const origin = block.data?.origin ?? "";
-  return `${vars}|${origin}`;
+  return `data:${vars}|${origin}`;
 }
 
 export type { TRealtimeData };

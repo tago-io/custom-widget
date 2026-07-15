@@ -10,11 +10,10 @@
         font-family: Arial, sans-serif;
         padding: 20px;
       }
-      .info-section {
-        margin: 20px 0;
-        padding: 15px;
-        background: #f9f9f9;
-        border: 1px solid #ddd;
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
       }
       .error {
         color: red;
@@ -22,242 +21,167 @@
         border: 1px solid red;
         margin: 10px 0;
       }
-      button {
+      .group {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 12px 0;
+      }
+      .group-header {
+        display: flex;
+        gap: 8px;
+        align-items: center;
         padding: 8px 12px;
-        margin: 5px;
-        cursor: pointer;
+        background: #f5f5f5;
+      }
+      .group-type {
+        text-transform: uppercase;
+        font-size: 12px;
+        color: #8a4b9c;
+      }
+      .group-count {
+        margin-left: auto;
+        font-size: 12px;
+        color: #777;
+      }
+      .request {
+        font-size: 13px;
+        color: #555;
+        padding: 8px 12px;
+      }
+      .item {
+        border: 1px solid #eee;
+        border-radius: 3px;
+        padding: 8px;
+        margin: 6px 12px;
+        font-size: 13px;
       }
     </style>
   </head>
   <body>
     <h1>Read Resource Widget</h1>
-    <p>Demonstrates accessing TagoIO platform resources and user information.</p>
+    <p>Reads platform resources (device list, users, entities, entity lists) from the realtime channel.</p>
+    <p>For widget config / user info / blueprint devices, see <code>read-widget-info.html</code>.</p>
 
+    <div id="status" class="status">Waiting for data...</div>
     <div id="error" class="error" style="display: none"></div>
-
-    <div class="info-section">
-      <h3>User Information</h3>
-      <div id="user-info">Loading user information...</div>
-      <button onclick="refreshUserInfo()">Refresh User Info</button>
-    </div>
-
-    <div class="info-section">
-      <h3>Blueprint Devices</h3>
-      <div id="blueprint-info">Loading blueprint information...</div>
-      <button onclick="refreshBlueprints()">Refresh Blueprints</button>
-    </div>
-
-    <div class="info-section">
-      <h3>Widget Configuration</h3>
-      <div id="widget-config">Loading widget configuration...</div>
-    </div>
+    <div id="resources"></div>
 
     <script>
       /**
        * Read Resource Example
-       * Demonstrates accessing platform resources using onSyncUserInformation and onSyncBlueprintDevices
+       * Resource blocks arrive on onRealtime carrying a `resource` descriptor instead of `data`.
+       * We keep only those blocks and render each collection.
        */
 
-      let userInfo = null;
-      let blueprintDevices = null;
-      let widgetConfig = null;
+      let updateCount = 0;
 
-      // Handle widget startup
-      window.TagoIO.onStart(function (widget) {
-        console.log("Resource Reader Widget started:", widget);
-        widgetConfig = widget;
-        displayWidgetConfig(widget);
-      });
-
-      // Handle user information sync
-      window.TagoIO.onSyncUserInformation(function (userData) {
-        console.log("User information received:", userData);
-        userInfo = userData;
-        displayUserInfo(userData);
-      });
-
-      // Handle blueprint devices sync
-      window.TagoIO.onSyncBlueprintDevices(function (devices) {
-        console.log("Blueprint devices received:", devices);
-        blueprintDevices = devices;
-        displayBlueprintInfo(devices);
-      });
-
-      // Display widget configuration
-      function displayWidgetConfig(widget) {
-        const configDiv = document.getElementById("widget-config");
-        configDiv.textContent = "";
-
-        // Create elements instead of using innerHTML
-        const widgetIdP = document.createElement("p");
-        const widgetIdStrong = document.createElement("strong");
-        widgetIdStrong.textContent = "Widget ID: ";
-        widgetIdP.appendChild(widgetIdStrong);
-        widgetIdP.appendChild(document.createTextNode(widget.id));
-        configDiv.appendChild(widgetIdP);
-
-        const dashboardIdP = document.createElement("p");
-        const dashboardIdStrong = document.createElement("strong");
-        dashboardIdStrong.textContent = "Dashboard ID: ";
-        dashboardIdP.appendChild(dashboardIdStrong);
-        dashboardIdP.appendChild(document.createTextNode(widget.dashboard));
-        configDiv.appendChild(dashboardIdP);
-
-        const labelP = document.createElement("p");
-        const labelStrong = document.createElement("strong");
-        labelStrong.textContent = "Widget Label: ";
-        labelP.appendChild(labelStrong);
-        labelP.appendChild(document.createTextNode(widget.label || "No label"));
-        configDiv.appendChild(labelP);
-
-        const variablesCountP = document.createElement("p");
-        const variablesCountStrong = document.createElement("strong");
-        variablesCountStrong.textContent = "Variables Count: ";
-        variablesCountP.appendChild(variablesCountStrong);
-        variablesCountP.appendChild(document.createTextNode(widget.display.variables.length));
-        configDiv.appendChild(variablesCountP);
-
-        const variablesP = document.createElement("p");
-        const variablesStrong = document.createElement("strong");
-        variablesStrong.textContent = "Variables:";
-        variablesP.appendChild(variablesStrong);
-        configDiv.appendChild(variablesP);
-
-        const variablesList = document.createElement("ul");
-        widget.display.variables.forEach((v) => {
-          const li = document.createElement("li");
-          li.textContent = `${v.variable} (Device: ${v.origin.id})`;
-          variablesList.appendChild(li);
-        });
-        configDiv.appendChild(variablesList);
+      function formatValue(value) {
+        if (value === null || value === undefined) return String(value);
+        if (typeof value === "object") return JSON.stringify(value);
+        return String(value);
       }
 
-      // Display user information
-      function displayUserInfo(userData) {
-        const userDiv = document.getElementById("user-info");
-        if (userData && userData.profile) {
-          userDiv.textContent = "";
+      function addRow(parent, label, value) {
+        const div = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = `${label}: `;
+        div.appendChild(strong);
+        div.appendChild(document.createTextNode(value));
+        parent.appendChild(div);
+      }
 
-          // Create elements instead of using innerHTML
-          const userIdP = document.createElement("p");
-          const userIdStrong = document.createElement("strong");
-          userIdStrong.textContent = "User ID: ";
-          userIdP.appendChild(userIdStrong);
-          userIdP.appendChild(document.createTextNode(userData.profile.id));
-          userDiv.appendChild(userIdP);
-
-          const nameP = document.createElement("p");
-          const nameStrong = document.createElement("strong");
-          nameStrong.textContent = "Name: ";
-          nameP.appendChild(nameStrong);
-          nameP.appendChild(document.createTextNode(userData.profile.name));
-          userDiv.appendChild(nameP);
-
-          const emailP = document.createElement("p");
-          const emailStrong = document.createElement("strong");
-          emailStrong.textContent = "Email: ";
-          emailP.appendChild(emailStrong);
-          emailP.appendChild(document.createTextNode(userData.profile.email));
-          userDiv.appendChild(emailP);
-
-          const companyP = document.createElement("p");
-          const companyStrong = document.createElement("strong");
-          companyStrong.textContent = "Company: ";
-          companyP.appendChild(companyStrong);
-          companyP.appendChild(document.createTextNode(userData.profile.company || "Not specified"));
-          userDiv.appendChild(companyP);
-
-          const planP = document.createElement("p");
-          const planStrong = document.createElement("strong");
-          planStrong.textContent = "Plan: ";
-          planP.appendChild(planStrong);
-          planP.appendChild(document.createTextNode(userData.profile.plan || "Unknown"));
-          userDiv.appendChild(planP);
-
-          const timezoneP = document.createElement("p");
-          const timezoneStrong = document.createElement("strong");
-          timezoneStrong.textContent = "Timezone: ";
-          timezoneP.appendChild(timezoneStrong);
-          timezoneP.appendChild(document.createTextNode(userData.profile.timezone || "Not specified"));
-          userDiv.appendChild(timezoneP);
-        } else {
-          userDiv.textContent = "";
-          const noUserP = document.createElement("p");
-          noUserP.textContent = "No user information available";
-          userDiv.appendChild(noUserP);
+      function renderRequest(resource) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "request";
+        if (resource.id) addRow(wrapper, "id", resource.id);
+        if (resource.index) addRow(wrapper, "index", resource.index);
+        if (Array.isArray(resource.view) && resource.view.length) addRow(wrapper, "view", resource.view.join(", "));
+        if (Array.isArray(resource.editable) && resource.editable.length) {
+          addRow(wrapper, "editable", resource.editable.join(", "));
         }
+        if (resource.filter !== undefined && resource.filter !== null) {
+          addRow(wrapper, "filter", formatValue(resource.filter));
+        }
+        if (resource.amount != null) addRow(wrapper, "amount", String(resource.amount));
+        if (resource.orderBy) addRow(wrapper, "orderBy", resource.orderBy);
+        return wrapper;
       }
 
-      // Display blueprint devices information
-      function displayBlueprintInfo(devices) {
-        const blueprintDiv = document.getElementById("blueprint-info");
-        if (devices && devices.length > 0) {
-          blueprintDiv.textContent = "";
+      function renderGroup(group, position) {
+        const resource = group.resource;
+        const result = Array.isArray(group.result) ? group.result : [];
 
-          // Create elements instead of using innerHTML
-          const countP = document.createElement("p");
-          const countStrong = document.createElement("strong");
-          countStrong.textContent = "Blueprint Devices Count: ";
-          countP.appendChild(countStrong);
-          countP.appendChild(document.createTextNode(devices.length));
-          blueprintDiv.appendChild(countP);
+        const section = document.createElement("section");
+        section.className = "group";
 
-          const devicesList = document.createElement("ul");
-          devices.forEach((device) => {
-            const li = document.createElement("li");
+        const header = document.createElement("div");
+        header.className = "group-header";
+        const title = document.createElement("strong");
+        title.textContent = `Group #${position + 1}`;
+        header.appendChild(title);
+        const type = document.createElement("span");
+        type.className = "group-type";
+        type.textContent = resource.type || "unknown";
+        header.appendChild(type);
+        const count = document.createElement("span");
+        count.className = "group-count";
+        count.textContent = `${result.length} item${result.length === 1 ? "" : "s"}`;
+        header.appendChild(count);
+        section.appendChild(header);
 
-            const deviceNameStrong = document.createElement("strong");
-            deviceNameStrong.textContent = device.name;
-            li.appendChild(deviceNameStrong);
-            li.appendChild(document.createTextNode(` (ID: ${device.id})`));
-            li.appendChild(document.createElement("br"));
+        section.appendChild(renderRequest(resource));
 
-            li.appendChild(document.createTextNode(`Type: ${device.type || "Unknown"}`));
-            li.appendChild(document.createElement("br"));
-
-            li.appendChild(document.createTextNode(`Active: ${device.active ? "Yes" : "No"}`));
-
-            devicesList.appendChild(li);
+        result.forEach(function (item) {
+          const itemDiv = document.createElement("div");
+          itemDiv.className = "item";
+          Object.keys(item).forEach(function (key) {
+            addRow(itemDiv, key, formatValue(item[key]));
           });
-          blueprintDiv.appendChild(devicesList);
-        } else {
-          blueprintDiv.textContent = "";
-          const noBlueprintP = document.createElement("p");
-          noBlueprintP.textContent = "No blueprint devices available";
-          blueprintDiv.appendChild(noBlueprintP);
-        }
+          section.appendChild(itemDiv);
+        });
+
+        return section;
       }
 
-      // Refresh user information
-      function refreshUserInfo() {
-        document.getElementById("user-info").textContent = "Refreshing user information...";
-        // The onSyncUserInformation callback will be triggered automatically
-        // This is just for demonstration - normally you don't need to manually refresh
-        if (userInfo) {
-          displayUserInfo(userInfo);
-        }
-      }
+      window.TagoIO.onStart(function (widget) {
+        console.log("Read Resource Widget started:", widget);
+        document.getElementById("status").textContent = "Widget started, waiting for resources...";
+      });
 
-      // Refresh blueprint devices
-      function refreshBlueprints() {
-        document.getElementById("blueprint-info").textContent = "Refreshing blueprint information...";
-        // The onSyncBlueprintDevices callback will be triggered automatically
-        // This is just for demonstration - normally you don't need to manually refresh
-        if (blueprintDevices) {
-          displayBlueprintInfo(blueprintDevices);
-        }
-      }
+      window.TagoIO.onRealtime(function (data) {
+        console.log("Real-time data received:", data);
+        updateCount++;
 
-      // Handle errors
+        const groups = (Array.isArray(data) ? data : []).filter(function (group) {
+          return group && group.resource;
+        });
+
+        document.getElementById("status").textContent =
+          `Updates received: ${updateCount} · ${groups.length} resource group${groups.length === 1 ? "" : "s"}`;
+
+        const container = document.getElementById("resources");
+        container.textContent = "";
+
+        if (groups.length === 0) {
+          const empty = document.createElement("p");
+          empty.textContent = "No resource groups in the last payload.";
+          container.appendChild(empty);
+          return;
+        }
+
+        groups.forEach(function (group, position) {
+          container.appendChild(renderGroup(group, position));
+        });
+      });
+
       window.TagoIO.onError(function (error) {
         console.error("Widget error:", error);
         document.getElementById("error").style.display = "block";
         document.getElementById("error").textContent = "Error: " + (error.message || "Unknown error");
       });
 
-      // Initialize widget
       window.TagoIO.ready({
-        header: { color: "#9C27B0" },
+        header: { color: "#8a4b9c" },
       });
     </script>
   </body>
