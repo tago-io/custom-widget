@@ -86,12 +86,13 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 > **Note**: These operations only work with data that is within the Custom Widget's configured settings and permissions.
 
-| Function                                  | Direction | Description                 |
-| ----------------------------------------- | --------- | --------------------------- |
-| `TagoIO.sendData(data, callback)`         | You send  | Send data to TagoIO devices |
-| `TagoIO.editData(data, callback)`         | You send  | Edit existing device data   |
-| `TagoIO.deleteData(data, callback)`       | You send  | Delete device data          |
-| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resources     |
+| Function                                  | Direction | Description                                                                            |
+| ----------------------------------------- | --------- | -------------------------------------------------------------------------------------- |
+| `TagoIO.sendData(data, callback)`         | You send  | Send data to TagoIO devices                                                            |
+| `TagoIO.editData(data, callback)`         | You send  | Edit existing device data                                                              |
+| `TagoIO.deleteData(data, callback)`       | You send  | Delete device data                                                                     |
+| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resources                                                                |
+| `TagoIO.refreshResources()`               | You send  | Ask the platform to re-fetch resource collections; fresh data arrives via `onRealtime` |
 
 ### Real-time Events
 
@@ -206,17 +207,18 @@ window.TagoIO.onError(function (error) {
 
 ## Examples
 
-This package includes 7 HTML examples in the [`examples/`](./examples/) folder:
+This package includes 8 HTML examples in the [`examples/`](./examples/) folder:
 
-| Example              | What it shows                             |
-| -------------------- | ----------------------------------------- |
-| `basic-widget.html`  | Minimal setup and widget lifecycle        |
-| `read-data.html`     | Displaying real-time device data          |
-| `read-resource.html` | Accessing user info and blueprint devices |
-| `read-entity.html`   | Complex structured data handling          |
-| `send-data.html`     | Sending data back to devices              |
-| `time-interval.html` | Time-based data analysis                  |
-| `custom-units.html`  | Unit conversions and formatting           |
+| Example                 | What it shows                                          |
+| ----------------------- | ------------------------------------------------------ |
+| `basic-widget.html`     | Minimal setup and widget lifecycle                     |
+| `read-data.html`        | Displaying real-time device data                       |
+| `read-resource.html`    | Read platform resources (device list, users, entities) |
+| `read-widget-info.html` | Widget config, user info, and blueprint devices        |
+| `read-entity.html`      | Complex structured data handling                       |
+| `send-data.html`        | Sending data back to devices                           |
+| `time-interval.html`    | Time-based data analysis                               |
+| `custom-units.html`     | Unit conversions and formatting                        |
 
 ## External Project Examples
 

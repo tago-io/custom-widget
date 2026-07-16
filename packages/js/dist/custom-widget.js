@@ -67,7 +67,11 @@
         }
       }
       for (const handler of this.handlers) {
-        handler(data);
+        try {
+          handler(data);
+        } catch (err) {
+          console.error("[TagoIO Widget] Message handler threw an error:", err);
+        }
       }
     }
     send(message) {
@@ -130,12 +134,20 @@
       const key = realtimeBlockKey(incomingBlock);
       processedKeys.add(key);
       const existingBlock = existingMap.get(key);
+      if (incomingBlock.resource) {
+        result.push(incomingBlock);
+        if (incomingBlock !== existingBlock) changed = true;
+        continue;
+      }
       if (!existingBlock) {
         result.push(incomingBlock);
         changed = true;
         continue;
       }
-      const mergedRecords = mergeRecords(existingBlock.result ?? [], incomingBlock.result ?? []);
+      const mergedRecords = mergeRecords(
+        existingBlock.result ?? [],
+        incomingBlock.result ?? []
+      );
       const dataChanged = mergedRecords !== existingBlock.result;
       if (dataChanged) {
         result.push({ ...incomingBlock, result: mergedRecords });
@@ -183,9 +195,13 @@
     return changed ? result : existing;
   }
   function realtimeBlockKey(block) {
+    if (block.resource) {
+      const { type, id, index } = block.resource;
+      return `resource:${type}:${id ?? ""}:${index ?? ""}`;
+    }
     const vars = block.data?.variable?.join(",") ?? "";
     const origin = block.data?.origin ?? "";
-    return `${vars}|${origin}`;
+    return `data:${vars}|${origin}`;
   }
   var INITIAL_STATE = {
     widget: null,
@@ -205,26 +221,28 @@
       this.initialized = false;
       this.unsubBridge = null;
       this.handleInbound = (data) => {
+        const partial = {};
         if (data.userInformation) {
-          this.updateState({ userInformation: data.userInformation });
+          partial.userInformation = data.userInformation;
         }
         if (data.blueprintDevices) {
-          this.updateState({ blueprintDevices: data.blueprintDevices });
+          partial.blueprintDevices = data.blueprintDevices;
         }
         if (data.widget) {
-          this.updateState({
-            widget: data.widget,
-            isReady: true
-          });
-        }
-        if (data.realtime) {
-          this.updateRealtime(data.realtime);
+          partial.widget = data.widget;
+          partial.isReady = true;
         }
         if (data.status === false) {
           const error = data;
-          this.updateState({
-            errors: [...this.state.errors, error]
-          });
+          partial.errors = [...this.state.errors, error];
+        }
+        if (Object.keys(partial).length > 0) {
+          this.state = { ...this.state, ...partial };
+        }
+        if (data.realtime) {
+          this.updateRealtime(data.realtime);
+        } else if (Object.keys(partial).length > 0) {
+          this.emit();
         }
       };
       this.subscribe = (callback) => {
@@ -320,6 +338,13 @@
     runAnalysis(scope) {
       this.bridge.send({ method: "run-analysis", scope });
     }
+    /**
+     * Ask the parent to re-fetch this widget's resource collections and push a fresh
+     * `realtime` payload back. Fire-and-forget: the updated data arrives via onRealtime.
+     */
+    refreshResources() {
+      this.bridge.send({ method: "refresh-resources" });
+    }
     clearErrors() {
       this.updateState({ errors: [] });
     }
@@ -407,14 +432,15 @@
     const vars = Array.isArray(variables) ? variables : [variables];
     if (window.TagoIO.autoFill) {
       console.info(
-        "AutoFill is enabled, the bucket and origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
+        "AutoFill is enabled, the origin id will be automatically generated based on the variables of the widget, this option can be disabled by setting window.TagoIO.autoFill = false."
       );
       return autoFillRecords(vars, getWidgetVariables());
     }
-    for (const v of vars) {
-      if (!v.bucket || !v.origin) {
-        console.error("AutoFill is disabled, the data must contain a bucket and origin key!");
-      }
+    const invalid = vars.filter((v) => !v.origin);
+    if (invalid.length > 0) {
+      throw new Error(
+        `AutoFill is disabled. ${invalid.length} record(s) missing required "origin" field. Either enable autoFill or provide this field.`
+      );
     }
     return vars;
   }
@@ -470,6 +496,9 @@
   var runAnalysis = (scope) => {
     store.runAnalysis(scope);
   };
+  var refreshResources = () => {
+    store.refreshResources();
+  };
   window.TagoIO.ready = onReady;
   window.TagoIO.onStart = onStart;
   window.TagoIO.onRealtime = onRealtime;
@@ -483,4 +512,5 @@
   window.TagoIO.openLink = openLink;
   window.TagoIO.closeModal = closeModal;
   window.TagoIO.runAnalysis = runAnalysis;
+  window.TagoIO.refreshResources = refreshResources;
 })();

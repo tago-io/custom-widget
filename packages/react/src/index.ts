@@ -6,6 +6,7 @@ export { useEditData } from "./hooks/use-edit-data.js";
 export { useEditResourceData } from "./hooks/use-edit-resource-data.js";
 export { useNavigation } from "./hooks/use-navigation.js";
 export { useRealtimeData } from "./hooks/use-realtime-data.js";
+export { useResourceData } from "./hooks/use-resource-data.js";
 export { useRunAnalysis } from "./hooks/use-run-analysis.js";
 export { useSendData } from "./hooks/use-send-data.js";
 export { useUserInformation } from "./hooks/use-user-information.js";

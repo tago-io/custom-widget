@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { appendStrategy, mergeStrategy, replaceStrategy } from "../../src/store/realtime-strategies.js";
-import type { TDataRecord, TRealtimeData } from "../../src/types/index.js";
+import type { TDataRecord, TRealtimeData, TResource, TResourceRecord, TResourceType } from "../../src/types/index.js";
 
 const record = (id: string, variable: string, value: string | number, time = "2024-01-01T00:00:00Z"): TDataRecord => ({
   id,
@@ -13,6 +13,15 @@ const record = (id: string, variable: string, value: string | number, time = "20
 const block = (variables: string[], origin: string, records: TDataRecord[]): TRealtimeData => ({
   data: { variable: variables, origin },
   result: records,
+});
+
+const resourceBlock = (
+  type: TResourceType,
+  result: TResourceRecord[],
+  resource: Omit<Partial<TResource>, "type"> = {}
+): TRealtimeData => ({
+  resource: { type, ...resource },
+  result,
 });
 
 describe("replaceStrategy", () => {
@@ -148,5 +157,64 @@ describe("mergeStrategy", () => {
 
     const result = mergeStrategy(existing, incomingSame);
     expect(result[0].result![0]).toBe(r1);
+  });
+});
+
+describe("mergeStrategy with resource blocks", () => {
+  it("keeps distinct resource types separate across updates (no key collision)", () => {
+    const round1 = [
+      resourceBlock("device", [{ id: "d1", name: "A" }]),
+      resourceBlock("user", [{ id: "u1", name: "U" }]),
+    ];
+    const round2 = [
+      resourceBlock("device", [{ id: "d1", name: "A2" }]),
+      resourceBlock("user", [{ id: "u1", name: "U2" }]),
+    ];
+
+    const result = mergeStrategy(round1, round2);
+
+    expect(result).toHaveLength(2);
+    const device = result.find((b) => b.resource?.type === "device");
+    const user = result.find((b) => b.resource?.type === "user");
+    expect((device!.result![0] as { name: string }).name).toBe("A2");
+    expect((user!.result![0] as { name: string }).name).toBe("U2");
+  });
+
+  it("replaces a resource block wholesale instead of record-merging", () => {
+    const round1 = [resourceBlock("device", [{ id: "d1" }, { id: "d2" }])];
+    const round2 = [resourceBlock("device", [{ id: "d3" }])];
+
+    const result = mergeStrategy(round1, round2);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].result).toBe(round2[0].result);
+    expect(result[0].result).toHaveLength(1);
+    expect((result[0].result![0] as { id: string }).id).toBe("d3");
+  });
+
+  it("keys same-type resource blocks by id so different ids don't collide", () => {
+    const round1 = [resourceBlock("entity", [{ v: 1 }], { id: "a" }), resourceBlock("entity", [{ v: 2 }], { id: "b" })];
+    const round2 = [resourceBlock("entity", [{ v: 3 }], { id: "a" })];
+
+    const result = mergeStrategy(round1, round2);
+
+    expect(result).toHaveLength(2);
+    const entityA = result.find((b) => b.resource?.id === "a");
+    const entityB = result.find((b) => b.resource?.id === "b");
+    expect((entityA!.result![0] as { v: number }).v).toBe(3);
+    expect((entityB!.result![0] as { v: number }).v).toBe(2);
+  });
+
+  it("merges data blocks and resource blocks independently", () => {
+    const round1 = [block(["temp"], "d1", [record("1", "temp", 20)]), resourceBlock("device", [{ id: "dev1" }])];
+    const round2 = [block(["temp"], "d1", [record("1", "temp", 25)]), resourceBlock("device", [{ id: "dev2" }])];
+
+    const result = mergeStrategy(round1, round2);
+
+    expect(result).toHaveLength(2);
+    const data = result.find((b) => b.data);
+    const resource = result.find((b) => b.resource);
+    expect((data!.result![0] as TDataRecord).value).toBe(25);
+    expect((resource!.result![0] as { id: string }).id).toBe("dev2");
   });
 });

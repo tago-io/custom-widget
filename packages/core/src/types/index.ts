@@ -1,4 +1,12 @@
-export type TMethod = "delete" | "edit" | "edit-resource" | "send" | "open-link" | "close-modal" | "run-analysis";
+export type TMethod =
+  | "delete"
+  | "edit"
+  | "edit-resource"
+  | "send"
+  | "open-link"
+  | "close-modal"
+  | "run-analysis"
+  | "refresh-resources";
 
 /** GeoJSON Point location format. */
 export type TLocationGeoJSON = {
@@ -171,13 +179,54 @@ export type TDataRecordInput = Omit<TDataRecord, "id" | "time" | "location"> & {
   location?: TLocationGeoJSON | TLocationLatLng | null;
 };
 
+/** Kind of platform resource a realtime block can carry. */
+export type TResourceType = "device" | "user" | "entity" | "entity_list";
+
+/** A JSON-serializable value. Platform payloads arrive as JSON, so resource fields use this. */
+export type TJSONValue = string | number | boolean | null | TJSONValue[] | { [key: string]: TJSONValue };
+
+/** Filter shape a resource block may carry. The platform picks the representation per resource type. */
+export type TResourceFilter = Array<{ key: string; value: string }> | Record<string, TJSONValue> | string;
+
+/**
+ * Descriptor of a resource block pushed by the platform (device list, users, entities...).
+ * Present on a TRealtimeData block instead of `data` when the block is a resource collection.
+ */
+export type TResource = {
+  type: TResourceType;
+  id?: string;
+  index?: string;
+  view?: string[];
+  editable?: string[];
+  filter?: TResourceFilter;
+  amount?: number;
+  orderBy?: string;
+};
+
+/**
+ * A single item inside a resource block. Keys are data-driven (the requested `view` picks them),
+ * so this is an open record of JSON values rather than a fixed shape.
+ */
+export type TResourceRecord = Record<string, TJSONValue>;
+
+/**
+ * A realtime block. Carries either data variables (`data`) or a platform resource collection (`resource`);
+ * `result` holds the matching rows (TDataRecord[] for data blocks, TResourceRecord[] for resource blocks).
+ */
 export type TRealtimeData = {
   data?: {
     variable: string[];
     origin?: string;
     bucket?: string;
   };
-  result?: TDataRecord[];
+  resource?: TResource;
+  result?: TDataRecord[] | TResourceRecord[];
+};
+
+/** A TRealtimeData block that carries a resource collection, narrowed so `resource`/`result` are guaranteed. */
+export type TResourceGroup = {
+  resource: TResource;
+  result: TResourceRecord[];
 };
 
 export type TEventData = {

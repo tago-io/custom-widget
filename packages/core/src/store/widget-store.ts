@@ -185,6 +185,14 @@ export class WidgetStore {
     this.bridge.send({ method: "run-analysis", scope });
   }
 
+  /**
+   * Ask the parent to re-fetch this widget's resource collections and push a fresh
+   * `realtime` payload back. Fire-and-forget: the updated data arrives via onRealtime.
+   */
+  refreshResources(): void {
+    this.bridge.send({ method: "refresh-resources" });
+  }
+
   clearErrors(): void {
     this.updateState({ errors: [] });
   }

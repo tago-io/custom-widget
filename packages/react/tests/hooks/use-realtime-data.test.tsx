@@ -72,6 +72,23 @@ describe("useRealtimeData", () => {
     expect(result.current.records[0].variable).toBe("temp");
   });
 
+  it("excludes resource blocks from flattened records", () => {
+    const { result } = renderHook(() => useRealtimeData(), { wrapper });
+
+    const mixed: TRealtimeData[] = [
+      ...mockRealtime,
+      { resource: { type: "device" }, result: [{ id: "dev1", name: "Sensor A" }] },
+    ];
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { realtime: mixed } }));
+    });
+
+    expect(result.current.data).toHaveLength(2);
+    expect(result.current.records).toHaveLength(1);
+    expect(result.current.records[0].variable).toBe("temp");
+  });
+
   it("clear resets the data", () => {
     const { result } = renderHook(() => useRealtimeData(), { wrapper });
 

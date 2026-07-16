@@ -39,8 +39,8 @@ Low-level postMessage communication with origin validation and request/response 
 Pure functions for handling incoming realtime data:
 
 - **replace** — swap entire array (latest snapshot)
-- **append** — concatenate with FIFO cap
-- **merge** — structural sharing, only new references for changed records
+- **append** — concatenate with FIFO cap (record-oriented; resource widgets should use `merge` or `replace`, since `append` does not dedupe resource blocks)
+- **merge** — structural sharing, only new references for changed records (resource blocks are replaced wholesale)
 
 ### Utilities
 
@@ -58,4 +58,4 @@ import {
 
 ### Types
 
-All types are exported: `TWidget`, `TDataRecord`, `TDataRecordInput`, `TRealtimeData`, `TUserInformation`, `WidgetState`, etc.
+All types are exported: `TWidget`, `TDataRecord`, `TDataRecordInput`, `TRealtimeData`, `TResource`, `TResourceGroup`, `TUserInformation`, `WidgetState`, etc.

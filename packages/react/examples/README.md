@@ -4,11 +4,12 @@ Simple examples showing how to use `@tago-io/custom-widget-react` in your custom
 
 Each file is a self-contained React component you can copy into your project.
 
-| Example                                  | What it shows                          |
-| ---------------------------------------- | -------------------------------------- |
-| [read-data.tsx](./read-data.tsx)         | Display real-time data from devices    |
-| [send-data.tsx](./send-data.tsx)         | Send data back to devices with a form  |
-| [read-resource.tsx](./read-resource.tsx) | Access user info and blueprint devices |
+| Example                                        | What it shows                                          |
+| ---------------------------------------------- | ------------------------------------------------------ |
+| [read-data.tsx](./read-data.tsx)               | Display real-time data from devices                    |
+| [send-data.tsx](./send-data.tsx)               | Send data back to devices with a form                  |
+| [read-resource.tsx](./read-resource.tsx)       | Read platform resources (device list, users, entities) |
+| [read-widget-info.tsx](./read-widget-info.tsx) | Widget config, user info, and blueprint devices        |
 
 ## How to use these
 
