@@ -182,8 +182,11 @@ export type TDataRecordInput = Omit<TDataRecord, "id" | "time" | "location"> & {
 /** Kind of platform resource a realtime block can carry. */
 export type TResourceType = "device" | "user" | "entity" | "entity_list";
 
+/** A JSON-serializable value. Platform payloads arrive as JSON, so resource fields use this. */
+export type TJSONValue = string | number | boolean | null | TJSONValue[] | { [key: string]: TJSONValue };
+
 /** Filter shape a resource block may carry. The platform picks the representation per resource type. */
-export type TResourceFilter = Array<{ key: string; value: string }> | Record<string, unknown> | string;
+export type TResourceFilter = Array<{ key: string; value: string }> | Record<string, TJSONValue> | string;
 
 /**
  * Descriptor of a resource block pushed by the platform (device list, users, entities...).
@@ -200,8 +203,11 @@ export type TResource = {
   orderBy?: string;
 };
 
-/** A single item inside a resource block. Shape is open-ended — the platform decides the fields per resource type. */
-export type TResourceRecord = Record<string, unknown>;
+/**
+ * A single item inside a resource block. Keys are data-driven (the requested `view` picks them),
+ * so this is an open record of JSON values rather than a fixed shape.
+ */
+export type TResourceRecord = Record<string, TJSONValue>;
 
 /**
  * A realtime block. Carries either data variables (`data`) or a platform resource collection (`resource`);
