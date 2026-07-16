@@ -10,7 +10,8 @@ export function replaceStrategy(_existing: TRealtimeData[], incoming: TRealtimeD
 
 /**
  * Append strategy: concatenate incoming data, cap at maxRecords (FIFO).
- * Best for time-series widgets.
+ * Best for time-series widgets. Record-oriented and does not dedupe resource blocks,
+ * so widgets reading resources should use the "merge" or "replace" strategy instead.
  */
 export function appendStrategy(
   existing: TRealtimeData[],

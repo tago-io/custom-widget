@@ -56,4 +56,20 @@ describe("useWidgetData", () => {
     expect(result.current.realtimeEventCount).toBe(1);
     expect(result.current.lastUpdatedAt).toBeInstanceOf(Date);
   });
+
+  it("excludes resource blocks from records", () => {
+    const { result } = renderHook(() => useWidgetData(), { wrapper });
+
+    const mixed: TRealtimeData[] = [
+      ...mockRealtime,
+      { resource: { type: "device" }, result: [{ id: "dev1", name: "Sensor A" }] },
+    ];
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data: { realtime: mixed } }));
+    });
+
+    expect(result.current.records).toHaveLength(1);
+    expect(result.current.records[0].variable).toBe("temp");
+  });
 });
