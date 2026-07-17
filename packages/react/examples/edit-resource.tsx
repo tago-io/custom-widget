@@ -76,6 +76,16 @@ function buildColumns(resource: TResource, result: TResourceRecord[]): string[] 
   return [...rowColumns, ...dotted.filter((column) => !rowColumns.includes(column))];
 }
 
+/** Entity fields keep their type: when the current cell holds a number and the draft parses, send a number. */
+function coerceEntityValue(row: TResourceRecord, column: string, value: string): TJSONValue {
+  const current = getCellValue(row, column);
+  if (typeof current === "number" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return value;
+}
+
 function buildEditPayload(
   resource: TResource,
   row: TResourceRecord,
@@ -83,10 +93,10 @@ function buildEditPayload(
   value: string
 ): TResourceEditInput {
   const rowId = getRowId(row) ?? "";
+  // Device and user values are always strings, like the native widgets send.
   if (resource.type === "device") return { device: rowId, [column]: value };
   if (resource.type === "user") return { user: rowId, [column]: value };
-  // Entity fields may be numeric — convert here if your column holds numbers.
-  return { id: rowId, entity: resource.id ?? "", [column]: value };
+  return { id: rowId, entity: resource.id ?? "", [column]: coerceEntityValue(row, column, value) };
 }
 
 /** Editing needs a row identity; entity data rows also need the block id. Entity_list rows are not editable. */
