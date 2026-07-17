@@ -87,14 +87,31 @@ const { records } = useRealtimeData({
 
 ### Mutations
 
-| Hook                    | Description                  |
-| ----------------------- | ---------------------------- |
-| `useSendData()`         | Send data records to devices |
-| `useEditData()`         | Edit existing data records   |
-| `useDeleteData()`       | Delete data records          |
-| `useEditResourceData()` | Edit resource-level data     |
+| Hook                    | Description                                            |
+| ----------------------- | ------------------------------------------------------ |
+| `useSendData()`         | Send data records to devices                           |
+| `useEditData()`         | Edit existing data records                             |
+| `useDeleteData()`       | Delete data records                                    |
+| `useEditResourceData()` | Edit platform resource rows (devices, users, entities) |
 
-Each returns `{ mutationFn, isMutating, error, reset }`.
+Each returns its mutation function plus a busy flag, `error`, and `reset` — e.g. `useSendData()` returns `{ sendData, isSending, error, reset }` and `useEditResourceData()` returns `{ editResourceData, isEditing, error, reset }`.
+
+#### Editing resources
+
+The payload identity key depends on the resource type, and only columns listed in the resource's `editable` array are accepted (enforced server-side):
+
+```tsx
+const { editResourceData } = useEditResourceData();
+
+// Device row — identity key is `device`
+await editResourceData({ device: "DEVICE_ID", name: "New name", "tags.type": "sensor" });
+
+// User row — identity key is `user`
+await editResourceData({ user: "USER_ID", phone: "+1 555 0100" });
+
+// Entity row — row `id` plus the entity block id (resource.id)
+await editResourceData({ id: "ROW_ID", entity: "ENTITY_ID", status: "closed" });
+```
 
 ### Navigation
 
@@ -122,6 +139,7 @@ The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy
 - **[read-data.tsx](./examples/read-data.tsx)** — Display real-time data from devices
 - **[send-data.tsx](./examples/send-data.tsx)** — Send data back to devices with a form
 - **[read-resource.tsx](./examples/read-resource.tsx)** — Read platform resources (device list, users, entities)
+- **[edit-resource.tsx](./examples/edit-resource.tsx)** — Edit resource rows driven by the `editable` columns
 - **[read-widget-info.tsx](./examples/read-widget-info.tsx)** — Widget config, user info, and blueprint devices
 
 ## Re-exports

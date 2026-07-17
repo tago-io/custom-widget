@@ -246,10 +246,32 @@ describe("WidgetStore", () => {
       expect(sentMessage.variables).toEqual(["rec-1:dev-1"]);
     });
 
-    it("editResourceData sends with method edit-resource", () => {
-      store.editResourceData({ variable: "temp", value: 42 }).catch(() => {});
+    it("editResourceData sends a device edit verbatim with method edit-resource", async () => {
+      const promise = store.editResourceData({ device: "dev-1", name: "New name", "tags.type": "sensor" });
+
       const sentMessage = mockPostMessage.mock.calls[0][0];
       expect(sentMessage.method).toBe("edit-resource");
+      expect(sentMessage.variables).toEqual([{ device: "dev-1", name: "New name", "tags.type": "sensor" }]);
+
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { status: true, key: sentMessage.key, result: [] },
+        })
+      );
+
+      await expect(promise).resolves.toEqual(expect.objectContaining({ status: true }));
+    });
+
+    it("editResourceData wraps a single user edit into an array", () => {
+      store.editResourceData({ user: "usr-1", phone: "+1 555 0100" }).catch(() => {});
+      const sentMessage = mockPostMessage.mock.calls[0][0];
+      expect(sentMessage.variables).toEqual([{ user: "usr-1", phone: "+1 555 0100" }]);
+    });
+
+    it("editResourceData preserves entity edit arrays and numeric values", () => {
+      store.editResourceData([{ id: "ent-1", entity: "entity-abc", status: "closed", value: 42 }]).catch(() => {});
+      const sentMessage = mockPostMessage.mock.calls[0][0];
+      expect(sentMessage.variables).toEqual([{ id: "ent-1", entity: "entity-abc", status: "closed", value: 42 }]);
     });
   });
 

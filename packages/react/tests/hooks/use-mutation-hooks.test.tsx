@@ -151,11 +151,12 @@ describe("mutation hooks", () => {
 
       let promise: Promise<unknown>;
       act(() => {
-        promise = result.current.editResourceData({ variable: "temp", value: 42 });
+        promise = result.current.editResourceData({ device: "dev-1", name: "Renamed" });
       });
 
       const sentMessage = postMessageSpy.mock.calls[postMessageSpy.mock.calls.length - 1][0] as Record<string, unknown>;
       expect(sentMessage.method).toBe("edit-resource");
+      expect(sentMessage.variables).toEqual([{ device: "dev-1", name: "Renamed" }]);
 
       await act(async () => {
         respondToLastMessage(true);

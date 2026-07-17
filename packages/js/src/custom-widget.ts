@@ -15,6 +15,10 @@ import type {
   TEventData,
   TReadyOptions,
   TRealtimeData,
+  TResourceDeviceEdit,
+  TResourceEditInput,
+  TResourceEntityEdit,
+  TResourceUserEdit,
   TUserInformation,
   TWidget,
   TWidgetVariable,
@@ -38,7 +42,7 @@ type TTagoIO = {
   deleteData: (dataToDelete: string | string[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   editData: (dataToEdit: TDataRecord | TDataRecord[], callback?: TSendDataCallback) => Promise<TData> | undefined;
   editResourceData: (
-    dataToEdit: TDataRecord | TDataRecord[],
+    dataToEdit: TResourceEditInput | TResourceEditInput[],
     callback?: TSendDataCallback
   ) => Promise<TData> | undefined;
   autoFill: boolean;
@@ -187,7 +191,7 @@ const deleteData = (variables: string | string[], callback?: TSendDataCallback):
 };
 
 const editResourceData = (
-  variables: TDataRecord | TDataRecord[],
+  variables: TResourceEditInput | TResourceEditInput[],
   callback?: TSendDataCallback
 ): Promise<TData> | undefined => {
   const vars = Array.isArray(variables) ? variables : [variables];
@@ -262,6 +266,10 @@ export type {
   TReadyOptions,
   TRealtimeCallback,
   TRealtimeData,
+  TResourceDeviceEdit,
+  TResourceEditInput,
+  TResourceEntityEdit,
+  TResourceUserEdit,
   TSendDataCallback,
   TStartCallback,
   TSyncBlueprintDevicesCallback,

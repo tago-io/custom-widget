@@ -58,4 +58,4 @@ import {
 
 ### Types
 
-All types are exported: `TWidget`, `TDataRecord`, `TDataRecordInput`, `TRealtimeData`, `TResource`, `TResourceGroup`, `TUserInformation`, `WidgetState`, etc.
+All types are exported: `TWidget`, `TDataRecord`, `TDataRecordInput`, `TRealtimeData`, `TResource`, `TResourceGroup`, `TResourceEditInput`, `TUserInformation`, `WidgetState`, etc.
