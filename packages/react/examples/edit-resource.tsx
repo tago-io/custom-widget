@@ -8,12 +8,17 @@
  * The edit payload identity key depends on the resource type:
  * - device      -> { device: rowId, ...fields }
  * - user        -> { user: rowId, ...fields }
- * - entity/list -> { id: rowId, entity: resource.id, ...fields }
+ * - entity_list -> { entity: rowId, ...fields }   (rows are entities themselves)
+ * - entity      -> { id: rowId, entity: resource.id, ...fields }
  *
- * Click an editable cell, type the new value, and press Enter to save
- * (Escape cancels). After a successful edit the widget asks the dashboard to
- * re-fetch resources, so the table reflects the persisted value.
- * For reading resources, see "read-resource.tsx".
+ * Tag and parameter columns are addressed as `tags.<key>` / `param.<key>` in
+ * `view`/`editable`, while rows carry `tags`/`params` as arrays of { key, value } —
+ * so those columns are resolved from the array, and edits are sent with the
+ * dotted key (e.g. { device, "tags.device_type": "sensor" }).
+ *
+ * Click an editable cell, type the new value, and press Enter to save (Escape
+ * cancels). The save promise settles when the dashboard echoes the request key
+ * back. For reading resources, see "read-resource.tsx".
  */
 
 import type {
@@ -38,6 +43,39 @@ function getRowId(row: TResourceRecord): string | null {
   return null;
 }
 
+/** Resolve a column value: `tags.X` / `param.X` come from the row's array, plain keys from the row. */
+function getCellValue(row: TResourceRecord, column: string): TJSONValue {
+  const dot = column.indexOf(".");
+  if (dot > 0) {
+    const prefix = column.slice(0, dot);
+    const key = column.slice(dot + 1);
+    const arrayKey = prefix === "param" ? "params" : prefix;
+    const entries = row[arrayKey];
+    if (Array.isArray(entries)) {
+      const match = entries.find(
+        (entry) => typeof entry === "object" && entry !== null && !Array.isArray(entry) && entry.key === key
+      );
+      if (match && typeof match === "object" && !Array.isArray(match)) return match.value ?? null;
+    }
+    return null;
+  }
+  return row[column] ?? null;
+}
+
+/** Row keys, replacing raw `tags`/`params` arrays with the dotted columns the view/editable declare. */
+function buildColumns(resource: TResource, result: TResourceRecord[]): string[] {
+  const dotted = Array.from(new Set([...(resource.view ?? []), ...(resource.editable ?? [])])).filter((column) =>
+    column.includes(".")
+  );
+  const expandedPrefixes = new Set(
+    dotted.map((column) => (column.startsWith("param.") ? "params" : column.slice(0, column.indexOf("."))))
+  );
+  const rowColumns = Array.from(new Set(result.flatMap((item) => Object.keys(item)))).filter(
+    (column) => !expandedPrefixes.has(column)
+  );
+  return [...rowColumns, ...dotted.filter((column) => !rowColumns.includes(column))];
+}
+
 function buildEditPayload(
   resource: TResource,
   row: TResourceRecord,
@@ -47,24 +85,43 @@ function buildEditPayload(
   const rowId = getRowId(row) ?? "";
   if (resource.type === "device") return { device: rowId, [column]: value };
   if (resource.type === "user") return { user: rowId, [column]: value };
+  if (resource.type === "entity_list") return { entity: rowId, [column]: value };
   // Entity fields may be numeric — convert here if your column holds numbers.
   return { id: rowId, entity: resource.id ?? "", [column]: value };
 }
 
-function EditableCell({ resource, row, column }: { resource: TResource; row: TResourceRecord; column: string }) {
+/** Editing needs a row identity; entity data rows also need the block id. */
+function canEditRow(resource: TResource, row: TResourceRecord): boolean {
+  if (getRowId(row) === null) return false;
+  if (resource.type === "entity") return !!resource.id;
+  return true;
+}
+
+function EditableCell({
+  resource,
+  row,
+  column,
+  onSaved,
+}: {
+  resource: TResource;
+  row: TResourceRecord;
+  column: string;
+  onSaved: () => void;
+}) {
   const { editResourceData, isEditing, error } = useEditResourceData();
-  const { refresh } = useResourceData();
   const [draft, setDraft] = useState<string | null>(null);
 
   const save = async () => {
     if (draft === null) return;
+    // Settles when the dashboard echoes the request key back — hosts without
+    // that echo leave the promise pending, so the input stays disabled.
     await editResourceData(buildEditPayload(resource, row, column, draft));
     setDraft(null);
-    refresh();
+    onSaved();
   };
 
   if (draft === null) {
-    const current = formatCell(row[column]);
+    const current = formatCell(getCellValue(row, column));
     return (
       <td
         onClick={() => setDraft(current === "—" ? "" : current)}
@@ -94,9 +151,9 @@ function EditableCell({ resource, row, column }: { resource: TResource; row: TRe
   );
 }
 
-function ResourceEditCard({ group }: { group: TResourceGroup }) {
+function ResourceEditCard({ group, onSaved }: { group: TResourceGroup; onSaved: () => void }) {
   const { resource, result } = group;
-  const columns = Array.from(new Set(result.flatMap((item) => Object.keys(item))));
+  const columns = buildColumns(resource, result);
   const editable = new Set(resource.editable ?? []);
 
   return (
@@ -142,14 +199,14 @@ function ResourceEditCard({ group }: { group: TResourceGroup }) {
             {result.map((row, index) => (
               <tr key={index} style={{ borderBottom: "1px solid #f5f7fa" }}>
                 {columns.map((col) =>
-                  editable.has(col) && getRowId(row) !== null ? (
-                    <EditableCell key={col} resource={resource} row={row} column={col} />
+                  editable.has(col) && canEditRow(resource, row) ? (
+                    <EditableCell key={col} resource={resource} row={row} column={col} onSaved={onSaved} />
                   ) : (
                     <td
                       key={col}
                       style={{ padding: "8px 14px", fontFamily: "ui-monospace, monospace", color: "#64748b" }}
                     >
-                      {formatCell(row[col])}
+                      {formatCell(getCellValue(row, col))}
                     </td>
                   )
                 )}
@@ -164,7 +221,8 @@ function ResourceEditCard({ group }: { group: TResourceGroup }) {
 
 function ResourceEditor() {
   const { label, isLoading } = useWidget();
-  const { resources } = useResourceData();
+  // `refresh` lives here (one store subscription) and is passed down to cells.
+  const { resources, refresh } = useResourceData();
 
   if (isLoading) {
     return <p style={{ padding: 20, fontFamily: "system-ui, sans-serif" }}>Loading widget...</p>;
@@ -187,7 +245,11 @@ function ResourceEditor() {
         <p style={{ color: "#9ca3af" }}>No resources received yet.</p>
       ) : (
         resources.map((group, index) => (
-          <ResourceEditCard key={`${group.resource.type}-${group.resource.id ?? index}`} group={group} />
+          <ResourceEditCard
+            key={`${group.resource.type}-${group.resource.id ?? index}`}
+            group={group}
+            onSaved={refresh}
+          />
         ))
       )}
     </div>
