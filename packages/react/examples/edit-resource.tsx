@@ -6,10 +6,10 @@
  * edited — the platform enforces this server-side.
  *
  * The edit payload identity key depends on the resource type:
- * - device      -> { device: rowId, ...fields }
- * - user        -> { user: rowId, ...fields }
- * - entity_list -> { entity: rowId, ...fields }   (rows are entities themselves)
- * - entity      -> { id: rowId, entity: resource.id, ...fields }
+ * - device -> { device: rowId, ...fields }
+ * - user   -> { user: rowId, ...fields }
+ * - entity -> { id: rowId, entity: resource.id, ...fields }
+ * Entity_list rows cannot be edited through this API.
  *
  * Tag and parameter columns are addressed as `tags.<key>` / `param.<key>` in
  * `view`/`editable`, while rows carry `tags`/`params` as arrays of { key, value } —
@@ -85,13 +85,13 @@ function buildEditPayload(
   const rowId = getRowId(row) ?? "";
   if (resource.type === "device") return { device: rowId, [column]: value };
   if (resource.type === "user") return { user: rowId, [column]: value };
-  if (resource.type === "entity_list") return { entity: rowId, [column]: value };
   // Entity fields may be numeric — convert here if your column holds numbers.
   return { id: rowId, entity: resource.id ?? "", [column]: value };
 }
 
-/** Editing needs a row identity; entity data rows also need the block id. */
+/** Editing needs a row identity; entity data rows also need the block id. Entity_list rows are not editable. */
 function canEditRow(resource: TResource, row: TResourceRecord): boolean {
+  if (resource.type === "entity_list") return false;
   if (getRowId(row) === null) return false;
   if (resource.type === "entity") return !!resource.id;
   return true;

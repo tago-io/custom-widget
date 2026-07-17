@@ -258,17 +258,8 @@ export type TResourceEntityEdit = {
   entity: string;
 } & { [field: string]: TJSONValue | undefined };
 
-/** Edit payload for an entity_list row. Rows are entities themselves, so the identity key is `entity`. */
-export type TResourceEntityListEdit = {
-  entity: string;
-} & { [field: string]: TJSONValue | undefined };
-
 /** Input for editResourceData. The platform only accepts columns listed in the resource's `editable`. */
-export type TResourceEditInput =
-  | TResourceDeviceEdit
-  | TResourceUserEdit
-  | TResourceEntityEdit
-  | TResourceEntityListEdit;
+export type TResourceEditInput = TResourceDeviceEdit | TResourceUserEdit | TResourceEntityEdit;
 
 export type TEventData = {
   realtime?: TRealtimeData[];
