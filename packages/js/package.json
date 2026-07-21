@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "clean-css-cli": "5.6.3",
-    "less": "4.6.4",
-    "tsup": "8.5.0"
+    "less": "4.7.0",
+    "tsup": "8.5.1"
   }
 }
