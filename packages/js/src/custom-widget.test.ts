@@ -1,7 +1,7 @@
 import type { TRealtimeData } from "@tago-io/custom-widget-core";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { closeModal, onError, onRealtime, onStart, runAnalysis, sendData } from "./custom-widget";
+import { closeModal, editResourceData, onError, onRealtime, onStart, runAnalysis, sendData } from "./custom-widget";
 
 const mockRandomUUID = vi.fn(() => "staticKey");
 
@@ -169,6 +169,48 @@ describe("sendData", () => {
     simulateMessage({ status: true, key: sentMessage.key, result: [] });
 
     await expect(result).resolves.toMatchObject({ status: true });
+  });
+});
+
+describe("editResourceData", () => {
+  const mockPostMessage = vi.fn();
+
+  beforeAll(() => {
+    window.parent.postMessage = mockPostMessage;
+  });
+
+  beforeEach(() => {
+    window.TagoIO.autoFill = true;
+    mockPostMessage.mockClear();
+  });
+
+  it("sends the resource edit verbatim and bypasses autoFill", async () => {
+    const result = editResourceData({ device: "dev-1", name: "New name" });
+
+    const sentCall = mockPostMessage.mock.calls[0][0];
+    expect(sentCall.method).toBe("edit-resource");
+    expect(sentCall.variables).toStrictEqual([{ device: "dev-1", name: "New name" }]);
+
+    simulateMessage({ status: true, key: sentCall.key, result: [] });
+
+    await expect(result).resolves.toMatchObject({ status: true });
+  });
+
+  it("returns undefined and invokes the callback when one is provided", () => {
+    const mockCallback = vi.fn();
+
+    const result = editResourceData({ user: "usr-1", phone: "+1 555 0100" }, mockCallback);
+
+    const sentCall = mockPostMessage.mock.calls[0][0];
+    simulateMessage({ status: true, key: sentCall.key, result: [] });
+
+    expect(result).toBeUndefined();
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        expect(mockCallback).toHaveBeenCalled();
+        resolve();
+      }, 10);
+    });
   });
 });
 

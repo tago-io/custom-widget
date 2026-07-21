@@ -1,6 +1,6 @@
 {
   "name": "@tago-io/custom-widget",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "TagoIO Toolkit to build your own widgets",
   "keywords": [
     "custom-widget",
@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "clean-css-cli": "5.6.3",
-    "less": "4.6.4",
-    "tsup": "8.5.0"
+    "less": "4.7.0",
+    "tsup": "8.5.1"
   }
 }

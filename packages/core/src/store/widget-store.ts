@@ -8,6 +8,7 @@ import type {
   TError,
   TReadyOptions,
   TRealtimeData,
+  TResourceEditInput,
   WidgetState,
 } from "../types/index.js";
 import { appendStrategy, mergeStrategy, replaceStrategy } from "./realtime-strategies.js";
@@ -165,10 +166,10 @@ export class WidgetStore {
 
   deleteData(records: string | string[]): Promise<TData> {
     const vars = Array.isArray(records) ? records : [records];
-    return this.bridge.sendWithResponse({ variables: vars as unknown as TDataRecordInput[], method: "delete" });
+    return this.bridge.sendWithResponse({ variables: vars, method: "delete" });
   }
 
-  editResourceData(records: TDataRecordInput | TDataRecordInput[]): Promise<TData> {
+  editResourceData(records: TResourceEditInput | TResourceEditInput[]): Promise<TData> {
     const vars = Array.isArray(records) ? records : [records];
     return this.bridge.sendWithResponse({ variables: vars, method: "edit-resource" });
   }

@@ -229,6 +229,38 @@ export type TResourceGroup = {
   result: TResourceRecord[];
 };
 
+/** Edit payload for a device row. Identity key is `device` (the device ID). */
+export type TResourceDeviceEdit = {
+  device: string;
+  name?: string;
+  active?: boolean;
+} & { [tag: `tags.${string}`]: string | boolean | undefined } & {
+  [param: `param.${string}`]: string | boolean | undefined;
+};
+
+/** Edit payload for a user row. Identity key is `user` (the user ID). */
+export type TResourceUserEdit = {
+  user: string;
+  name?: string;
+  phone?: string;
+  company?: string;
+  password?: string;
+  language?: string;
+  timezone?: string;
+} & { [tag: `tags.${string}`]: string | undefined };
+
+/**
+ * Edit payload for an entity data row: the row's own `id` plus the entity block ID
+ * (`resource.id` on the TResourceGroup). Remaining keys are the edited fields.
+ */
+export type TResourceEntityEdit = {
+  id: string;
+  entity: string;
+} & { [field: string]: TJSONValue | undefined };
+
+/** Input for editResourceData. The platform only accepts columns listed in the resource's `editable`. */
+export type TResourceEditInput = TResourceDeviceEdit | TResourceUserEdit | TResourceEntityEdit;
+
 export type TEventData = {
   realtime?: TRealtimeData[];
   widget?: TWidget;
@@ -242,7 +274,7 @@ export type TEventData = {
 
 export type TMessage = {
   loaded?: boolean;
-  variables?: TDataRecord[] | TDataRecordInput[];
+  variables?: TDataRecord[] | TDataRecordInput[] | TResourceEditInput[] | string[];
   key?: string;
   options?: TReadyOptions;
   url?: string;

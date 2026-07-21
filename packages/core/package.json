@@ -1,6 +1,6 @@
 {
   "name": "@tago-io/custom-widget-core",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Framework-agnostic core for TagoIO Custom Widget SDKs",
   "keywords": [
     "custom-widget",
@@ -51,6 +51,6 @@
     "format": "vp fmt src/"
   },
   "devDependencies": {
-    "tsup": "8.5.0"
+    "tsup": "8.5.1"
   }
 }

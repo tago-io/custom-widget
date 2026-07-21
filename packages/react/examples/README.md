@@ -9,6 +9,7 @@ Each file is a self-contained React component you can copy into your project.
 | [read-data.tsx](./read-data.tsx)               | Display real-time data from devices                    |
 | [send-data.tsx](./send-data.tsx)               | Send data back to devices with a form                  |
 | [read-resource.tsx](./read-resource.tsx)       | Read platform resources (device list, users, entities) |
+| [edit-resource.tsx](./edit-resource.tsx)       | Edit resource rows driven by the `editable` columns    |
 | [read-widget-info.tsx](./read-widget-info.tsx) | Widget config, user info, and blueprint devices        |
 
 ## How to use these

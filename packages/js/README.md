@@ -91,7 +91,7 @@ The SDK exposes everything through the global `window.TagoIO` object.
 | `TagoIO.sendData(data, callback)`         | You send  | Send data to TagoIO devices                                                            |
 | `TagoIO.editData(data, callback)`         | You send  | Edit existing device data                                                              |
 | `TagoIO.deleteData(data, callback)`       | You send  | Delete device data                                                                     |
-| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resources                                                                |
+| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resource rows (devices, users, entities)                                 |
 | `TagoIO.refreshResources()`               | You send  | Ask the platform to re-fetch resource collections; fresh data arrives via `onRealtime` |
 
 ### Real-time Events
@@ -142,6 +142,21 @@ async function sendSensorData() {
     console.error("Failed to send data:", error);
   }
 }
+```
+
+## Editing Resources
+
+The payload identity key depends on the resource type. Only columns listed in the resource's `editable` array are accepted — the platform enforces this server-side.
+
+```javascript
+// Device row — identity key is `device`
+await window.TagoIO.editResourceData({ device: "DEVICE_ID", name: "New name", "tags.type": "sensor" });
+
+// User row — identity key is `user`
+await window.TagoIO.editResourceData({ user: "USER_ID", phone: "+1 555 0100" });
+
+// Entity row — row `id` plus the entity block id (resource.id)
+await window.TagoIO.editResourceData({ id: "ROW_ID", entity: "ENTITY_ID", status: "closed" });
 ```
 
 ## Blueprint Devices
