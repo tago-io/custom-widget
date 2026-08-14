@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Error handling and protocol log</title>
+
+    <script>
+      document.documentElement.dataset.theme =
+        new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light";
+    </script>
+
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #111114;
+        --muted: #6b6b76;
+        --line: #e4e4e7;
+      }
+      :root[data-theme="dark"] {
+        --bg: #0b0b0c;
+        --fg: #f4f4f5;
+        --muted: #8b8b95;
+        --line: #27272a;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          13px/1.5 ui-monospace,
+          monospace;
+      }
+      h2 {
+        font-size: 13px;
+        margin: 20px 0 8px;
+      }
+      button {
+        font: inherit;
+        margin: 0 6px 6px 0;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        cursor: pointer;
+      }
+      .row {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--muted);
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .out {
+        border-left-color: #2cb1bc;
+      }
+      .in {
+        border-left-color: #7c3aed;
+      }
+      .err {
+        border-left-color: #dc2626;
+      }
+      .muted {
+        color: var(--muted);
+      }
+    </style>
+
+    <!-- Swap this for the contents of dist/custom-dashboard.min.js to get one uploadable file. -->
+    <script src="../dist/custom-dashboard.min.js"></script>
+  </head>
+
+  <body>
+    <p class="muted" id="context"></p>
+
+    <h2>Trigger an outcome</h2>
+    <div>
+      <button data-action="list">sql.list</button>
+      <button data-action="run-first">sql.run (first query)</button>
+      <button data-action="bad-id">bad_request — invalid id, refused locally</button>
+      <button data-action="not-found">not_found — well-formed id that does not exist</button>
+      <button data-action="unknown-op">unknown_op — hand-posted</button>
+      <button data-action="empty-id">empty id — the host never answers</button>
+      <button data-action="timeout">timeout — pin the wrong origin and watch it hang</button>
+    </div>
+
+    <h2>Result</h2>
+    <div id="result" class="row">—</div>
+
+    <h2>Every message, both directions</h2>
+    <div id="log"></div>
+
+    <script>
+      var log = document.getElementById("log");
+      var result = document.getElementById("result");
+      var FAKE_BUT_VALID_ID = "aaaaaaaaaaaaaaaaaaaaaaaa";
+
+      document.getElementById("context").textContent =
+        "origin=" +
+        location.origin +
+        "  parentIsSelf=" +
+        (window.parent === window) +
+        "  embedded=" +
+        TagoDashboard.isEmbedded;
+
+      function line(kind, text) {
+        var div = document.createElement("div");
+        div.className = "row " + kind;
+        div.textContent = text;
+        log.insertBefore(div, log.firstChild);
+      }
+
+      function show(text) {
+        result.textContent = text;
+      }
+
+      // Inbound is observable from here. Outbound is not: the host is on another origin, and
+      // assigning to `window.parent.postMessage` throws a SecurityError — so log intent instead.
+      window.addEventListener("message", function (event) {
+        if (event.data && typeof event.data.type === "string" && event.data.type.indexOf("dashboard:") === 0) {
+          line("in", "← " + event.origin + "  " + JSON.stringify(event.data).slice(0, 400));
+        }
+      });
+
+      function post(message) {
+        line("out", "→ " + JSON.stringify(message));
+        window.parent.postMessage(message, "*");
+      }
+
+      function report(error) {
+        line("err", "✗ " + error.code + " — " + error.message);
+        // `bad_params` folds in timeouts, rate limits and plan limits, so show the raw message.
+        show(error.code + "\n" + error.message);
+      }
+
+      var actions = {
+        list: async function () {
+          line("out", "→ sql.list() via SDK");
+          var queries = await TagoDashboard.sql.list();
+          line("in", "✓ resolved with " + queries.length + " queries");
+          show(JSON.stringify(queries, null, 2));
+        },
+        "run-first": async function () {
+          var queries = await TagoDashboard.sql.list();
+          if (queries.length === 0) return show("No saved queries in this profile.");
+          var data = await TagoDashboard.sql.run(queries[0].id);
+          show(JSON.stringify(data, null, 2));
+        },
+        "bad-id": async function () {
+          await TagoDashboard.sql.run("nope");
+        },
+        "not-found": async function () {
+          line("out", "→ sql.run(" + FAKE_BUT_VALID_ID + ") via SDK");
+          await TagoDashboard.sql.run(FAKE_BUT_VALID_ID);
+        },
+        "unknown-op": function () {
+          // The SDK deliberately has no generic op caller, so this one is hand-posted.
+          post({ type: "dashboard:request", id: "manual-1", op: "sql.nope" });
+          show("Posted an unknown op by hand — watch the log for the reply.");
+        },
+        "empty-id": function () {
+          post({ type: "dashboard:request", id: "", op: "sql.list" });
+          show(
+            "Posted a request with an empty id. The host drops it and never answers — that is\nwhy the SDK always generates one."
+          );
+        },
+        timeout: async function () {
+          // A healthy host answers everything, so the only honest way to show the transport
+          // backstop is to break the transport. Pinning `allowedOrigins` to the shell's own
+          // origin instead of the host's is the documented footgun: the reply is dropped on
+          // arrival, nothing errors, and the request simply never settles.
+          line("out", "→ sql.list() on a client pinned to the WRONG origin (" + location.origin + ")");
+          var broken = TagoDashboard.createClient({
+            allowedOrigins: [location.origin],
+            timeoutMs: 2000,
+          });
+          broken.start();
+          try {
+            await broken.sql.list();
+          } finally {
+            broken.stop();
+          }
+        },
+      };
+
+      document.addEventListener("click", async function (event) {
+        var action = event.target instanceof HTMLElement ? event.target.dataset.action : null;
+        if (!action || !actions[action]) return;
+
+        show("…");
+        try {
+          await actions[action]();
+        } catch (error) {
+          report(error);
+        }
+      });
+    </script>
+  </body>
+</html>
