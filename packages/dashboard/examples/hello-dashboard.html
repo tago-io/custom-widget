@@ -127,7 +127,9 @@
               ? "You do not have access to this query's resource."
               : error.code === "no_host"
                 ? "Open this page inside a TagoIO Custom Dashboard."
-                : error.message;
+                : error.code === "no_response"
+                  ? "The dashboard did not answer. Try again."
+                  : error.message;
 
         errorText.textContent = hint + " (" + error.code + ")";
         errorText.hidden = false;

@@ -137,7 +137,7 @@ Every failure throws a `TagoDashboardError` with a `code`:
 | `no_host`     | The page is not running inside a dashboard          |
 | `aborted`     | `stop()` was called while the request was in flight |
 
-**`bad_params` is not only about parameters.** The host maps API failures by HTTP status and folds every 4xx that is not 404 or 403 into this one code — so a query timeout, a rate limit, a plan limit, a row-limit refusal, and a genuine bad parameter all arrive as `bad_params`. Show `error.message`, which carries the server's own explanation. Do not tell users to check their parameters on this code.
+**`bad_params` still covers more than parameters.** A row-limit refusal, a too-wide time window, an inactive query and a genuine bad parameter all arrive here, because the host maps by HTTP status and they are all `400`. The server's message says which. Timeouts, rate limits and plan caps used to land here too; they now have their own codes.
 
 ```js
 try {
@@ -155,7 +155,7 @@ try {
 
 TagoSQL enforces its own execution deadline and answers with an error, so a slow _query_ always comes back. What has no timeout is the _transport_: if the dashboard is reloaded, navigated away from, or remounted while a request is in flight, the host discards the answer and never tells you.
 
-So each request carries a generous backstop (60s, configurable per client or per call, `0` to disable). It exists to catch a wedged host, not to bound your query — if a query is legitimately long, raise `timeoutMs` rather than lowering it. A timeout does not cancel anything: the query keeps running server-side, and a late answer is ignored.
+So each request carries a generous backstop (60s, configurable per client or per call, `0` to disable) that rejects with `no_response`. It exists to catch a wedged host, not to bound your query — a query that genuinely runs too long comes back from the server as `timeout` instead. A `no_response` cancels nothing: the query keeps running server-side, and a late answer is ignored.
 
 ## Local development
 

@@ -329,9 +329,10 @@ export class DashboardClient {
               this.pending.markExpired(requestID);
               expired.reject(
                 new TagoDashboardError(
-                  "timeout",
+                  "no_response",
                   `The dashboard did not answer ${op} within ${timeoutMs}ms. It may have been reloaded or navigated away. ` +
-                    "If the query is legitimately long, raise timeoutMs — this deadline is a transport backstop, not a query limit.",
+                    "This is a transport backstop, not a query limit: a query that runs too long comes back as `timeout` instead. " +
+                    "If the dashboard is simply slow, raise timeoutMs.",
                   { op, requestID }
                 )
               );

@@ -1,10 +1,25 @@
 export type TDashboardTheme = "dark" | "light";
 
 /** Mirrors the host bridge's own error codes. */
-export type THostErrorCode = "not_found" | "forbidden" | "bad_params" | "api_error" | "unknown_op" | "bad_request";
+export type THostErrorCode =
+  | "not_found"
+  | "forbidden"
+  | "bad_params"
+  | "plan_limit"
+  | "timeout"
+  | "rate_limited"
+  | "api_error"
+  | "unknown_op"
+  | "bad_request";
 
-/** Host codes plus the ones the SDK raises locally, so one `switch` covers everything. */
-export type TDashboardErrorCode = THostErrorCode | "timeout" | "aborted" | "no_host" | "internal";
+/**
+ * Host codes plus the ones the SDK raises locally, so one `switch` covers everything.
+ *
+ * `no_response` is deliberately not called `timeout`: the host owns that code for a query
+ * that exceeded its execution deadline, and the remedy differs. A `timeout` means narrow the
+ * query; a `no_response` means the dashboard never answered at all.
+ */
+export type TDashboardErrorCode = THostErrorCode | "no_response" | "aborted" | "no_host" | "internal";
 
 /** Host-driven body styles. The host currently always sends `{}`. */
 export type TDashboardStyle = Record<string, string | number | null | undefined>;

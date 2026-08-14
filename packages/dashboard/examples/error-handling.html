@@ -82,7 +82,7 @@
       <button data-action="not-found">not_found — well-formed id that does not exist</button>
       <button data-action="unknown-op">unknown_op — hand-posted</button>
       <button data-action="empty-id">empty id — the host never answers</button>
-      <button data-action="timeout">timeout — pin the wrong origin and watch it hang</button>
+      <button data-action="timeout">no_response — pin the wrong origin and watch it hang</button>
     </div>
 
     <h2>Result</h2>
@@ -167,7 +167,9 @@
         },
         timeout: async function () {
           // A healthy host answers everything, so the only honest way to show the transport
-          // backstop is to break the transport. Pinning `allowedOrigins` to the shell's own
+          // backstop is to break the transport. This is `no_response`, not `timeout`: the host
+          // owns `timeout` for a query that ran past its deadline.
+          // Pinning `allowedOrigins` to the shell's own
           // origin instead of the host's is the documented footgun: the reply is dropped on
           // arrival, nothing errors, and the request simply never settles.
           line("out", "→ sql.list() on a client pinned to the WRONG origin (" + location.origin + ")");

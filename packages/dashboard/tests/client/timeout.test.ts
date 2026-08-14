@@ -23,7 +23,7 @@ describe("transport backstop", () => {
     const promise = ctx.client.sql.list();
 
     // Attach the assertion before advancing, or the rejection lands unhandled.
-    const assertion = expect(promise).rejects.toMatchObject({ code: "timeout", op: "sql.list" });
+    const assertion = expect(promise).rejects.toMatchObject({ code: "no_response", op: "sql.list" });
     await vi.advanceTimersByTimeAsync(60_000);
     await assertion;
   });
@@ -39,7 +39,7 @@ describe("transport backstop", () => {
     await vi.advanceTimersByTimeAsync(59_999);
     expect(settled).toBe(false);
 
-    const assertion = expect(promise).rejects.toMatchObject({ code: "timeout" });
+    const assertion = expect(promise).rejects.toMatchObject({ code: "no_response" });
     await vi.advanceTimersByTimeAsync(1);
     await assertion;
   });
@@ -47,7 +47,7 @@ describe("transport backstop", () => {
   it("honors a per-call override", async () => {
     ctx = setupClient();
     const promise = ctx.client.sql.run(VALID_ID, undefined, { timeoutMs: 5_000 });
-    const assertion = expect(promise).rejects.toMatchObject({ code: "timeout" });
+    const assertion = expect(promise).rejects.toMatchObject({ code: "no_response" });
 
     await vi.advanceTimersByTimeAsync(5_000);
     await assertion;
@@ -56,7 +56,7 @@ describe("transport backstop", () => {
   it("honors a per-instance override", async () => {
     ctx = setupClient({ timeoutMs: 1_000 });
     const promise = ctx.client.sql.list();
-    const assertion = expect(promise).rejects.toMatchObject({ code: "timeout" });
+    const assertion = expect(promise).rejects.toMatchObject({ code: "no_response" });
 
     await vi.advanceTimersByTimeAsync(1_000);
     await assertion;
@@ -110,7 +110,7 @@ describe("timer hygiene", () => {
 
     const promise = ctx.client.sql.list();
     const id = ctx.lastRequestID();
-    const assertion = expect(promise).rejects.toMatchObject({ code: "timeout" });
+    const assertion = expect(promise).rejects.toMatchObject({ code: "no_response" });
     await vi.advanceTimersByTimeAsync(1_000);
     await assertion;
 
