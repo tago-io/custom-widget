@@ -31,3 +31,9 @@ docs/
 # Package build outputs (JS package dist is committed)
 packages/core/dist/
 packages/react/dist/
+packages/dashboard/dist/
+packages/dashboard-react/dist/
+
+# Generated uploadable examples (built from the committed sources)
+packages/dashboard/examples/dist/
+packages/dashboard-react/examples/single-file-app/dist/
