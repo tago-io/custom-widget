@@ -132,8 +132,22 @@
         });
 
         function load() {
+          // Anything that reaches an iframe src is a javascript: sink, so resolve the typed
+          // path and refuse a non-http(s) scheme before assigning it.
+          var target;
+          try {
+            target = new URL(srcInput.value, location.href);
+          } catch (error) {
+            return;
+          }
+          if (target.protocol !== "http:" && target.protocol !== "https:") {
+            return;
+          }
+
           // The real shell URL carries the theme, and shells are expected to read it.
-          shell.src = srcInput.value + "?theme=" + themeSelect.value + "&v=1";
+          target.searchParams.set("theme", themeSelect.value);
+          target.searchParams.set("v", "1");
+          shell.src = target.href;
         }
 
         document.getElementById("reload").addEventListener("click", load);
