@@ -1,0 +1,71 @@
+{
+  "name": "@tago-io/custom-dashboard-react",
+  "version": "0.0.0",
+  "private": true,
+  "description": "React SDK for TagoIO Custom Dashboards",
+  "keywords": [
+    "custom-dashboard",
+    "dashboard",
+    "hooks",
+    "iot",
+    "react",
+    "sql",
+    "tago",
+    "tagoio"
+  ],
+  "homepage": "https://github.com/tago-io/custom-widget#readme",
+  "bugs": "https://github.com/tago-io/custom-widget/issues",
+  "license": "Apache-2.0",
+  "author": "TagoIO Inc.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tago-io/custom-widget.git",
+    "directory": "packages/dashboard-react"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vp test run",
+    "check:types": "tsc --noEmit",
+    "lint": "vp lint src/",
+    "format": "vp fmt src/"
+  },
+  "dependencies": {
+    "@tago-io/custom-dashboard": "workspace:*"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tsup": "8.5.1"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  }
+}
