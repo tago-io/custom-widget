@@ -37,3 +37,6 @@ packages/dashboard-react/dist/
 # Generated uploadable examples (built from the committed sources)
 packages/dashboard/examples/dist/
 packages/dashboard-react/examples/single-file-app/dist/
+
+# Playwright MCP session output (console logs, page snapshots, screenshots)
+.playwright-mcp/
