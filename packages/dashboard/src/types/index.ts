@@ -13,13 +13,23 @@ export type THostErrorCode =
   | "bad_request";
 
 /**
- * Host codes plus the ones the SDK raises locally, so one `switch` covers everything.
+ * Host codes plus the ones the SDK raises locally.
  *
  * `no_response` is deliberately not called `timeout`: the host owns that code for a query
  * that exceeded its execution deadline, and the remedy differs. A `timeout` means narrow the
  * query; a `no_response` means the dashboard never answered at all.
  */
-export type TDashboardErrorCode = THostErrorCode | "no_response" | "aborted" | "no_host" | "internal";
+export type TKnownErrorCode = THostErrorCode | "no_response" | "aborted" | "no_host" | "internal";
+
+/**
+ * What `TagoDashboardError.code` can actually hold at runtime.
+ *
+ * The open tail is not laziness. An unrecognized host code is forwarded verbatim rather than
+ * flattened, so a host newer than this SDK produces a code outside the known set. Autocomplete
+ * still offers every known code, and an exhaustive `switch` can no longer claim a `never`
+ * default it does not have. Narrow with `TKnownErrorCode` when you want that exhaustiveness.
+ */
+export type TDashboardErrorCode = TKnownErrorCode | (string & {});
 
 /** Host-driven body styles. The host currently always sends `{}`. */
 export type TDashboardStyle = Record<string, string | number | null | undefined>;

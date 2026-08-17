@@ -257,7 +257,10 @@ export class DashboardClient {
       return;
     }
     this.styleReceived = true;
-    this.styleValue = style;
+    // Copy, never adopt. One MessageEvent reaches every listener carrying the same `data`
+    // object, so storing the payload itself would hand two clients in this document the very
+    // same object out of `style.get()`, and a mutation through one would show up in the other.
+    this.styleValue = { ...style };
     this.emit(this.styleListeners);
   }
 
@@ -299,9 +302,17 @@ export class DashboardClient {
       return existing;
     }
 
-    const promise = this.dispatch(op, payload, timeoutMs).finally(() => {
-      this.inFlight.delete(key);
-    });
+    const promise: Promise<{ result: unknown; requestID: string }> = this.dispatch(op, payload, timeoutMs).finally(
+      () => {
+        // Retract only our own entry. `stop()` then `start()` then an identical call all land in
+        // one tick under React StrictMode, which registers a fresh promise under this key before
+        // the stopped one settles. Deleting unconditionally would drop the live entry and cost a
+        // second execution, defeating the coalescing this key exists for.
+        if (this.inFlight.get(key) === promise) {
+          this.inFlight.delete(key);
+        }
+      }
+    );
     this.inFlight.set(key, promise);
     return promise;
   }

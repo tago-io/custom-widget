@@ -7,8 +7,32 @@ import {
   readInboundMessage,
   readResponseResult,
 } from "../../src/protocol/messages.js";
+import type { TDashboardErrorCode, TKnownErrorCode } from "../../src/types/index.js";
 
 const META = { op: "sql.run", requestID: "req-1" };
+
+/**
+ * Enforced by `pnpm check`, not at runtime. The README tells authors that an unknown code
+ * reaches them intact and that `TKnownErrorCode` is the narrow one; these assertions are what
+ * keep both halves of that promise true.
+ */
+describe("error code types", () => {
+  it("lets an unrecognized host code inhabit the open type", () => {
+    const forwarded: TDashboardErrorCode = "some_future_code";
+    expect(forwarded).toBe("some_future_code");
+  });
+
+  it("keeps the narrow type closed, so an exhaustive switch stays exhaustive", () => {
+    // @ts-expect-error a code outside the known set must not satisfy the narrow type
+    const rejected: TKnownErrorCode = "some_future_code";
+    expect(rejected).toBe("some_future_code");
+  });
+
+  it("still offers the known codes on the open type", () => {
+    const known: TDashboardErrorCode = "no_response";
+    expect(known).toBe("no_response");
+  });
+});
 
 describe("readInboundMessage", () => {
   it("accepts the three host messages", () => {
@@ -114,10 +138,20 @@ describe("normalizeSqlRunResult", () => {
     expect(result.rows).toEqual([{ a: 1 }]);
   });
 
-  it("filters non-string columns and synthesizes a missing meta", () => {
-    const result = normalizeSqlRunResult({ columns: ["a", 2, null, "b"] }, META);
+  it("filters junk columns and synthesizes a missing meta", () => {
+    const result = normalizeSqlRunResult({ columns: ["a", 2, null, "b", {}, []] }, META);
     expect(result.columns).toEqual(["a", "b"]);
     expect(result.meta).toEqual({ row_count: null, execution_ms: null, served_from_cache: false });
+  });
+
+  it("reads the name off an object-shaped column, so a header row survives a host change", () => {
+    // The execute API returns `{ name, type }` and the host flattens it today. If it ever stops,
+    // the alternative to this is an empty header above fully populated rows.
+    const result = normalizeSqlRunResult(
+      { columns: [{ name: "device", type: "string" }, "raw", { type: "number" }] },
+      META
+    );
+    expect(result.columns).toEqual(["device", "raw"]);
   });
 
   it("nulls non-numeric meta values", () => {

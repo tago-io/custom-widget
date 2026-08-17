@@ -2,7 +2,7 @@
 
 Build TagoIO Custom Dashboards: you upload one HTML file, TagoIO renders it as the whole dashboard canvas, and this SDK is how that page talks to the host.
 
-The host speaks a small request/response `postMessage` protocol. Without an SDK you generate correlation ids, match responses to requests, and handle six error codes by hand — and because the host drops responses in several situations without answering, a naive promise wrapper hangs forever. This package owns that plumbing and nothing else.
+The host speaks a small request/response `postMessage` protocol. Without an SDK you generate correlation ids, match responses to requests, and handle nine error codes by hand, and because the host drops responses in several situations without answering, a naive promise wrapper hangs forever. This package owns that plumbing and nothing else.
 
 ```js
 const queries = await TagoDashboard.sql.list();
@@ -123,21 +123,29 @@ The `<script>` build starts automatically. Opened outside a dashboard, `isEmbedd
 
 ## Errors
 
-Every failure throws a `TagoDashboardError` with a `code`:
+Every failure throws a `TagoDashboardError` with a `code`. The host raises the first group, the SDK raises the second.
 
-| Code          | Meaning                                             |
-| ------------- | --------------------------------------------------- |
-| `not_found`   | The saved query does not exist                      |
-| `forbidden`   | The viewer cannot access that query's resource      |
-| `bad_params`  | **See below — this one is not what it sounds like** |
-| `api_error`   | The query failed to execute                         |
-| `unknown_op`  | This SDK is newer than the dashboard host           |
-| `bad_request` | Malformed query id or parameters                    |
-| `timeout`     | The host never answered (see below)                 |
-| `no_host`     | The page is not running inside a dashboard          |
-| `aborted`     | `stop()` was called while the request was in flight |
+| Code           | Raised by | Meaning                                                   |
+| -------------- | --------- | --------------------------------------------------------- |
+| `not_found`    | Host      | The saved query does not exist                            |
+| `forbidden`    | Host      | The viewer cannot access that query's resource            |
+| `bad_params`   | Host      | **See below. This one is not what it sounds like**        |
+| `plan_limit`   | Host      | The profile's plan does not allow this execution          |
+| `timeout`      | Host      | The query ran past its execution deadline, server side    |
+| `rate_limited` | Host      | Too many executions. Back off and retry                   |
+| `api_error`    | Host      | The query failed to execute                               |
+| `unknown_op`   | Host      | This SDK is newer than the dashboard host                 |
+| `bad_request`  | Host      | Malformed query id or parameters                          |
+| `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts) |
+| `no_host`      | SDK       | The page is not running inside a dashboard                |
+| `aborted`      | SDK       | `stop()` was called while the request was in flight       |
+| `internal`     | SDK       | The SDK could not issue the request                       |
 
-**`bad_params` still covers more than parameters.** A row-limit refusal, a too-wide time window, an inactive query and a genuine bad parameter all arrive here, because the host maps by HTTP status and they are all `400`. The server's message says which. Timeouts, rate limits and plan caps used to land here too; they now have their own codes.
+**`timeout` and `no_response` are different failures, and the remedy is opposite.** A `timeout` is the server saying the query ran too long, so narrow it. A `no_response` is the dashboard never answering, so only the SDK's own backstop bounded the wait. Branch on the wrong one and you tell someone to fix a query that was fine.
+
+A code you do not recognize is forwarded verbatim rather than flattened, so a host newer than your copy of the SDK still reports what it meant. That is why `TDashboardErrorCode` is open ended. Narrow to `TKnownErrorCode` when you want an exhaustive `switch`.
+
+**`bad_params` still covers more than parameters.** A row-limit refusal, a too-wide time window, an inactive query and a genuine bad parameter all arrive here, because the host maps by HTTP status and they are all `400`. The server's message says which. Timeouts, rate limits and plan caps used to land here too; they now have the three codes above.
 
 ```js
 try {

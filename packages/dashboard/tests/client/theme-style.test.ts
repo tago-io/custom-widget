@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { setupClient } from "../helpers/host.js";
+import { dispatch, setupClient } from "../helpers/host.js";
 
 let ctx: ReturnType<typeof setupClient> | undefined;
 
@@ -102,6 +102,27 @@ describe("style", () => {
 
       (first.client.style.get() as Record<string, unknown>).injected = "from the first shell";
       expect(second.client.style.get()).toEqual({});
+    } finally {
+      first.client.stop();
+      second.client.stop();
+    }
+  });
+
+  it("still isolates them once a real message has landed", () => {
+    const first = setupClient();
+    const second = setupClient();
+
+    try {
+      // One event, dispatched once on window, delivered to both clients' listeners carrying the
+      // very same `data` object. Adopting the payload instead of copying it aliased the two.
+      dispatch({ type: "dashboard:style", style: { paddingBottom: 96 } });
+
+      expect(first.client.style.get()).toEqual({ paddingBottom: 96 });
+      expect(second.client.style.get()).toEqual({ paddingBottom: 96 });
+      expect(first.client.style.get()).not.toBe(second.client.style.get());
+
+      (first.client.style.get() as Record<string, unknown>).injected = "from the first shell";
+      expect(second.client.style.get()).toEqual({ paddingBottom: 96 });
     } finally {
       first.client.stop();
       second.client.stop();

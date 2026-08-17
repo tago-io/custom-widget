@@ -62,7 +62,8 @@ export function readResponseResult(body: Record<string, unknown>, meta: ErrorMet
   if (body.ok === false) {
     const error = isRecord(body.error) ? body.error : {};
     // An unrecognized code is forwarded verbatim, not coerced, so a newer host is not flattened.
-    const code = typeof error.code === "string" ? (error.code as TDashboardErrorCode) : "api_error";
+    // `TDashboardErrorCode` has an open tail precisely so this needs no cast.
+    const code: TDashboardErrorCode = typeof error.code === "string" ? error.code : "api_error";
     const message = typeof error.message === "string" ? error.message : "The request failed.";
     throw new TagoDashboardError(code, message, meta);
   }
@@ -72,6 +73,21 @@ export function readResponseResult(body: Record<string, unknown>, meta: ErrorMet
 
 function toNullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The execute API returns `{ name, type }` per column and the host flattens it to a string.
+ * Accept both, so a host that stops flattening degrades to named columns rather than to an
+ * empty header row above populated rows.
+ */
+function toColumnName(column: unknown): string[] {
+  if (typeof column === "string") {
+    return [column];
+  }
+  if (isRecord(column) && typeof column.name === "string") {
+    return [column.name];
+  }
+  return [];
 }
 
 /**
@@ -88,9 +104,7 @@ export function normalizeSqlRunResult<TRow extends TSqlRow = TSqlRow>(
 
   const rawMeta = isRecord(raw.meta) ? raw.meta : {};
   return {
-    columns: Array.isArray(raw.columns)
-      ? raw.columns.filter((column): column is string => typeof column === "string")
-      : [],
+    columns: Array.isArray(raw.columns) ? raw.columns.flatMap(toColumnName) : [],
     // A null inside `rows` breaks Object.keys in every consumer, and the host does not filter.
     rows: Array.isArray(raw.rows) ? (raw.rows.filter(isRecord) as TRow[]) : [],
     meta: {

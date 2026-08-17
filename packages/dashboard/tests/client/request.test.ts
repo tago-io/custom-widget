@@ -202,4 +202,24 @@ describe("in-flight coalescing", () => {
     ctx.respondOk({ queries: [] });
     await second;
   });
+
+  it("keeps the live key when a run stopped in the same tick settles afterwards", async () => {
+    ctx = setupClient();
+    void ctx.client.sql.list().catch(() => undefined);
+    expect(ctx.requests()).toHaveLength(1);
+
+    // stop() rejects the pending entry, so that run's release is now a queued microtask.
+    ctx.client.stop();
+    // Same tick, which is what StrictMode does: restart and re-issue under the same key.
+    ctx.client.start();
+    void ctx.client.sql.list().catch(() => undefined);
+    expect(ctx.requests()).toHaveLength(2);
+
+    // Let the stopped run release. Retracting unconditionally would drop the live entry here.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    void ctx.client.sql.list().catch(() => undefined);
+    expect(ctx.requests()).toHaveLength(2);
+  });
 });
