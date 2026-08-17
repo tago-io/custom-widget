@@ -45,8 +45,8 @@ function FilteredReadings() {
 
       {isLoading && <p>Running…</p>}
 
-      {/* `bad_params` also covers timeouts, rate limits and plan limits, so show the
-          server's message rather than guessing what went wrong. */}
+      {/* `bad_params` still covers several 400s, so show the server's message rather than
+          guessing which one it was. */}
       {error && <p style={{ color: "#dc2626" }}>{error.message}</p>}
 
       {data && (

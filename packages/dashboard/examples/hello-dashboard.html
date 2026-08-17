@@ -118,8 +118,8 @@
       TagoDashboard.theme.subscribe(applyTheme);
 
       function showError(error) {
-        // `bad_params` covers timeouts, rate limits and plan limits too, so the server's own
-        // message is the only reliable detail. textContent, never innerHTML: it is API text.
+        // `bad_params` still covers several 400s, so for that one the server's own message is
+        // the only reliable detail. textContent, never innerHTML: it is API text.
         var hint =
           error.code === "not_found"
             ? "That saved query no longer exists."
