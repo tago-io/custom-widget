@@ -92,6 +92,21 @@ describe("style", () => {
     expect(listener).toHaveBeenCalledTimes(2);
     expect(ctx.client.style.get()).toEqual({ paddingBottom: 96 });
   });
+
+  it("gives each client its own object, so one shell cannot mutate another's", () => {
+    const first = setupClient();
+    const second = setupClient();
+
+    try {
+      expect(first.client.style.get()).not.toBe(second.client.style.get());
+
+      (first.client.style.get() as Record<string, unknown>).injected = "from the first shell";
+      expect(second.client.style.get()).toEqual({});
+    } finally {
+      first.client.stop();
+      second.client.stop();
+    }
+  });
 });
 
 describe("subscriber isolation", () => {

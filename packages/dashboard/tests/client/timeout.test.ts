@@ -104,9 +104,10 @@ describe("timer hygiene", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("ignores a late answer that arrives after the timeout", async () => {
+  it("ignores a late answer that arrives after the timeout, and says which id it was", async () => {
     ctx = setupClient({ timeoutMs: 1_000 });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => undefined);
 
     const promise = ctx.client.sql.list();
     const id = ctx.lastRequestID();
@@ -120,5 +121,20 @@ describe("timer hygiene", () => {
 
     expect(ctx.client.pendingCount).toBe(0);
     expect(errorSpy).not.toHaveBeenCalled();
+    // Naming the id is the whole point: the alternative reading is a query that did nothing.
+    expect(debugSpy).toHaveBeenCalledTimes(1);
+    expect(debugSpy.mock.calls[0][0]).toContain(id as string);
+  });
+
+  it("stays silent for an id it never issued, so another client in the page is not noise", async () => {
+    ctx = setupClient({ timeoutMs: 1_000 });
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    ctx.respondOk({ queries: [] }, "some-other-clients-id");
+    await Promise.resolve();
+
+    expect(debugSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

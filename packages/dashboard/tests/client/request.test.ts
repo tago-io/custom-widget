@@ -79,21 +79,36 @@ describe("sql.run", () => {
 });
 
 describe("responses", () => {
-  it.each(["not_found", "forbidden", "bad_params", "api_error", "unknown_op", "bad_request"])(
-    "surfaces the %s code with the host message verbatim",
-    async (code) => {
-      ctx = setupClient();
-      const promise = ctx.client.sql.list();
-      ctx.respondError(code, `raw message for ${code}`);
+  it.each([
+    "not_found",
+    "forbidden",
+    "bad_params",
+    "plan_limit",
+    "timeout",
+    "rate_limited",
+    "api_error",
+    "unknown_op",
+    "bad_request",
+  ])("surfaces the %s code with the host message verbatim", async (code) => {
+    ctx = setupClient();
+    const promise = ctx.client.sql.list();
+    ctx.respondError(code, `raw message for ${code}`);
 
-      await expect(promise).rejects.toMatchObject({
-        name: "TagoDashboardError",
-        code,
-        message: `raw message for ${code}`,
-        op: "sql.list",
-      });
-    }
-  );
+    await expect(promise).rejects.toMatchObject({
+      name: "TagoDashboardError",
+      code,
+      message: `raw message for ${code}`,
+      op: "sql.list",
+    });
+  });
+
+  it("forwards a host code it has never heard of instead of flattening it", async () => {
+    ctx = setupClient();
+    const promise = ctx.client.sql.list();
+    ctx.respondError("some_future_code", "from a newer host");
+
+    await expect(promise).rejects.toMatchObject({ code: "some_future_code", message: "from a newer host" });
+  });
 
   it("ignores an unknown id in silence and leaves the request pending", async () => {
     ctx = setupClient();

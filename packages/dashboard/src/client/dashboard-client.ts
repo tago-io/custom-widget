@@ -31,8 +31,6 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  */
 const READY_RETRY_DELAYS_MS = [100, 300, 700, 1500];
 
-const EMPTY_STYLE: TDashboardStyle = {};
-
 function shallowEqual(left: TDashboardStyle, right: TDashboardStyle): boolean {
   const leftKeys = Object.keys(left);
   if (leftKeys.length !== Object.keys(right).length) {
@@ -65,7 +63,9 @@ export class DashboardClient {
 
   private started = false;
   private themeValue: TDashboardTheme;
-  private styleValue: TDashboardStyle = EMPTY_STYLE;
+  // Per instance, not a shared module constant: `style.get()` hands this object to the author,
+  // and a shared one would let a mutation in one shell reach every client in the document.
+  private styleValue: TDashboardStyle = {};
   private styleReceived = false;
   private learnedOrigin: string | null = null;
   private readyTimers: ReturnType<typeof setTimeout>[] = [];
@@ -222,7 +222,14 @@ export class DashboardClient {
   private settleResponse(id: string, body: Record<string, unknown>): void {
     const entry = this.pending.take(id);
     if (!entry) {
-      // Late, duplicated, addressed to another client, or forged. All of them are noise.
+      if (this.pending.wasExpired(id)) {
+        // This one we can name: the request timed out and the answer turned up anyway. Worth
+        // saying so, because the alternative reading is "my query silently did nothing".
+        // `debug` rather than `warn`, since it is diagnostic and browsers hide it by default.
+        console.debug(`[TagoIO Dashboard] Ignoring a late response for ${id}, which already timed out.`);
+        return;
+      }
+      // Duplicated, addressed to another client in this document, or forged. All noise.
       return;
     }
     if (entry.timer) {

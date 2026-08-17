@@ -155,7 +155,9 @@ try {
 
 TagoSQL enforces its own execution deadline and answers with an error, so a slow _query_ always comes back. What has no timeout is the _transport_: if the dashboard is reloaded, navigated away from, or remounted while a request is in flight, the host discards the answer and never tells you.
 
-So each request carries a generous backstop (60s, configurable per client or per call, `0` to disable) that rejects with `no_response`. It exists to catch a wedged host, not to bound your query — a query that genuinely runs too long comes back from the server as `timeout` instead. A `no_response` cancels nothing: the query keeps running server-side, and a late answer is ignored.
+So each request carries a generous backstop (60s, configurable per client or per call, `0` to disable) that rejects with `no_response`. It exists to catch a wedged host, not to bound your query — a query that genuinely runs too long comes back from the server as `timeout` instead.
+
+A `no_response` cancels nothing: the query keeps running server-side. If its answer turns up afterwards the SDK ignores it, and logs one `console.debug` naming the request, so a late reply is distinguishable from a query that quietly did nothing.
 
 ## Local development
 
