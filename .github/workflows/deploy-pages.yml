@@ -43,11 +43,17 @@ jobs:
           cp packages/js/examples/*.html           _site/examples/
           # Guarded: a missing dashboard artifact must not fail the whole release job.
           test -f packages/dashboard/dist/custom-dashboard.js && cp packages/dashboard/dist/custom-dashboard.js _site/dist/ || true
-          test -f packages/dashboard/dist/custom-dashboard.min.js && cp packages/dashboard/dist/custom-dashboard.min.js _site/dist/ || true
-          # Flat alongside the widget examples, not in a subdirectory: each dashboard example
-          # loads the bundle with a relative ../dist/ path, which only resolves to _site/dist/
-          # from this depth. No filename collides with packages/js/examples.
-          ls packages/dashboard/examples/*.html >/dev/null 2>&1 && cp packages/dashboard/examples/*.html _site/examples/ || true
+          # The examples ride on the minified bundle, so publish them only if it actually landed.
+          # Copying them regardless would publish pages whose relative ../dist/ script src 404s,
+          # and the guards above would keep the job green while it happened.
+          if [ -f packages/dashboard/dist/custom-dashboard.min.js ]; then
+            cp packages/dashboard/dist/custom-dashboard.min.js _site/dist/
+            # Flat alongside the widget examples, not in a subdirectory: ../dist/ only resolves
+            # to _site/dist/ from this depth. No filename collides with packages/js/examples.
+            cp packages/dashboard/examples/*.html _site/examples/
+          else
+            echo "::warning::dashboard bundle missing; skipped publishing the dashboard examples"
+          fi
 
       - uses: actions/upload-pages-artifact@v3
 

@@ -123,29 +123,31 @@ The `<script>` build starts automatically. Opened outside a dashboard, `isEmbedd
 
 ## Errors
 
-Every failure throws a `TagoDashboardError` with a `code`. The host raises the first group, the SDK raises the second.
+Every failure throws a `TagoDashboardError` with a `code`. The `Raised by` column is not decoration: two codes come from either side, and knowing which side you are looking at changes what you do about it.
 
-| Code           | Raised by | Meaning                                                   |
-| -------------- | --------- | --------------------------------------------------------- |
-| `not_found`    | Host      | The saved query does not exist                            |
-| `forbidden`    | Host      | The viewer cannot access that query's resource            |
-| `bad_params`   | Host      | **See below. This one is not what it sounds like**        |
-| `plan_limit`   | Host      | The profile's plan does not allow this execution          |
-| `timeout`      | Host      | The query ran past its execution deadline, server side    |
-| `rate_limited` | Host      | Too many executions. Back off and retry                   |
-| `api_error`    | Host      | The query failed to execute                               |
-| `unknown_op`   | Host      | This SDK is newer than the dashboard host                 |
-| `bad_request`  | Host      | Malformed query id or parameters                          |
-| `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts) |
-| `no_host`      | SDK       | The page is not running inside a dashboard                |
-| `aborted`      | SDK       | `stop()` was called while the request was in flight       |
-| `internal`     | SDK       | The SDK could not issue the request                       |
+| Code           | Raised by | Meaning                                                                                                                  |
+| -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `not_found`    | Host      | The saved query does not exist                                                                                           |
+| `forbidden`    | Host      | The viewer cannot access that query's resource                                                                           |
+| `bad_params`   | Host      | **See below. This one is not what it sounds like**                                                                       |
+| `plan_limit`   | Host      | The profile's plan does not allow this execution                                                                         |
+| `timeout`      | Host      | The query ran past its execution deadline, server side                                                                   |
+| `rate_limited` | Host      | Too many executions. Back off and retry                                                                                  |
+| `unknown_op`   | Host      | This SDK is newer than the dashboard host                                                                                |
+| `api_error`    | Both      | Host: the query failed to execute. SDK: the reply was malformed                                                          |
+| `bad_request`  | Both      | SDK: the query id failed its local format check, and nothing was sent. Host: some other part of the payload was rejected |
+| `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts)                                                                |
+| `no_host`      | SDK       | The page is not running inside a dashboard                                                                               |
+| `aborted`      | SDK       | `stop()` was called while the request was in flight                                                                      |
+| `internal`     | SDK       | The SDK could not issue the request                                                                                      |
+
+In practice `bad_request` reaches you from the SDK, not the host: the query id is checked before anything is posted, so an invalid one costs no round trip. And an `api_error` whose message mentions a malformed reply is the SDK telling you the host answered with something it could not read, which is a different problem from a query that failed.
 
 **`timeout` and `no_response` are different failures, and the remedy is opposite.** A `timeout` is the server saying the query ran too long, so narrow it. A `no_response` is the dashboard never answering, so only the SDK's own backstop bounded the wait. Branch on the wrong one and you tell someone to fix a query that was fine.
 
 A code you do not recognize is forwarded verbatim rather than flattened, so a host newer than your copy of the SDK still reports what it meant. That is why `TDashboardErrorCode` is open ended. Narrow to `TKnownErrorCode` when you want an exhaustive `switch`.
 
-**`bad_params` still covers more than parameters.** A row-limit refusal, a too-wide time window, an inactive query and a genuine bad parameter all arrive here, because the host maps by HTTP status and they are all `400`. The server's message says which. Timeouts, rate limits and plan caps used to land here too; they now have the three codes above.
+**`bad_params` still covers more than parameters.** A row-limit refusal, a too-wide time window, an inactive query and a genuine bad parameter all arrive here, because the host peels off only the statuses it recognizes and folds every other `4xx` into this one code. A `422` lands here as readily as a `400`. The server's message says which. Timeouts, rate limits and plan caps used to land here too; they now have the three codes above.
 
 ```js
 try {

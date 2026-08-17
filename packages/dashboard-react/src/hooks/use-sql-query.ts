@@ -11,7 +11,11 @@ import { useDashboardClient } from "./use-dashboard-client.js";
 import { toDashboardError } from "./use-sql-queries.js";
 
 export type TUseSqlQueryReturn<TRow extends TSqlRow = TSqlRow> = {
-  /** Kept across a refetch, so the table does not blink on every refresh. */
+  /**
+   * Kept across a refetch of the same query, so the table does not blink on every refresh.
+   * Cleared as soon as the query identity changes, because rows from the previous query
+   * rendered under the new one's identity is worse than an empty table.
+   */
   data: TSqlRunResult<TRow> | null;
   isLoading: boolean;
   error: TagoDashboardError | null;
@@ -40,6 +44,21 @@ export function useSqlQuery<TRow extends TSqlRow = TSqlRow>(
   paramsRef.current = params;
   const timeoutMs = options?.timeoutMs;
   const runID = useRef(0);
+
+  // Drop a result the moment it stops describing what the caller is asking for. Retention is
+  // for a refetch of the same query; carrying it across an identity change let a failed switch
+  // render the previous query's rows under the new query's name.
+  const identity = `${queryID ?? ""}|${paramsKey}`;
+  const shownFor = useRef(identity);
+  if (shownFor.current !== identity) {
+    shownFor.current = identity;
+    if (data !== null) {
+      setData(null);
+    }
+    if (error !== null) {
+      setError(null);
+    }
+  }
 
   const refetch = useCallback(async () => {
     const current = (runID.current += 1);

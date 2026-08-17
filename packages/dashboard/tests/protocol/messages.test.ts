@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
+// Imported from the package entry, not from src/types: a type the entry forgets to re-export
+// is unusable by every consumer, and a deep import hides exactly that.
+import type { TDashboardErrorCode, TKnownErrorCode } from "../../src/index.js";
 import { getInitialTheme } from "../../src/page/location.js";
 import {
   normalizeSqlListResult,
@@ -7,7 +10,6 @@ import {
   readInboundMessage,
   readResponseResult,
 } from "../../src/protocol/messages.js";
-import type { TDashboardErrorCode, TKnownErrorCode } from "../../src/types/index.js";
 
 const META = { op: "sql.run", requestID: "req-1" };
 

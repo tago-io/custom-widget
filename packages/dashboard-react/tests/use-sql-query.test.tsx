@@ -1,10 +1,11 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useSqlQuery } from "../src/hooks/use-sql-query.js";
 import { createHarness, RUN_RESULT } from "./helpers/harness.js";
 
 const VALID_ID = "6fdbb0f233ea47fa36d331fa";
+const OTHER_ID = "aaaaaaaaaaaaaaaaaaaaaaaa";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -147,5 +148,49 @@ describe("useSqlQuery", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("query identity changes", () => {
+  it("drops the previous query's rows instead of showing them under the new id", async () => {
+    const harness = createHarness();
+    const { result, rerender } = renderHook(({ id }: { id: string }) => useSqlQuery(id), {
+      wrapper: harness.wrapper,
+      initialProps: { id: VALID_ID },
+    });
+
+    await waitFor(() => expect(harness.requests()).toHaveLength(1));
+    harness.respondOk({ columns: ["name"], rows: [{ name: "belongs-to-the-first-query" }], meta: {} });
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+
+    rerender({ id: OTHER_ID });
+    // The switch itself clears it, before any answer arrives.
+    expect(result.current.data).toBeNull();
+
+    await waitFor(() => expect(harness.requests()).toHaveLength(2));
+    harness.respondError("forbidden", "not yours");
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    // And a failure on the new query must not resurrect the old rows.
+    expect(result.current.data).toBeNull();
+  });
+
+  it("still keeps data across a refetch of the same query", async () => {
+    const harness = createHarness();
+    const { result } = renderHook(() => useSqlQuery(VALID_ID), { wrapper: harness.wrapper });
+
+    await waitFor(() => expect(harness.requests()).toHaveLength(1));
+    harness.respondOk({ columns: ["name"], rows: [{ name: "kept" }], meta: {} });
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+
+    await act(async () => {
+      void result.current.refetch();
+    });
+    // Mid-refetch the table must not blink, which is the whole point of retaining it.
+    expect(result.current.data?.rows).toEqual([{ name: "kept" }]);
+
+    await waitFor(() => expect(harness.requests()).toHaveLength(2));
+    harness.respondOk({ columns: ["name"], rows: [{ name: "refreshed" }], meta: {} });
+    await waitFor(() => expect(result.current.data?.rows).toEqual([{ name: "refreshed" }]));
   });
 });

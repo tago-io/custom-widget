@@ -203,6 +203,23 @@ describe("in-flight coalescing", () => {
     await second;
   });
 
+  it("releases a settled key while an unrelated request is still in flight", async () => {
+    ctx = setupClient();
+    const list = ctx.client.sql.list();
+    void ctx.client.sql.run(VALID_ID).catch(() => undefined);
+    expect(ctx.requests()).toHaveLength(2);
+
+    // Answer only sql.list. The still-pending sql.run must not keep sql.list's key parked:
+    // a guard that asks "is anything pending" instead of "is this entry mine" would.
+    ctx.respondOk({ queries: [] }, ctx.requests()[0].id as string);
+    await expect(list).resolves.toEqual([]);
+
+    const again = ctx.client.sql.list();
+    expect(ctx.requests()).toHaveLength(3);
+    ctx.respondOk({ queries: [] }, ctx.requests()[2].id as string);
+    await expect(again).resolves.toEqual([]);
+  });
+
   it("keeps the live key when a run stopped in the same tick settles afterwards", async () => {
     ctx = setupClient();
     void ctx.client.sql.list().catch(() => undefined);
@@ -221,5 +238,16 @@ describe("in-flight coalescing", () => {
 
     void ctx.client.sql.list().catch(() => undefined);
     expect(ctx.requests()).toHaveLength(2);
+
+    // Not enough to stop above: a key that was never released also posts no third request.
+    // Settle the survivor, and the key must then be free for a genuinely new request.
+    ctx.respondOk({ queries: [] }, ctx.lastRequestID());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const fresh = ctx.client.sql.list();
+    expect(ctx.requests()).toHaveLength(3);
+    ctx.respondOk({ queries: [] });
+    await expect(fresh).resolves.toEqual([]);
   });
 });

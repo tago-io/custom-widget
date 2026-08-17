@@ -10,8 +10,29 @@ const HOST_ORIGIN = "https://admin.tago.io";
  * jsdom makes `window.parent === window`, so a default client would think it has no host.
  * Injecting a stand-in host window is the same seam a dev harness uses.
  */
-export function createHarness() {
-  const postMessage = vi.fn();
+/**
+ * Only the slice of the spy these tests use. Annotated explicitly because inferring it would
+ * name a vitest internal path that this package does not depend on, which is not portable.
+ */
+type TPostMessageSpy = {
+  (message: unknown, targetOrigin?: string): void;
+  mock: { calls: [unknown, string?][] };
+};
+
+type TCreateHarness = {
+  client: DashboardClient;
+  wrapper: ({ children }: { children: ReactNode }) => ReactNode;
+  postMessage: TPostMessageSpy;
+  requests: () => Record<string, unknown>[];
+  readyCount: () => number;
+  lastRequestID: () => string | undefined;
+  fromHost: (data: unknown) => void;
+  respondOk: (result: unknown, id?: string) => void;
+  respondError: (code: string, message: string, id?: string) => void;
+};
+
+export function createHarness(): TCreateHarness {
+  const postMessage = vi.fn() as unknown as TPostMessageSpy;
   const hostWindow = { postMessage } as unknown as Window;
   const client = new DashboardClient({ targetWindow: hostWindow });
 

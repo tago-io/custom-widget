@@ -11,6 +11,7 @@ export type {
   TDashboardTheme,
   THostErrorCode,
   TInboundMessage,
+  TKnownErrorCode,
   TOutboundMessage,
   TQueryParam,
   TReadableStore,
