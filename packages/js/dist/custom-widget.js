@@ -116,8 +116,25 @@
     if (combined.length <= maxRecords) return combined;
     return combined.slice(combined.length - maxRecords);
   }
+  function valuesEqual(a, b) {
+    if (a === b) return true;
+    if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      return a.every((item, index) => valuesEqual(item, b[index]));
+    }
+    const objectA = a;
+    const objectB = b;
+    for (const key of Object.keys(objectA)) {
+      if (!valuesEqual(objectA[key], objectB[key])) return false;
+    }
+    for (const key of Object.keys(objectB)) {
+      if (!Object.hasOwn(objectA, key) && objectB[key] !== void 0) return false;
+    }
+    return true;
+  }
   function recordsEqual(a, b) {
-    return a.id === b.id && a.value === b.value && a.time === b.time && a.variable === b.variable;
+    return a.id === b.id && a.value === b.value && a.time === b.time && a.variable === b.variable && a.group === b.group && a.device === b.device && a.unit === b.unit && a.created_at === b.created_at && a.origin === b.origin && a.bucket === b.bucket && valuesEqual(a.metadata, b.metadata) && valuesEqual(a.location, b.location);
   }
   function mergeStrategy(existing, incoming) {
     if (existing.length === 0) return incoming;
