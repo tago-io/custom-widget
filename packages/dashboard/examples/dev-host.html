@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dev host — develop a shell without uploading</title>
+    <style>
+      body {
+        margin: 0;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        height: 100vh;
+        font:
+          13px/1.5 system-ui,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid #e4e4e7;
+      }
+      input {
+        flex: 1;
+        font: inherit;
+        padding: 4px 8px;
+      }
+      iframe {
+        border: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <label for="src">Shell</label>
+      <input id="src" value="./hello-dashboard.html" />
+      <label for="theme">Theme</label>
+      <select id="theme">
+        <option value="light">light</option>
+        <option value="dark">dark</option>
+      </select>
+      <button id="reload">Reload</button>
+    </header>
+
+    <iframe id="shell"></iframe>
+
+    <script>
+      // Guard against a double install under HMR, which would answer every request twice.
+      if (!window.__tagoDevHostInstalled) {
+        window.__tagoDevHostInstalled = true;
+
+        var QUERIES = [
+          { id: "aaaaaaaaaaaaaaaaaaaaaaaa", name: "devices (mock)" },
+          { id: "bbbbbbbbbbbbbbbbbbbbbbbb", name: "readings (mock)" },
+        ];
+
+        var shell = document.getElementById("shell");
+        var themeSelect = document.getElementById("theme");
+        var srcInput = document.getElementById("src");
+
+        function reply(message) {
+          shell.contentWindow.postMessage(message, "*");
+        }
+
+        function mockRows(queryID, params) {
+          return {
+            columns: ["id", "name", "params_seen"],
+            rows: [
+              { id: queryID, name: "mock row 1", params_seen: JSON.stringify(params ?? []) },
+              { id: queryID, name: "mock row 2", params_seen: JSON.stringify(params ?? []) },
+            ],
+            row_count: 2,
+            execution_ms: 7,
+            served_from_cache: false,
+          };
+        }
+
+        window.addEventListener("message", function (event) {
+          var data = event.data;
+          if (!data || typeof data !== "object") return;
+
+          if (data.type === "dashboard:ready") {
+            reply({ type: "dashboard:theme", theme: themeSelect.value });
+            reply({ type: "dashboard:style", style: {} });
+            return;
+          }
+
+          if (data.type !== "dashboard:request") return;
+
+          // The real host drops a request with no id and never answers. Mirror that, or you
+          // will not notice the bug until you upload.
+          if (typeof data.id !== "string" || data.id.length === 0) return;
+
+          if (data.op === "sql.list") {
+            reply({ type: "dashboard:response", id: data.id, ok: true, result: { queries: QUERIES } });
+            return;
+          }
+
+          if (data.op === "sql.run") {
+            var payload = data.payload ?? {};
+            var known = QUERIES.some(function (query) {
+              return query.id === payload.query_id;
+            });
+
+            reply(
+              known
+                ? {
+                    type: "dashboard:response",
+                    id: data.id,
+                    ok: true,
+                    result: mockRows(payload.query_id, payload.params),
+                  }
+                : {
+                    type: "dashboard:response",
+                    id: data.id,
+                    ok: false,
+                    error: { code: "not_found", message: "SQL query can't be found" },
+                  }
+            );
+            return;
+          }
+
+          reply({
+            type: "dashboard:response",
+            id: data.id,
+            ok: false,
+            error: { code: "unknown_op", message: "Unknown op: " + data.op },
+          });
+        });
+
+        function load() {
+          // Anything that reaches an iframe src is a javascript: sink, so resolve the typed
+          // path and refuse a non-http(s) scheme before assigning it.
+          var target;
+          try {
+            target = new URL(srcInput.value, location.href);
+          } catch (error) {
+            return;
+          }
+          if (target.protocol !== "http:" && target.protocol !== "https:") {
+            return;
+          }
+
+          // The real shell URL carries the theme, and shells are expected to read it.
+          target.searchParams.set("theme", themeSelect.value);
+          target.searchParams.set("v", "1");
+          shell.src = target.href;
+        }
+
+        document.getElementById("reload").addEventListener("click", load);
+        themeSelect.addEventListener("change", function () {
+          reply({ type: "dashboard:theme", theme: themeSelect.value });
+        });
+
+        load();
+      }
+    </script>
+  </body>
+</html>

@@ -263,3 +263,40 @@ describe("runAnalysis", () => {
     expect(mockPostMessage).toHaveBeenCalledWith({ method: "run-analysis", scope }, "*");
   });
 });
+
+describe("onRealtime fires for an edit that only touches metadata", () => {
+  const dock = (metadata: Record<string, unknown>): TRealtimeData[] => [
+    {
+      data: { variable: ["dock_state"], origin: "dev1" },
+      result: [{ id: "r1", variable: "dock_state", value: "dock-42", time: "2024-01-01T00:00:00Z", metadata }],
+    } as unknown as TRealtimeData,
+  ];
+
+  it("fires again when only metadata changed", () => {
+    // The callback is gated on the realtimeData array identity, so a merge that judged the
+    // edit identical did not just skip a render: it never called the widget author's code.
+    const callback = vi.fn();
+    onRealtime(callback);
+
+    simulateMessage({ realtime: dock({ label: "free" }) });
+    const afterFirst = callback.mock.calls.length;
+
+    simulateMessage({ realtime: dock({ label: "occupied" }) });
+
+    expect(callback.mock.calls.length).toBe(afterFirst + 1);
+    const delivered = callback.mock.calls[callback.mock.calls.length - 1][0] as TRealtimeData[];
+    expect((delivered[0].result as Array<{ metadata?: { label?: string } }>)[0].metadata?.label).toBe("occupied");
+  });
+
+  it("stays quiet when an identical tick arrives", () => {
+    const callback = vi.fn();
+    onRealtime(callback);
+
+    simulateMessage({ realtime: dock({ label: "free" }) });
+    const afterFirst = callback.mock.calls.length;
+
+    simulateMessage({ realtime: dock({ label: "free" }) });
+
+    expect(callback.mock.calls.length).toBe(afterFirst);
+  });
+});

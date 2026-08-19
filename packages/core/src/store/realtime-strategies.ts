@@ -23,8 +23,57 @@ export function appendStrategy(
   return combined.slice(combined.length - maxRecords);
 }
 
+/**
+ * Deep value comparison for the open-ended record fields, metadata and location.
+ *
+ * Realtime payloads cross postMessage, which structured-clones them, so every tick hands over
+ * a fresh object graph and a reference check would report a change every time. A key that is
+ * absent and a key set to undefined count as equal: the platform sends JSON, which carries
+ * neither, and the parent's own edit path emits `old_value: undefined` for an empty cell.
+ */
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, index) => valuesEqual(item, b[index]));
+  }
+
+  const objectA = a as Record<string, unknown>;
+  const objectB = b as Record<string, unknown>;
+
+  for (const key of Object.keys(objectA)) {
+    if (!valuesEqual(objectA[key], objectB[key])) return false;
+  }
+  // Comparing key counts instead would call an explicit undefined different from an absent key.
+  for (const key of Object.keys(objectB)) {
+    if (!Object.hasOwn(objectA, key) && objectB[key] !== undefined) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Compares every field TDataRecord declares. A field left out here is a field whose edits a
+ * widget never sees, which is why `origin` and `bucket` are included despite being deprecated.
+ * Scalars come first: a new reading differs there and never reaches the deep compare.
+ */
 function recordsEqual(a: TDataRecord, b: TDataRecord): boolean {
-  return a.id === b.id && a.value === b.value && a.time === b.time && a.variable === b.variable;
+  return (
+    a.id === b.id &&
+    a.value === b.value &&
+    a.time === b.time &&
+    a.variable === b.variable &&
+    a.group === b.group &&
+    a.device === b.device &&
+    a.unit === b.unit &&
+    a.created_at === b.created_at &&
+    a.origin === b.origin &&
+    a.bucket === b.bucket &&
+    valuesEqual(a.metadata, b.metadata) &&
+    valuesEqual(a.location, b.location)
+  );
 }
 
 /**

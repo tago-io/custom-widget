@@ -1,0 +1,60 @@
+{
+  "name": "@tago-io/custom-dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "description": "TagoIO Toolkit to build your own Custom Dashboards",
+  "keywords": [
+    "custom-dashboard",
+    "dashboard",
+    "iot",
+    "sql",
+    "tago",
+    "tagoio"
+  ],
+  "homepage": "https://github.com/tago-io/custom-widget#readme",
+  "bugs": "https://github.com/tago-io/custom-widget/issues",
+  "license": "Apache-2.0",
+  "author": "TagoIO Inc.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tago-io/custom-widget.git",
+    "directory": "packages/dashboard"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "./dist/custom-dashboard.js",
+    "./dist/custom-dashboard.min.js"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vp test run",
+    "check:types": "tsc --noEmit",
+    "lint": "vp lint src/",
+    "format": "vp fmt src/"
+  },
+  "devDependencies": {
+    "tsup": "8.5.1"
+  }
+}
