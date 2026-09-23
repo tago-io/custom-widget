@@ -38,12 +38,13 @@
   <body>
     <h1>Scan a QR code or a barcode</h1>
     <p>
-      Both buttons open the same scanner in the TagoIO mobile app. The reply carries back whichever method you asked
+      Both buttons open the same scanner in the TagoRUN mobile app. The reply carries back whichever method you asked
       for.
     </p>
 
     <button id="scan-barcode" type="button">Scan barcode</button>
     <button id="scan-qrcode" type="button">Scan QR code</button>
+    <button id="stop" type="button" style="display: none">Stop waiting</button>
 
     <p class="sent" id="sent"></p>
     <p class="status" id="status">Pick one to start.</p>
@@ -54,40 +55,43 @@
     <script>
       /**
        * Scan Code Example
-       * Demonstrates asking the TagoIO mobile app for a QR code or barcode scan
+       * Demonstrates asking the TagoRUN mobile app for a QR code or barcode scan
        */
 
       // The scanner is not part of the SDK, so the request and the reply are plain
       // postMessage. The SDK's own listener ignores these, so the two coexist.
       let pendingMethod = null;
-      let timeoutId = null;
+      let hintTimeoutId = null;
 
       function setStatus(text) {
         document.getElementById("status").textContent = text;
       }
 
-      function requestScan(method) {
+      // The reply carries no `key`, so two requests' replies cannot be told apart.
+      // Keep exactly one request in flight by locking the buttons until it ends.
+      function setPending(method) {
         pendingMethod = method;
+        window.clearTimeout(hintTimeoutId);
+        document.getElementById("scan-barcode").disabled = method !== null;
+        document.getElementById("scan-qrcode").disabled = method !== null;
+        document.getElementById("stop").style.display = method === null ? "none" : "inline-block";
+      }
+
+      function requestScan(method) {
+        setPending(method);
         document.getElementById("sent").textContent = 'sent { method: "' + method + '" }';
         setStatus("Waiting for the scanner...");
 
-        window.clearTimeout(timeoutId);
-        // The platform drops the request in silence outside the mobile app, so nothing
-        // ever answers here. Say so rather than waiting forever.
-        timeoutId = window.setTimeout(function () {
-          if (pendingMethod) {
-            pendingMethod = null;
-            setStatus(
-              "No answer. The scanner only opens inside the TagoIO mobile app; anywhere else the request is ignored."
-            );
-          }
+        // Inside the app the reply only comes once the user has scanned, which can take a
+        // while. Outside the app it never comes, because the platform drops the request in
+        // silence. The page cannot tell the two apart, so this is a hint, not a verdict.
+        hintTimeoutId = window.setTimeout(function () {
+          setStatus("Still waiting. Outside the TagoRUN mobile app, nothing ever answers.");
         }, 5000);
 
         window.parent.postMessage({ method: method }, "*");
       }
 
-      // The reply echoes the method that was asked for, and carries the decoded string
-      // in `data`. It has no `key`, so keep one request in flight at a time.
       window.addEventListener("message", function (event) {
         // Opened outside a dashboard, `window.parent` is this same window, so the request
         // above arrives here too. Inside a dashboard the host is a different window.
@@ -95,13 +99,18 @@
           return;
         }
 
+        // The reply echoes the method that was asked for and carries the decoded string
+        // in `data`.
         const message = event.data;
         if (!message || (message.method !== "barcode" && message.method !== "qrcode")) {
           return;
         }
 
-        window.clearTimeout(timeoutId);
-        pendingMethod = null;
+        // A reply after "Stop waiting" belongs to a request we already gave up on.
+        if (pendingMethod === null) {
+          return;
+        }
+        setPending(null);
 
         const value = message.data;
         if (typeof value !== "string" || value === "") {
@@ -119,6 +128,13 @@
 
       document.getElementById("scan-qrcode").addEventListener("click", function () {
         requestScan("qrcode");
+      });
+
+      // The platform documents no reply for a scan the user cancels, so the page needs
+      // its own way out. Any reply that arrives after this is ignored.
+      document.getElementById("stop").addEventListener("click", function () {
+        setPending(null);
+        setStatus("Stopped waiting. A reply that arrives now is ignored.");
       });
 
       window.TagoIO.onError(function (error) {
