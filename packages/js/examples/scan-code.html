@@ -86,7 +86,7 @@
         // while. Outside the app it never comes, because the platform drops the request in
         // silence. The page cannot tell the two apart, so this is a hint, not a verdict.
         hintTimeoutId = window.setTimeout(function () {
-          setStatus("Still waiting. Outside the TagoRUN mobile app, nothing ever answers.");
+          setStatus("Still waiting. Outside the mobile app, nothing ever answers.");
         }, 5000);
 
         window.parent.postMessage({ method: method }, "*");

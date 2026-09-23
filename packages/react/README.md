@@ -142,6 +142,11 @@ function ScanButton() {
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
+      // Opened outside a dashboard, `window.parent` is this page, so skip its own request.
+      if (event.source === window) {
+        return;
+      }
+
       // The reply echoes the method you asked for, with the decoded string in `data`.
       if (event.data?.method === "barcode") {
         setCode(event.data.data);
@@ -152,7 +157,7 @@ function ScanButton() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  // Ask for a scan. "barcode" and "qrcode" open the same scanner; the reply carries back the method you sent.
+  // Ask for a scan.
   return (
     <button type="button" onClick={() => window.parent.postMessage({ method: "barcode" }, "*")}>
       {code || "Scan barcode"}
@@ -161,11 +166,11 @@ function ScanButton() {
 }
 ```
 
-Both methods open the same scanner, which reads QR codes and 1D barcodes alike. What changes is the reply: a widget that asks for `barcode` is answered with `barcode`.
+`barcode` and `qrcode` open the same scanner, which reads QR codes and 1D barcodes alike. What changes is the reply: a widget that asks for `barcode` is answered with `barcode`.
 
-Three things to plan for:
+Plan for the following:
 
-- **It only works inside the TagoRUN mobile app.** Everywhere else, a mobile browser included, the request is dropped in silence. No reply, no error.
+- **It only works inside the mobile app.** Everywhere else, a mobile browser included, the request is dropped in silence. No reply, no error.
 - **The reply comes when the user is done, if at all.** It arrives only after the user has aimed and scanned, and no reply is documented for a scan the user cancels. Give the user a way to stop waiting instead of treating a slow reply as a failure.
 - **The reply carries no `key`.** The SDK matches data-operation replies by the `key` it sends, but a scan reply never carries one, so it cannot be matched to its request. Keep a single request in flight, and ignore a reply you are no longer waiting for.
 

@@ -40,8 +40,11 @@ function Scanner() {
     // Inside the app the reply only comes once the user has scanned, which can take a
     // while. Outside the app it never comes, because the platform drops the request in
     // silence. The page cannot tell the two apart, so this is a hint, not a verdict.
+    // A second reply can land before the re-render removes this listener; take only the first.
+    let answered = false;
+
     const hintTimeoutId = window.setTimeout(() => {
-      setStatus("Still waiting. Outside the TagoRUN mobile app, nothing ever answers.");
+      setStatus("Still waiting. Outside the mobile app, nothing ever answers.");
     }, 5000);
 
     function onMessage(event: MessageEvent) {
@@ -58,6 +61,10 @@ function Scanner() {
         return;
       }
 
+      if (answered) {
+        return;
+      }
+      answered = true;
       setPending(null);
 
       if (typeof message.data !== "string" || message.data === "") {
