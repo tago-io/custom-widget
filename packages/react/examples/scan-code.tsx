@@ -37,12 +37,12 @@ function Scanner() {
       return;
     }
 
-    // Inside the app the reply only comes once the user has scanned, which can take a
-    // while. Outside the app it never comes, because the platform drops the request in
-    // silence. The page cannot tell the two apart, so this is a hint, not a verdict.
     // A second reply can land before the re-render removes this listener; take only the first.
     let answered = false;
 
+    // Inside the app the reply only comes once the user has scanned, which can take a
+    // while. Outside the app it never comes, because the platform drops the request in
+    // silence. The page cannot tell the two apart, so this is a hint, not a verdict.
     const hintTimeoutId = window.setTimeout(() => {
       setStatus("Still waiting. Outside the mobile app, nothing ever answers.");
     }, 5000);
@@ -65,6 +65,9 @@ function Scanner() {
         return;
       }
       answered = true;
+      // The cleanup that clears the hint only runs after the re-render, so clear it here or
+      // it can land on top of the result.
+      window.clearTimeout(hintTimeoutId);
       setPending(null);
 
       if (typeof message.data !== "string" || message.data === "") {
