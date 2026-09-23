@@ -79,7 +79,7 @@ See the full API and more examples in the [React SDK docs](./packages/react/READ
 
 Both SDKs include ready-to-use examples you can copy into your project:
 
-- **JavaScript examples** — 7 HTML files covering common patterns: [packages/js/examples/](./packages/js/examples/)
+- **JavaScript examples** — HTML files covering common patterns: [packages/js/examples/](./packages/js/examples/)
 - **React examples** — Simple `.tsx` files for reading data, sending data, and accessing resources: [packages/react/examples/](./packages/react/examples/)
 
 ### External Project Examples
