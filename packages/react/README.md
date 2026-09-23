@@ -132,6 +132,42 @@ const { t, tSync, language } = useDictionary();
 const translated = await t("Hello");
 ```
 
+## Scanning QR codes and barcodes
+
+Inside the TagoIO mobile app, a widget can open the device scanner. This is the one platform capability the SDK does not wrap, so both the request and the reply are plain `postMessage`. The provider's own listener ignores them, so your listener runs alongside it.
+
+```tsx
+function ScanButton() {
+  const [code, setCode] = useState("");
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      // The reply echoes the method you asked for, with the decoded string in `data`.
+      if (event.data?.method === "barcode") {
+        setCode(event.data.data);
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  // Ask for a scan. Use "barcode" for 1D codes and "qrcode" for QR codes.
+  return (
+    <button type="button" onClick={() => window.parent.postMessage({ method: "barcode" }, "*")}>
+      {code || "Scan barcode"}
+    </button>
+  );
+}
+```
+
+Both methods open the same scanner, which reads QR codes and 1D barcodes alike. What changes is the reply: a widget that asks for `barcode` is answered with `barcode`.
+
+Two things to plan for:
+
+- **It only works inside the TagoIO mobile app.** Everywhere else, a mobile browser included, the request is dropped in silence. No reply, no error.
+- **The reply carries no `key`.** Data operations are answered with the `key` they were sent with, but a scan reply is not, so it cannot be matched to its request. Keep a single request in flight, and ignore a reply you are no longer waiting for.
+
 ## Examples
 
 The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy into your project:
@@ -141,6 +177,7 @@ The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy
 - **[read-resource.tsx](./examples/read-resource.tsx)** — Read platform resources (device list, users, entities)
 - **[edit-resource.tsx](./examples/edit-resource.tsx)** — Edit resource rows driven by the `editable` columns
 - **[read-widget-info.tsx](./examples/read-widget-info.tsx)** — Widget config, user info, and blueprint devices
+- **[scan-code.tsx](./examples/scan-code.tsx)** — Scan a QR code or barcode with the mobile app
 
 ## Re-exports
 

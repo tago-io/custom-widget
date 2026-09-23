@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scan Code</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      button {
+        font-size: 16px;
+        padding: 12px 16px;
+        margin-right: 8px;
+        min-height: 48px;
+      }
+      .result {
+        font-family: monospace;
+        font-size: 20px;
+        word-break: break-all;
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 12px 0;
+      }
+      .status {
+        color: #555;
+        margin: 12px 0;
+      }
+      .sent {
+        color: #555;
+        font-family: monospace;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Scan a QR code or a barcode</h1>
+    <p>
+      Both buttons open the same scanner in the TagoIO mobile app. The reply carries back whichever method you asked
+      for.
+    </p>
+
+    <button id="scan-barcode" type="button">Scan barcode</button>
+    <button id="scan-qrcode" type="button">Scan QR code</button>
+
+    <p class="sent" id="sent"></p>
+    <p class="status" id="status">Pick one to start.</p>
+
+    <h3>Scanned value</h3>
+    <div class="result" id="result">-</div>
+
+    <script>
+      /**
+       * Scan Code Example
+       * Demonstrates asking the TagoIO mobile app for a QR code or barcode scan
+       */
+
+      // The scanner is not part of the SDK, so the request and the reply are plain
+      // postMessage. The SDK's own listener ignores these, so the two coexist.
+      let pendingMethod = null;
+      let timeoutId = null;
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      function requestScan(method) {
+        pendingMethod = method;
+        document.getElementById("sent").textContent = 'sent { method: "' + method + '" }';
+        setStatus("Waiting for the scanner...");
+
+        window.clearTimeout(timeoutId);
+        // The platform drops the request in silence outside the mobile app, so nothing
+        // ever answers here. Say so rather than waiting forever.
+        timeoutId = window.setTimeout(function () {
+          if (pendingMethod) {
+            pendingMethod = null;
+            setStatus(
+              "No answer. The scanner only opens inside the TagoIO mobile app; anywhere else the request is ignored."
+            );
+          }
+        }, 5000);
+
+        window.parent.postMessage({ method: method }, "*");
+      }
+
+      // The reply echoes the method that was asked for, and carries the decoded string
+      // in `data`. It has no `key`, so keep one request in flight at a time.
+      window.addEventListener("message", function (event) {
+        // Opened outside a dashboard, `window.parent` is this same window, so the request
+        // above arrives here too. Inside a dashboard the host is a different window.
+        if (event.source === window) {
+          return;
+        }
+
+        const message = event.data;
+        if (!message || (message.method !== "barcode" && message.method !== "qrcode")) {
+          return;
+        }
+
+        window.clearTimeout(timeoutId);
+        pendingMethod = null;
+
+        const value = message.data;
+        if (typeof value !== "string" || value === "") {
+          setStatus("The scanner answered " + JSON.stringify(message.method) + " with no value.");
+          return;
+        }
+
+        document.getElementById("result").textContent = value;
+        setStatus("Scanned with " + JSON.stringify(message.method) + ", " + value.length + " characters.");
+      });
+
+      document.getElementById("scan-barcode").addEventListener("click", function () {
+        requestScan("barcode");
+      });
+
+      document.getElementById("scan-qrcode").addEventListener("click", function () {
+        requestScan("qrcode");
+      });
+
+      window.TagoIO.onError(function (error) {
+        setStatus("Error: " + (error.message || "Unknown error"));
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#00897B" },
+      });
+    </script>
+  </body>
+</html>

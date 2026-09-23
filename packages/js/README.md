@@ -188,6 +188,29 @@ window.TagoIO.openLink("https://admin.tago.io/dashboards/info/dashboard-id");
 window.TagoIO.closeModal();
 ```
 
+## Scanning QR codes and barcodes
+
+Inside the TagoIO mobile app, a widget can open the device scanner. This is the one platform capability the SDK does not wrap, so both the request and the reply are plain `postMessage`. The SDK's own listener ignores them, so a listener of your own runs alongside it.
+
+```javascript
+// Ask for a scan. Use "barcode" for 1D codes and "qrcode" for QR codes.
+window.parent.postMessage({ method: "barcode" }, "*");
+
+// The reply echoes the method you asked for, with the decoded string in `data`.
+window.addEventListener("message", function (event) {
+  if (event.data && event.data.method === "barcode") {
+    console.log("Scanned:", event.data.data);
+  }
+});
+```
+
+Both methods open the same scanner, which reads QR codes and 1D barcodes alike. What changes is the reply: a widget that asks for `barcode` is answered with `barcode`.
+
+Two things to plan for:
+
+- **It only works inside the TagoIO mobile app.** Everywhere else, a mobile browser included, the request is dropped in silence. No reply, no error.
+- **The reply carries no `key`.** Data operations are answered with the `key` they were sent with, but a scan reply is not, so it cannot be matched to its request. Keep a single request in flight, and ignore a reply you are no longer waiting for.
+
 ## TypeScript Support
 
 The SDK includes TypeScript definitions. For TypeScript projects:
@@ -222,7 +245,7 @@ window.TagoIO.onError(function (error) {
 
 ## Examples
 
-This package includes 8 HTML examples in the [`examples/`](./examples/) folder:
+This package includes 9 HTML examples in the [`examples/`](./examples/) folder:
 
 | Example                 | What it shows                                          |
 | ----------------------- | ------------------------------------------------------ |
@@ -234,6 +257,7 @@ This package includes 8 HTML examples in the [`examples/`](./examples/) folder:
 | `send-data.html`        | Sending data back to devices                           |
 | `time-interval.html`    | Time-based data analysis                               |
 | `custom-units.html`     | Unit conversions and formatting                        |
+| `scan-code.html`        | Scanning a QR code or barcode with the mobile app      |
 
 ## External Project Examples
 

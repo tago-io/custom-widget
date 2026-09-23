@@ -11,6 +11,7 @@ Each file is a self-contained React component you can copy into your project.
 | [read-resource.tsx](./read-resource.tsx)       | Read platform resources (device list, users, entities) |
 | [edit-resource.tsx](./edit-resource.tsx)       | Edit resource rows driven by the `editable` columns    |
 | [read-widget-info.tsx](./read-widget-info.tsx) | Widget config, user info, and blueprint devices        |
+| [scan-code.tsx](./scan-code.tsx)               | Scan a QR code or barcode with the mobile app          |
 
 ## How to use these
 
