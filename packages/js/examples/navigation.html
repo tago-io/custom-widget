@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Navigation</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      button {
+        font-size: 16px;
+        padding: 12px 16px;
+        margin: 0 8px 8px 0;
+        min-height: 48px;
+      }
+      .status {
+        color: #555;
+        margin: 12px 0;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Navigation</h1>
+    <p>
+      Switch this tab to another dashboard, open a web page in a new tab, or close the modal this widget is open in.
+    </p>
+
+    <button id="open-dashboard" type="button">Open dashboard</button>
+    <button id="open-docs" type="button">Open the docs</button>
+    <button id="close" type="button">Close</button>
+
+    <p class="status" id="status">Pick one to start.</p>
+
+    <script>
+      /**
+       * Navigation Example
+       * Demonstrates opening a dashboard or a web page with openLink, and closing a widget modal with closeModal
+       */
+
+      // The dashboard to open: the 24-character id in that dashboard's URL.
+      const TARGET_DASHBOARD_ID = "REPLACE_WITH_DASHBOARD_ID";
+
+      // A blueprint dashboard reads its device selection from the query string. The key is
+      // the Identifier of one of its blueprint devices, and the value is a device id.
+      const BLUEPRINT_IDENTIFIER = "device";
+
+      const DOCS_URL = "https://docs.tago.io/docs/tagoio/widgets/custom-widget/";
+
+      // The device behind the widget's first variable, known once the widget settings
+      // arrive. Opened outside a dashboard they never do, and the link goes without it.
+      let deviceId = null;
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      window.TagoIO.onStart(function (widget) {
+        const variables = (widget.display && widget.display.variables) || [];
+        deviceId = variables.length > 0 ? variables[0].origin.id : null;
+      });
+
+      // openLink and closeModal only post a message to the dashboard. They return nothing
+      // and no reply comes back, so the status can only say what was asked for.
+
+      document.getElementById("open-dashboard").addEventListener("click", function () {
+        if (!/^[a-f0-9]{24}$/i.test(TARGET_DASHBOARD_ID)) {
+          setStatus("Set TARGET_DASHBOARD_ID to the id of the dashboard to open.");
+          return;
+        }
+
+        // In the Admin and TagoRUN, a link that contains "/dashboards/info/<id>" opens that
+        // dashboard in this tab, without a page reload, and keeps the query string. The host
+        // drops everything before "/dashboards/", so a relative link works whatever domain
+        // the dashboard runs on. Keep "/info/": the "/dashboards/<id>" address in the browser
+        // bar is not treated as a dashboard link.
+        let link = "/dashboards/info/" + TARGET_DASHBOARD_ID;
+        if (deviceId) {
+          link += "?" + new URLSearchParams({ [BLUEPRINT_IDENTIFIER]: deviceId });
+        }
+
+        window.TagoIO.openLink(link);
+        setStatus("Asked the dashboard to open " + link);
+      });
+
+      // A web page opens in a new tab: the dashboard page calls window.open with the URL.
+      // Browsers can block that when the click was not recent, so call openLink from the
+      // click handler itself, not after waiting on a request or a timer. Admin pages other
+      // than dashboards, such as "https://admin.tago.io/devices/<id>", do not open at all.
+      document.getElementById("open-docs").addEventListener("click", function () {
+        window.TagoIO.openLink(DOCS_URL);
+        setStatus("Asked the dashboard to open the docs in a new tab.");
+      });
+
+      // closeModal closes the modal this widget is open in, such as the one a header button
+      // opens when it is set to open a widget. On a dashboard tile it does nothing, and the
+      // widget cannot tell which of the two it is in. Closing removes the widget from the
+      // page, so let a pending sendData or editData settle first, or its reply is lost.
+      document.getElementById("close").addEventListener("click", function () {
+        window.TagoIO.closeModal();
+        setStatus("Asked the dashboard to close this modal. On a dashboard tile nothing happens.");
+      });
+
+      window.TagoIO.onError(function (error) {
+        setStatus("Error: " + (error.message || "Unknown error"));
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#3F51B5" },
+      });
+    </script>
+  </body>
+</html>

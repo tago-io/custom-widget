@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Run Analysis</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      button {
+        font-size: 16px;
+        padding: 12px 16px;
+        min-height: 48px;
+      }
+      .notice {
+        color: #7a4f00;
+        background: #fff8e1;
+        padding: 10px;
+        margin: 10px 0;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+      .status:empty {
+        display: none;
+      }
+      .sent {
+        color: #555;
+        font-family: monospace;
+        font-size: 13px;
+        word-break: break-all;
+      }
+      .record {
+        border: 1px solid #ddd;
+        padding: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Run an Analysis</h1>
+    <p>
+      The button runs the Analysis selected in the widget settings. No reply comes back, so the page watches for new
+      data instead.
+    </p>
+
+    <p id="notice" class="notice" style="display: none">
+      No Analysis selected. In the widget settings, open <strong>Options</strong> and pick one under
+      <strong>Run analysis when sending data</strong>.
+    </p>
+
+    <button id="run" type="button" disabled>Run Analysis</button>
+
+    <p class="status" id="status">Waiting for the widget settings...</p>
+    <p class="sent" id="sent"></p>
+
+    <h3>Latest record</h3>
+    <div class="record" id="latest">No data yet.</div>
+
+    <script>
+      /**
+       * Run Analysis Example
+       * Demonstrates running the widget's Analysis with runAnalysis and watching realtime data for its result
+       */
+
+      // runAnalysis gets no reply, on success or on failure. The only sign the page gets that
+      // the Analysis ran is new data on a variable this widget reads, so it watches realtime.
+      // A slow Analysis, a failed one and one that writes elsewhere all look the same from
+      // here, so after this long the page gives a hint, not a verdict.
+      const HINT_AFTER_MS = 30000;
+
+      let widgetVariables = [];
+      let records = [];
+      // Ids of the records on screen when the last request went out, or null when not waiting.
+      let knownIds = null;
+      let hintTimeoutId = null;
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      // Resource blocks (device lists, users, entities) carry rows, not data records.
+      function dataRecords(blocks) {
+        return blocks
+          .filter((block) => !block.resource && Array.isArray(block.result))
+          .flatMap((block) => block.result);
+      }
+
+      function newest(list) {
+        return list.reduce((latest, record) => {
+          return !latest || new Date(record.time) > new Date(latest.time) ? record : latest;
+        }, null);
+      }
+
+      function describe(record) {
+        const unit = record.unit ? ` ${record.unit}` : "";
+        return `${record.variable} = ${record.value}${unit} at ${new Date(record.time).toLocaleString()}`;
+      }
+
+      window.TagoIO.onStart(function (widget) {
+        console.log("Run Analysis Widget started:", widget);
+        widgetVariables = (widget.display && widget.display.variables) || [];
+
+        // The dashboard ignores runAnalysis when no Analysis is selected, and analysis_run
+        // is the field it checks.
+        const hasAnalysis = Boolean(widget.analysis_run);
+        document.getElementById("notice").style.display = hasAnalysis ? "none" : "block";
+        document.getElementById("run").disabled = !hasAnalysis;
+        setStatus("");
+      });
+
+      window.TagoIO.onRealtime(function (data) {
+        records = dataRecords(data);
+        const latest = newest(records);
+        document.getElementById("latest").textContent = latest ? describe(latest) : "No data yet.";
+
+        if (knownIds === null) {
+          return;
+        }
+        // Match by id, not by time: a record's time is whatever its writer set.
+        const fresh = newest(records.filter((record) => !knownIds.has(record.id)));
+        if (fresh) {
+          knownIds = null;
+          window.clearTimeout(hintTimeoutId);
+          setStatus(`New data after the request: ${describe(fresh)}`);
+        }
+      });
+
+      document.getElementById("run").addEventListener("click", function () {
+        // The Analysis receives this array as its scope. Send plain objects in an array: a
+        // string does not arrive as sent, and the dashboard strips the keys source,
+        // displayValue and orderingValue (a source value can also rewrite or drop the item).
+        // device tells the Analysis which device the widget shows. On a blueprint dashboard
+        // it is the selected device, and null while none is selected.
+        const first = widgetVariables[0];
+        const scope = [{ device: (first && first.origin.id) || null, requested_at: new Date().toISOString() }];
+
+        knownIds = new Set(records.map((record) => record.id));
+        window.TagoIO.runAnalysis(scope);
+
+        document.getElementById("sent").textContent = `scope: ${JSON.stringify(scope)}`;
+        setStatus(`Request sent at ${new Date().toLocaleTimeString()}. Waiting for new data...`);
+
+        window.clearTimeout(hintTimeoutId);
+        hintTimeoutId = window.setTimeout(function () {
+          setStatus(
+            `No new data after ${HINT_AFTER_MS / 1000} seconds. ` +
+              "Check that the Analysis ran and that it writes to a variable this widget reads."
+          );
+        }, HINT_AFTER_MS);
+      });
+
+      window.TagoIO.onError(function (error) {
+        setStatus("Error: " + (error.message || "Unknown error"));
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#795548" },
+      });
+    </script>
+  </body>
+</html>

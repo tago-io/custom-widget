@@ -99,14 +99,14 @@ This is a monorepo managed with [pnpm workspaces](https://pnpm.io/workspaces):
 packages/
   js/       → @tago-io/custom-widget          (JavaScript SDK)
   react/    → @tago-io/custom-widget-react     (React SDK)
-  core/     → @tago-io/custom-widget-core      (shared internals, not published directly)
+  core/     → @tago-io/custom-widget-core      (shared internals and types used by both SDKs)
 ```
 
 ## Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 10+
 
 ### Setup
