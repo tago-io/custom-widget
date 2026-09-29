@@ -12,11 +12,15 @@ Each file is a self-contained React component you can copy into your project.
 | [edit-resource.tsx](./edit-resource.tsx)       | Edit resource rows driven by the `editable` columns    |
 | [read-widget-info.tsx](./read-widget-info.tsx) | Widget config, user info, and blueprint devices        |
 | [scan-code.tsx](./scan-code.tsx)               | Scan a QR code or barcode with the mobile app          |
+| [edit-delete-data.tsx](./edit-delete-data.tsx) | Edit and delete the data records a widget receives     |
+| [navigation.tsx](./navigation.tsx)             | Open a dashboard or web page, or close a widget modal  |
+| [run-analysis.tsx](./run-analysis.tsx)         | Run the widget's Analysis and show the data it writes  |
+| [format-data.tsx](./format-data.tsx)           | Format the latest readings in the viewer's language    |
 
 ## How to use these
 
 1. Copy the example file into your React project
-2. Make sure you have the SDK installed: `npm install @tago-io/custom-widget-react`
+2. Make sure you have the SDK installed: `npm install @tago-io/custom-widget-react react react-dom`
 3. Render the `App` component from the example as your root component (or adapt it to fit your app)
 
 Every example follows the same pattern:
@@ -26,4 +30,4 @@ Every example follows the same pattern:
 
 ## Looking for JavaScript examples?
 
-Check out the [JavaScript SDK examples](../../js/examples/) — they cover the same use cases using plain HTML and `window.TagoIO`.
+The [JavaScript SDK examples](../../js/examples/) cover the same use cases with plain HTML and `window.TagoIO`. `format-data.tsx` has no JavaScript version: its helpers are not part of the JavaScript SDK.
