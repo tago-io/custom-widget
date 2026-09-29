@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edit and Delete Data</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+      .record {
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 10px 0;
+      }
+      .record-time {
+        color: #555;
+        font-size: 13px;
+      }
+      .record input {
+        width: 120px;
+        padding: 8px;
+        font-size: 16px;
+      }
+      button {
+        font-size: 16px;
+        padding: 8px 12px;
+        margin: 4px 8px 4px 0;
+        min-height: 44px;
+        cursor: pointer;
+      }
+      .row-status {
+        color: #555;
+        font-size: 13px;
+      }
+      .row-status.failed {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Edit and delete data records</h1>
+    <p>Change the value of a record or delete it. The rows are the records this widget receives from TagoIO.</p>
+
+    <div id="status" class="status">Waiting for the widget configuration...</div>
+    <div id="error" class="error" style="display: none">
+      <span id="error-text"></span>
+      <button id="dismiss-error" type="button">Dismiss</button>
+    </div>
+    <p id="notice"></p>
+
+    <div id="records"></div>
+
+    <script>
+      /**
+       * Edit and Delete Data Example
+       * Demonstrates changing and deleting the data records the widget receives, with editData and deleteData
+       */
+
+      // When the platform API refuses an edit or a delete, the host never replies and the
+      // promise stays pending, so stop waiting after a while.
+      const REPLY_TIMEOUT_MS = 10000;
+
+      // Records from the last realtime message, newest first.
+      let snapshot = [];
+      // Changes TagoIO confirmed, applied on top of every snapshot: realtime may not bring
+      // the change back, and a later push can still carry the old record.
+      const savedValues = new Map();
+      const deletedIds = new Set();
+      // Rows on screen by record id. A realtime push updates them in place, so it does not
+      // wipe a value the user is typing.
+      const rows = new Map();
+
+      function withTimeout(promise) {
+        let timeoutId;
+        const timeout = new Promise(function (resolve, reject) {
+          timeoutId = window.setTimeout(function () {
+            reject(new Error("TagoIO did not confirm the change within " + REPLY_TIMEOUT_MS / 1000 + " seconds."));
+          }, REPLY_TIMEOUT_MS);
+        });
+        return Promise.race([promise, timeout]).finally(function () {
+          window.clearTimeout(timeoutId);
+        });
+      }
+
+      // Send the value with the type it had, so a numeric variable does not turn into text.
+      // Returns null when the text does not fit that type.
+      function parseValue(text, current) {
+        const trimmed = text.trim();
+        if (typeof current === "number") {
+          return trimmed === "" || Number.isNaN(Number(trimmed)) ? null : Number(trimmed);
+        }
+        if (typeof current === "boolean") {
+          return trimmed === "true" ? true : trimmed === "false" ? false : null;
+        }
+        return text;
+      }
+
+      function createButton(label, type, onClick) {
+        const button = document.createElement("button");
+        button.type = type;
+        button.textContent = label;
+        if (onClick) {
+          button.addEventListener("click", onClick);
+        }
+        return button;
+      }
+
+      function createRow() {
+        const row = { record: null, dirty: false, element: document.createElement("div") };
+        row.element.className = "record";
+
+        row.variable = document.createElement("strong");
+        row.time = document.createElement("div");
+        row.time.className = "record-time";
+
+        // A form, so Enter in the field saves too.
+        row.form = document.createElement("form");
+        row.form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          saveValue(row);
+        });
+        row.input = document.createElement("input");
+        row.input.type = "text";
+        row.input.addEventListener("input", function () {
+          row.dirty = true;
+          row.save.disabled = false;
+        });
+        row.unit = document.createElement("span");
+        row.save = createButton("Save", "submit");
+        row.save.disabled = true;
+        row.remove = createButton("Delete", "button", function () {
+          setConfirming(row, true);
+        });
+        row.form.append(row.input, " ", row.unit, " ", row.save, row.remove);
+
+        row.confirm = document.createElement("div");
+        row.confirm.hidden = true;
+        row.confirm.append(
+          "Delete this record? ",
+          createButton("Yes, delete", "button", function () {
+            deleteRecord(row);
+          }),
+          createButton("Cancel", "button", function () {
+            setConfirming(row, false);
+          })
+        );
+
+        row.status = document.createElement("div");
+        row.status.className = "row-status";
+
+        row.element.append(row.variable, row.time, row.form, row.confirm, row.status);
+        return row;
+      }
+
+      function updateRow(row, record) {
+        row.record = record;
+        row.variable.textContent = record.variable;
+        row.time.textContent = new Date(record.time).toLocaleString();
+        row.unit.textContent = record.unit || "";
+        row.input.setAttribute("aria-label", "Value of " + record.variable);
+        // Leave the field alone while it holds an edit that is not saved yet.
+        if (!row.dirty) {
+          row.input.value = record.value === undefined ? "" : String(record.value);
+        }
+      }
+
+      function setBusy(row, busy) {
+        row.input.disabled = busy;
+        row.save.disabled = busy || !row.dirty;
+        row.remove.disabled = busy;
+      }
+
+      function setConfirming(row, confirming) {
+        row.form.hidden = confirming;
+        row.confirm.hidden = !confirming;
+      }
+
+      function setRowStatus(row, text, failed) {
+        row.status.textContent = text;
+        row.status.className = failed ? "row-status failed" : "row-status";
+      }
+
+      function renderRecords() {
+        const records = snapshot
+          .filter(function (record) {
+            return !deletedIds.has(record.id);
+          })
+          .map(function (record) {
+            return savedValues.has(record.id)
+              ? Object.assign({}, record, { value: savedValues.get(record.id) })
+              : record;
+          });
+
+        const list = document.getElementById("records");
+        const shownIds = new Set();
+        let previous = null;
+        records.forEach(function (record) {
+          shownIds.add(record.id);
+          let row = rows.get(record.id);
+          if (!row) {
+            row = createRow();
+            rows.set(record.id, row);
+          }
+          updateRow(row, record);
+          // Move a row only when it is out of place: moving an element takes the focus away
+          // from the field inside it.
+          const expected = previous ? previous.nextSibling : list.firstChild;
+          if (row.element !== expected) {
+            list.insertBefore(row.element, expected);
+          }
+          previous = row.element;
+        });
+        rows.forEach(function (row, id) {
+          if (!shownIds.has(id)) {
+            row.element.remove();
+            rows.delete(id);
+          }
+        });
+
+        document.getElementById("status").textContent =
+          records.length === 0 ? "No records yet." : records.length + (records.length === 1 ? " record" : " records");
+      }
+
+      function saveValue(row) {
+        const record = row.record;
+        const value = parseValue(row.input.value, record.value);
+        if (value === null) {
+          setRowStatus(row, typeof record.value === "number" ? "Enter a number." : "Enter true or false.", true);
+          return;
+        }
+
+        setBusy(row, true);
+        setRowStatus(row, "Saving...", false);
+        // autoFill (on by default) adds `device` and `origin` from the widget's binding for
+        // this variable.
+        withTimeout(window.TagoIO.editData({ id: record.id, variable: record.variable, value: value }))
+          .then(function () {
+            savedValues.set(record.id, value);
+            row.dirty = false;
+            setRowStatus(row, "Saved.", false);
+            renderRecords();
+          })
+          .catch(function (error) {
+            setRowStatus(row, "Not saved: " + (error.message || "Unknown error"), true);
+          })
+          .finally(function () {
+            setBusy(row, false);
+          });
+      }
+
+      function deleteRecord(row) {
+        const record = row.record;
+        setConfirming(row, false);
+        setBusy(row, true);
+        setRowStatus(row, "Deleting...", false);
+        // deleteData takes "<record id>:<device id>" strings, so one call can delete records
+        // from several devices.
+        withTimeout(window.TagoIO.deleteData([record.id + ":" + record.device]))
+          .then(function () {
+            deletedIds.add(record.id);
+            document.getElementById("notice").textContent =
+              "Deleted " + record.variable + " from " + new Date(record.time).toLocaleString() + ".";
+            renderRecords();
+          })
+          .catch(function (error) {
+            setRowStatus(row, "Not deleted: " + (error.message || "Unknown error"), true);
+            setBusy(row, false);
+          });
+      }
+
+      document.getElementById("dismiss-error").addEventListener("click", function () {
+        document.getElementById("error").style.display = "none";
+      });
+
+      window.TagoIO.onStart(function (widget) {
+        console.log("Edit and Delete Data Widget started:", widget);
+        document.getElementById("status").textContent = "Waiting for data...";
+      });
+
+      window.TagoIO.onRealtime(function (data) {
+        console.log("Real-time data received:", data);
+        snapshot = [];
+        data.forEach(function (block) {
+          // Resource blocks (device lists, users, entities) carry no data records.
+          if (block.resource || !Array.isArray(block.result)) {
+            return;
+          }
+          block.result.forEach(function (record) {
+            snapshot.push(record);
+          });
+        });
+        snapshot.sort(function (a, b) {
+          return new Date(b.time) - new Date(a.time);
+        });
+
+        // Once realtime shows a confirmed change, stop overriding the record.
+        savedValues.forEach(function (value, id) {
+          const record = snapshot.find(function (item) {
+            return item.id === id;
+          });
+          if (!record || record.value === value) {
+            savedValues.delete(id);
+          }
+        });
+        deletedIds.forEach(function (id) {
+          const stillThere = snapshot.some(function (item) {
+            return item.id === id;
+          });
+          if (!stillThere) {
+            deletedIds.delete(id);
+          }
+        });
+
+        renderRecords();
+      });
+
+      // The host reports some failures without the request key, so no promise settles for
+      // them. "Failed to delete" arrives only here.
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        document.getElementById("error-text").textContent = "Error: " + (error.message || "Unknown error");
+        document.getElementById("error").style.display = "block";
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#00ACC1" },
+      });
+    </script>
+  </body>
+</html>

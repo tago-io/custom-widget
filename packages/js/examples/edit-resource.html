@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edit Resource</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+      .success {
+        color: green;
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0fff0;
+      }
+      .error {
+        color: red;
+        padding: 10px;
+        border: 1px solid red;
+        margin: 10px 0;
+      }
+      .editor {
+        border: 1px solid #673ab7;
+        border-radius: 4px;
+        padding: 12px;
+        margin: 10px 0;
+      }
+      .editor label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+      .editor input {
+        width: 100%;
+        max-width: 320px;
+        box-sizing: border-box;
+        font-size: 16px;
+        padding: 8px;
+      }
+      .editor button {
+        font-size: 16px;
+        min-height: 48px;
+        padding: 12px 16px;
+        margin: 8px 8px 0 0;
+      }
+      .group {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 12px 0;
+      }
+      .group-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        background: #f5f5f5;
+        font-size: 12px;
+        color: #777;
+      }
+      .group-type {
+        text-transform: uppercase;
+        font-weight: bold;
+        color: #673ab7;
+      }
+      .group-count {
+        margin-left: auto;
+      }
+      .table-wrapper {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 12px;
+        border-bottom: 1px solid #eee;
+        white-space: nowrap;
+      }
+      th.editable {
+        color: #673ab7;
+      }
+      .cell-edit {
+        font: inherit;
+        color: #673ab7;
+        background: none;
+        border: 1px dashed #673ab7;
+        border-radius: 3px;
+        min-height: 32px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Edit resource rows</h1>
+    <p>
+      Lists the device, user and entity rows sent to this widget. Click a value in an editable column to change it.
+      After a save, the widget asks the dashboard for the updated rows.
+    </p>
+    <p>To only read resources, see <code>read-resource.html</code>.</p>
+
+    <div id="status" class="status">Waiting for resources...</div>
+
+    <div id="editor" class="editor" style="display: none">
+      <label id="edit-label" for="edit-value">New value</label>
+      <input id="edit-value" type="text" autocomplete="off" />
+      <div>
+        <button id="edit-save" type="button">Save</button>
+        <button id="edit-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+    <div id="message" style="display: none"></div>
+
+    <div id="resources"></div>
+
+    <script>
+      /**
+       * Edit Resource Example
+       * Demonstrates editing device, user and entity rows with editResourceData
+       * and loading the saved values back with refreshResources
+       */
+
+      // The save promise settles only when the dashboard answers. Stop waiting
+      // after this long so a missing answer does not lock the editor.
+      const SAVE_TIMEOUT_MS = 15000;
+
+      let blocks = [];
+      let editing = null; // { resource, row, column, original } while the editor is open
+      let saving = false;
+
+      function createElement(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      function showMessage(text, type) {
+        const message = document.getElementById("message");
+        message.className = type;
+        message.textContent = text;
+        message.style.display = "block";
+      }
+
+      function toText(value) {
+        if (value === null || value === undefined) return "";
+        return typeof value === "object" ? JSON.stringify(value) : String(value);
+      }
+
+      function getRowID(row) {
+        return typeof row.id === "string" && row.id !== "" ? row.id : null;
+      }
+
+      // `view` and `editable` name tag and parameter columns "tags.<key>" and
+      // "param.<key>", but rows carry them as `tags` and `params` arrays of { key, value }.
+      function getCellValue(row, column) {
+        const match = /^(tags|param)\.(.+)$/.exec(column);
+        if (!match) return row[column];
+        const entries = row[match[1] === "tags" ? "tags" : "params"];
+        const entry = Array.isArray(entries) ? entries.find((item) => item && item.key === match[2]) : undefined;
+        return entry ? entry.value : undefined;
+      }
+
+      function getColumns(resource, rows) {
+        const columns = [];
+        (resource.view || []).concat(resource.editable || []).forEach((column) => {
+          if (!columns.includes(column)) columns.push(column);
+        });
+        if (columns.length === 0 && rows.length > 0) return Object.keys(rows[0]);
+        return columns;
+      }
+
+      // Offer only the columns the widget settings list in `resource.editable`. The SDK
+      // has edit payloads for device, user and entity rows, so entity_list rows stay
+      // read-only. An entity row also needs the entity ID, which is `resource.id`.
+      function isEditableColumn(resource, column) {
+        const hasPayload =
+          resource.type === "device" || resource.type === "user" || (resource.type === "entity" && !!resource.id);
+        return hasPayload && (resource.editable || []).includes(column);
+      }
+
+      // Entity fields keep their type: a number stays a number when the text parses as
+      // one. Device and user values go as text, the way the native list widgets send them.
+      function toEntityValue(original, text) {
+        const number = Number(text);
+        return typeof original === "number" && text.trim() !== "" && !Number.isNaN(number) ? number : text;
+      }
+
+      // The identity key tells the platform which row to change: { device } or { user }
+      // with the row's id, or { id, entity } for an entity row. Tag and parameter columns
+      // keep their dotted names, as in { device, "tags.type": "sensor" }.
+      function buildEditPayload(edit, text) {
+        const rowID = getRowID(edit.row);
+        const type = edit.resource.type;
+        let payload;
+        if (type === "device") payload = { device: rowID };
+        else if (type === "user") payload = { user: rowID };
+        else payload = { id: rowID, entity: edit.resource.id };
+        payload[edit.column] = type === "entity" ? toEntityValue(edit.original, text) : text;
+        return payload;
+      }
+
+      // An entity edit can resolve even when the platform refused it: `result.status`
+      // holds the HTTP code and `result.data` the API answer, which can say
+      // `status: false` with a 200.
+      function getEntityEditError(response) {
+        const result = response && response.result;
+        if (!result || typeof result !== "object") return null;
+        const body = result.data || {};
+        const httpFailed = typeof result.status === "number" && result.status >= 400;
+        if (!httpFailed && body.status !== false) return null;
+        return typeof body.message === "string" && body.message ? body.message : "The platform refused the change.";
+      }
+
+      function withTimeout(promise, ms) {
+        return new Promise((resolve, reject) => {
+          const timer = window.setTimeout(() => {
+            const error = new Error(`No answer from the dashboard after ${ms / 1000} seconds.`);
+            error.name = "TimeoutError";
+            reject(error);
+          }, ms);
+          promise.then(
+            (value) => {
+              window.clearTimeout(timer);
+              resolve(value);
+            },
+            (error) => {
+              window.clearTimeout(timer);
+              reject(error);
+            }
+          );
+        });
+      }
+
+      function setSaving(value) {
+        saving = value;
+        ["edit-value", "edit-save", "edit-cancel"].forEach((id) => {
+          document.getElementById(id).disabled = value;
+        });
+      }
+
+      function openEditor(resource, row, column) {
+        if (saving) return;
+        const original = getCellValue(row, column);
+        editing = { resource: resource, row: row, column: column, original: original };
+
+        const rowLabel = toText(row.name) || getRowID(row);
+        document.getElementById("edit-label").textContent = `Edit ${column} (${resource.type} ${rowLabel})`;
+        document.getElementById("message").style.display = "none";
+        document.getElementById("editor").style.display = "block";
+        const input = document.getElementById("edit-value");
+        input.value = toText(original);
+        input.focus();
+      }
+
+      function closeEditor() {
+        editing = null;
+        document.getElementById("editor").style.display = "none";
+      }
+
+      function saveEdit() {
+        if (!editing || saving) return;
+        const edit = editing;
+        const text = document.getElementById("edit-value").value;
+        if (text === toText(edit.original)) {
+          closeEditor();
+          showMessage("No change to save.", "status");
+          return;
+        }
+
+        setSaving(true);
+        showMessage(`Saving ${edit.column}...`, "status");
+
+        // One row per call. The dashboard sends every row of a call to the same
+        // endpoint, so if you batch rows, keep entity rows and device or user rows
+        // in separate calls.
+        withTimeout(window.TagoIO.editResourceData(buildEditPayload(edit, text)), SAVE_TIMEOUT_MS)
+          .then(function (response) {
+            setSaving(false);
+            const entityError = edit.resource.type === "entity" ? getEntityEditError(response) : null;
+            if (entityError) {
+              showMessage(`Could not save ${edit.column}: ${entityError}`, "error");
+              return;
+            }
+
+            closeEditor();
+            showMessage(`Saved ${edit.column}.`, "success");
+            // Device, user and entity_list rows do not update by themselves. Ask the
+            // dashboard for the resource blocks again: they come back through
+            // onRealtime, and there is no reply to wait for.
+            window.TagoIO.refreshResources();
+          })
+          .catch(function (error) {
+            setSaving(false);
+            if (error && error.name === "TimeoutError") {
+              showMessage(`${error.message} The change may still have been saved.`, "error");
+              return;
+            }
+            const reason = (error && error.message) || "Unknown error";
+            showMessage(`Could not save ${edit.column}: ${reason}`, "error");
+          });
+      }
+
+      function renderBlock(block) {
+        const resource = block.resource;
+        const rows = Array.isArray(block.result) ? block.result : [];
+        const columns = getColumns(resource, rows);
+        const editableColumns = columns.filter((column) => isEditableColumn(resource, column));
+
+        const section = createElement("section", "group");
+        const header = createElement("div", "group-header");
+        const editableText = editableColumns.length > 0 ? `Editable: ${editableColumns.join(", ")}` : "Read only";
+        header.appendChild(createElement("span", "group-type", resource.type || "unknown"));
+        header.appendChild(createElement("span", "", editableText));
+        header.appendChild(createElement("span", "group-count", `${rows.length} row${rows.length === 1 ? "" : "s"}`));
+        section.appendChild(header);
+
+        const table = createElement("table");
+        const headRow = createElement("tr");
+        columns.forEach((column) => {
+          headRow.appendChild(createElement("th", editableColumns.includes(column) ? "editable" : "", column));
+        });
+        const head = createElement("thead");
+        head.appendChild(headRow);
+        table.appendChild(head);
+
+        const body = createElement("tbody");
+        rows.forEach((row) => {
+          const tableRow = createElement("tr");
+          columns.forEach((column) => {
+            const cell = createElement("td");
+            const text = toText(getCellValue(row, column)) || "-";
+            if (editableColumns.includes(column) && getRowID(row) !== null) {
+              const button = createElement("button", "cell-edit", text);
+              button.type = "button";
+              button.addEventListener("click", () => openEditor(resource, row, column));
+              cell.appendChild(button);
+            } else {
+              cell.textContent = text;
+            }
+            tableRow.appendChild(cell);
+          });
+          body.appendChild(tableRow);
+        });
+        table.appendChild(body);
+
+        const wrapper = createElement("div", "table-wrapper");
+        wrapper.appendChild(table);
+        section.appendChild(wrapper);
+        return section;
+      }
+
+      function render() {
+        const container = document.getElementById("resources");
+        container.textContent = "";
+        blocks.forEach((block) => container.appendChild(renderBlock(block)));
+      }
+
+      document.getElementById("edit-save").addEventListener("click", saveEdit);
+      document.getElementById("edit-cancel").addEventListener("click", closeEditor);
+      document.getElementById("edit-value").addEventListener("keydown", function (event) {
+        if (event.key === "Enter") saveEdit();
+        if (event.key === "Escape") closeEditor();
+      });
+
+      window.TagoIO.onStart(function (widget) {
+        console.log("Edit Resource Widget started:", widget);
+        setStatus("Widget started, waiting for resources...");
+      });
+
+      window.TagoIO.onRealtime(function (data) {
+        console.log("Real-time data received:", data);
+        // Each call carries every block the widget has. Resource blocks have a
+        // `resource` descriptor instead of `data`.
+        blocks = (Array.isArray(data) ? data : []).filter(function (block) {
+          return block && block.resource;
+        });
+        setStatus(
+          blocks.length === 0
+            ? "No resource blocks received yet."
+            : `Showing ${blocks.length} resource block${blocks.length === 1 ? "" : "s"}.`
+        );
+        render();
+      });
+
+      window.TagoIO.onError(function (error) {
+        console.error("Widget error:", error);
+        // A rejected save lands here first, then its own handler replaces this message.
+        showMessage("Error: " + (error.message || "Unknown error"), "error");
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#673AB7" },
+      });
+    </script>
+  </body>
+</html>
