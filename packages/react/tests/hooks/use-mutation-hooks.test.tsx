@@ -166,4 +166,108 @@ describe("mutation hooks", () => {
       expect(result.current.isEditing).toBe(false);
     });
   });
+
+  describe("under StrictMode", () => {
+    // reactStrictMode renders StrictMode above the wrapper. React replays effects only for a newly mounted
+    // tree that starts at or inside StrictMode, so a wrapper that renders StrictMode itself would skip it.
+    const strictOptions = { wrapper, reactStrictMode: true };
+
+    it("useSendData clears isSending when the reply arrives", async () => {
+      const { result } = renderHook(() => useSendData(), strictOptions);
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.sendData({ variable: "temp", value: 42 });
+      });
+
+      expect(result.current.isSending).toBe(true);
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isSending).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("useSendData stores the rejection and clears isSending", async () => {
+      const { result } = renderHook(() => useSendData(), strictOptions);
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.sendData({ variable: "temp", value: 42 }).catch(() => {});
+      });
+
+      expect(result.current.isSending).toBe(true);
+
+      await act(async () => {
+        respondToLastMessage(false);
+        await promise!;
+      });
+
+      expect(result.current.isSending).toBe(false);
+      expect(result.current.error).toMatchObject({ status: false, message: "failed" });
+    });
+
+    it("useEditData clears isEditing when the reply arrives", async () => {
+      const { result } = renderHook(() => useEditData(), strictOptions);
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.editData({ variable: "temp", value: 42 });
+      });
+
+      expect(result.current.isEditing).toBe(true);
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isEditing).toBe(false);
+    });
+
+    it("useDeleteData clears isDeleting when the reply arrives", async () => {
+      const { result } = renderHook(() => useDeleteData(), strictOptions);
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.deleteData({
+          id: "rec-1",
+          device: "dev-1",
+          variable: "temp",
+          value: 42,
+          time: "2024-01-01T00:00:00Z",
+        });
+      });
+
+      expect(result.current.isDeleting).toBe(true);
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isDeleting).toBe(false);
+    });
+
+    it("useEditResourceData clears isEditing when the reply arrives", async () => {
+      const { result } = renderHook(() => useEditResourceData(), strictOptions);
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = result.current.editResourceData({ device: "dev-1", name: "Renamed" });
+      });
+
+      expect(result.current.isEditing).toBe(true);
+
+      await act(async () => {
+        respondToLastMessage(true);
+        await promise!;
+      });
+
+      expect(result.current.isEditing).toBe(false);
+    });
+  });
 });

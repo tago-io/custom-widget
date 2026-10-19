@@ -25,6 +25,8 @@ export function useDeleteData(): UseDeleteDataReturn {
   const mountedRef = useRef(true);
 
   useEffect(() => {
+    // StrictMode and <Activity> run the cleanup and then this setup again on a mounted component.
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
