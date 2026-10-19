@@ -214,6 +214,64 @@ describe("editResourceData", () => {
   });
 });
 
+describe("callEndpoint", () => {
+  const mockPostMessage = vi.fn();
+  const mockOnError = vi.fn();
+  const endpointID = "65f1c0a2b3d4e5f6a7b8c9d0";
+
+  beforeAll(() => {
+    window.parent.postMessage = mockPostMessage;
+    onError(mockOnError);
+    simulateMessage({ widget: mockWidget, capabilities: ["call-endpoint"] });
+  });
+
+  beforeEach(() => {
+    mockPostMessage.mockClear();
+    mockOnError.mockClear();
+  });
+
+  it("resolves through window.TagoIO with the Endpoint's answer", async () => {
+    const promise = window.TagoIO.callEndpoint(endpointID, {
+      method: "POST",
+      path: "/setpoint",
+      body: { setpoint: 50 },
+    });
+
+    expect(mockPostMessage).toHaveBeenCalledWith(
+      {
+        method: "call-endpoint",
+        key: "staticKey",
+        payload: { endpoint_id: endpointID, method: "POST", path: "/setpoint", body: { setpoint: 50 } },
+      },
+      "*"
+    );
+
+    const answer = {
+      status: 422,
+      headers: { "content-type": "application/json" },
+      body: { errors: { setpoint: "Enter a number from 5 to 30." } },
+    };
+    simulateMessage({ status: true, key: "staticKey", method: "call-endpoint", result: answer });
+
+    await expect(promise).resolves.toEqual(answer);
+  });
+
+  it("rejects with the dashboard's code and leaves onError alone", async () => {
+    const promise = window.TagoIO.callEndpoint(endpointID);
+
+    simulateMessage({
+      status: false,
+      key: "staticKey",
+      method: "call-endpoint",
+      code: "api_error",
+      message: "The Endpoint call failed",
+    });
+
+    await expect(promise).rejects.toEqual({ code: "api_error", message: "The Endpoint call failed" });
+    expect(mockOnError).not.toHaveBeenCalled();
+  });
+});
+
 describe("closeModal", () => {
   const mockPostMessage = vi.fn();
 

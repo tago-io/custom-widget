@@ -11,6 +11,12 @@ import type {
   TData,
   TDataRecord,
   TDataRecordInput,
+  TEndpointCallError,
+  TEndpointCallErrorCode,
+  TEndpointCallOptions,
+  TEndpointCallResult,
+  TEndpointMethod,
+  TEndpointQueryValue,
   TError,
   TEventData,
   TReadyOptions,
@@ -51,6 +57,7 @@ type TTagoIO = {
   closeModal: () => void;
   runAnalysis: (scope?: unknown) => void;
   refreshResources: () => void;
+  callEndpoint: (endpointID: string, options?: TEndpointCallOptions) => Promise<TEndpointCallResult>;
 };
 
 declare global {
@@ -224,6 +231,8 @@ const refreshResources: TTagoIO["refreshResources"] = () => {
   store.refreshResources();
 };
 
+const callEndpoint: TTagoIO["callEndpoint"] = (endpointID, options) => store.callEndpoint(endpointID, options);
+
 window.TagoIO.ready = onReady;
 window.TagoIO.onStart = onStart;
 window.TagoIO.onRealtime = onRealtime;
@@ -238,8 +247,10 @@ window.TagoIO.openLink = openLink;
 window.TagoIO.closeModal = closeModal;
 window.TagoIO.runAnalysis = runAnalysis;
 window.TagoIO.refreshResources = refreshResources;
+window.TagoIO.callEndpoint = callEndpoint;
 
 export {
+  callEndpoint,
   closeModal,
   deleteData,
   editData,
@@ -260,6 +271,12 @@ export type {
   TData,
   TDataRecord,
   TDataRecordInput,
+  TEndpointCallError,
+  TEndpointCallErrorCode,
+  TEndpointCallOptions,
+  TEndpointCallResult,
+  TEndpointMethod,
+  TEndpointQueryValue,
   TError,
   TErrorCallback,
   TEventData,

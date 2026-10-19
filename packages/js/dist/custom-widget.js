@@ -561,6 +561,7 @@
   var refreshResources = () => {
     store.refreshResources();
   };
+  var callEndpoint = (endpointID, options) => store.callEndpoint(endpointID, options);
   window.TagoIO.ready = onReady;
   window.TagoIO.onStart = onStart;
   window.TagoIO.onRealtime = onRealtime;
@@ -575,4 +576,5 @@
   window.TagoIO.closeModal = closeModal;
   window.TagoIO.runAnalysis = runAnalysis;
   window.TagoIO.refreshResources = refreshResources;
+  window.TagoIO.callEndpoint = callEndpoint;
 })();
