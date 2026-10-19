@@ -5,6 +5,10 @@ import type {
   StoreOptions,
   TData,
   TDataRecordInput,
+  TEndpointCallError,
+  TEndpointCallErrorCode,
+  TEndpointCallOptions,
+  TEndpointCallResult,
   TError,
   TReadyOptions,
   TRealtimeData,
@@ -20,11 +24,51 @@ const INITIAL_STATE: WidgetState = {
   blueprintDevices: null,
   errors: [],
   isReady: false,
+  capabilities: null,
   realtimeEventCount: 0,
   lastRealtimeAt: null,
 };
 
 const SERVER_SNAPSHOT: WidgetState = { ...INITIAL_STATE };
+
+/** The dashboard runs the same check; running it here fails a malformed ID before anything is posted. */
+const ENDPOINT_ID_PATTERN = /^[a-z0-9]{24}$/i;
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function endpointCallError(code: TEndpointCallErrorCode, message: string): TEndpointCallError {
+  return { code, message };
+}
+
+/** The bridge rejects with the dashboard's failure reply, a postMessage DataCloneError, or destroy()'s Error. */
+function toEndpointCallError(reason: unknown): TEndpointCallError {
+  if (isObject(reason) && reason.status === false) {
+    const code = typeof reason.code === "string" && reason.code ? reason.code : "api_error";
+    const message =
+      typeof reason.message === "string" && reason.message
+        ? reason.message
+        : "The dashboard could not call the Endpoint.";
+    return endpointCallError(code, message);
+  }
+  if (isObject(reason) && reason.name === "DataCloneError") {
+    return endpointCallError(
+      "bad_request",
+      `The request could not be posted to the dashboard: ${String(reason.message)}`
+    );
+  }
+  return endpointCallError("aborted", "The widget stopped before the dashboard answered.");
+}
+
+/** The reply comes from another window, so its shape is checked before the caller gets it. */
+function readEndpointResult<TBody>(reply: unknown): TEndpointCallResult<TBody> {
+  const result = isObject(reply) ? reply.result : undefined;
+  if (isObject(result) && typeof result.status === "number" && isObject(result.headers)) {
+    return result as TEndpointCallResult<TBody>;
+  }
+  throw endpointCallError("api_error", "The dashboard sent a malformed reply.");
+}
 
 export class WidgetStore {
   private state: WidgetState = { ...INITIAL_STATE };
@@ -64,9 +108,12 @@ export class WidgetStore {
     if (data.widget) {
       partial.widget = data.widget;
       partial.isReady = true;
+      // The list comes with the widget settings. A dashboard that predates it sends none: empty, not unknown.
+      partial.capabilities = Array.isArray(data.capabilities) ? data.capabilities : [];
     }
 
-    if (data.status === false) {
+    // A call-endpoint failure already rejects that call's promise, so it stays out of `errors`.
+    if (data.status === false && data.method !== "call-endpoint") {
       const error = data as unknown as TError;
       partial.errors = [...this.state.errors, error];
     }
@@ -172,6 +219,47 @@ export class WidgetStore {
   editResourceData(records: TResourceEditInput | TResourceEditInput[]): Promise<TData> {
     const vars = Array.isArray(records) ? records : [records];
     return this.bridge.sendWithResponse({ variables: vars, method: "edit-resource" });
+  }
+
+  /**
+   * Call an Analysis Endpoint through the dashboard, which sends the viewer's session. Every HTTP answer
+   * resolves, 4xx and 5xx included; the promise rejects with a TEndpointCallError only when the call did
+   * not complete.
+   */
+  async callEndpoint<TBody = unknown>(
+    endpointID: string,
+    options?: TEndpointCallOptions
+  ): Promise<TEndpointCallResult<TBody>> {
+    if (typeof endpointID !== "string" || !ENDPOINT_ID_PATTERN.test(endpointID)) {
+      throw endpointCallError(
+        "bad_request",
+        `Invalid Endpoint ID "${String(endpointID)}": pass the 24-character ID of the Analysis.`
+      );
+    }
+
+    const { capabilities } = this.state;
+    if (capabilities === null) {
+      throw endpointCallError(
+        "not_ready",
+        "The widget settings have not arrived yet. Call callEndpoint after the widget starts."
+      );
+    }
+    // A dashboard without the operation never answers it, so the call stops here instead of waiting.
+    if (!capabilities.includes("call-endpoint")) {
+      throw endpointCallError("unsupported", "This dashboard does not support Endpoint calls from custom widgets.");
+    }
+
+    // Named fields only, and no `variables`: the dashboard sends any message with `variables` to the data operations.
+    const { method, path, query, body } = options ?? {};
+    const payload = { endpoint_id: endpointID, method, path, query, body };
+
+    let reply: unknown;
+    try {
+      reply = await this.bridge.sendWithResponse({ method: "call-endpoint", payload });
+    } catch (reason) {
+      throw toEndpointCallError(reason);
+    }
+    return readEndpointResult<TBody>(reply);
   }
 
   openLink(url: string): void {
