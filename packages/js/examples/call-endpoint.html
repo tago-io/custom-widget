@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Call Endpoint</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      input,
+      button {
+        font-size: 16px;
+        padding: 12px 16px;
+        min-height: 48px;
+      }
+      input {
+        width: 6em;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        background: #f0f0f0;
+      }
+      .status:empty {
+        display: none;
+      }
+      .failed {
+        color: #b00020;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Room temperature</h1>
+    <p>
+      The form saves a setpoint through an Analysis Endpoint. The Endpoint checks the value, stores it on the viewer's
+      device and answers with the saved setpoint or a field error.
+    </p>
+
+    <form id="settings" novalidate>
+      <label for="setpoint">Setpoint (5 to 30 C)</label>
+      <input id="setpoint" name="setpoint" value="22" inputmode="decimal" aria-describedby="feedback" />
+      <button id="save" type="submit" disabled>Save setpoint</button>
+    </form>
+
+    <p class="status" id="feedback" role="status">Waiting for the widget settings...</p>
+
+    <script>
+      /**
+       * Call Endpoint Example
+       * Demonstrates saving a setpoint with callEndpoint and showing the field error the Endpoint answers with
+       */
+
+      // The Analysis is the one from the "Validate a Custom Dashboard form" recipe. Set it up
+      // as the recipe's Set up and Permissions sections say:
+      // https://docs.tago.io/docs/tagoio/analysis/endpoints/recipes/validate-dashboard-form#set-up
+      // https://docs.tago.io/docs/tagoio/analysis/endpoints/recipes/validate-dashboard-form#permissions
+      // The Run user needs Access to the dashboard that holds this widget and Call Endpoint on
+      // the Analysis, and the Analysis needs Access and Send data on the devices. Open that
+      // dashboard in TagoRUN as the Run user: the recipe answers 403 to anyone else, Admin
+      // included.
+
+      // The Analysis ID, the 24-character ID in its Endpoint URL. Left as it is, Save shows
+      // the bad_request rejection.
+      const ENDPOINT_ID = "YOUR_ANALYSIS_ID";
+
+      const form = document.getElementById("settings");
+      const saveButton = document.getElementById("save");
+
+      function setFeedback(text, failed) {
+        const feedback = document.getElementById("feedback");
+        feedback.textContent = text;
+        feedback.className = failed ? "status failed" : "status";
+      }
+
+      // callEndpoint rejects with not_ready until the widget settings arrive, so the button
+      // stays disabled until then.
+      window.TagoIO.onStart(function (widget) {
+        console.log("Call Endpoint Widget started:", widget);
+        saveButton.disabled = false;
+        setFeedback("", false);
+      });
+
+      // A form, so Enter in the field saves too.
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        // One call at a time: every Endpoint call on the profile counts toward the same
+        // per-minute allowance.
+        saveButton.disabled = true;
+        setFeedback("Saving...", false);
+
+        // The Endpoint checks the value, so the field's text goes as typed, inside an object
+        // sent as JSON. A string body would go as text/plain, and the Analysis would get scope
+        // as nil.
+        window.TagoIO.callEndpoint(ENDPOINT_ID, {
+          method: "POST",
+          path: "/setpoint",
+          body: { setpoint: form.elements.setpoint.value },
+        })
+          .then(function (answer) {
+            // Every HTTP status resolves, 4xx and 5xx included, so check it before reading
+            // the body.
+            if (answer.status === 422) {
+              setFeedback(answer.body.errors.setpoint, true);
+            } else if (answer.status >= 400) {
+              // Such as 403 "Sign in first." outside TagoRUN, 404 without Call Endpoint, or 429
+              // when the profile's allowance ran out.
+              const reason = answer.body && answer.body.error;
+              setFeedback(reason || "Request failed (" + answer.status + ").", true);
+            } else {
+              setFeedback("Saved: " + answer.body.setpoint + " C", false);
+            }
+          })
+          .catch(function (error) {
+            // The call did not complete. The rejection is a plain { code, message } object,
+            // and it never reaches onError.
+            setFeedback("Not sent (" + error.code + "): " + error.message, true);
+          })
+          .finally(function () {
+            saveButton.disabled = false;
+          });
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#00796b" },
+      });
+    </script>
+  </body>
+</html>
