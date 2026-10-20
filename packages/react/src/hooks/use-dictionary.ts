@@ -1,5 +1,5 @@
 import type { WidgetState } from "@tago-io/custom-widget-core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useStore, useStoreSelector } from "./use-store-selector.js";
 
@@ -27,15 +27,6 @@ export function useDictionary(options?: UseDictionaryOptions): UseDictionaryRetu
   const [dictionary, setDictionary] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    // StrictMode and <Activity> run the cleanup and then this setup again on a mounted component.
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!dictionaryClass || !language) {
@@ -49,15 +40,11 @@ export function useDictionary(options?: UseDictionaryOptions): UseDictionaryRetu
     try {
       const DictClass = dictionaryClass as new (opts: { language: string }) => unknown;
       const instance = new DictClass({ language });
-      if (mountedRef.current) {
-        setDictionary(instance);
-        setIsLoading(false);
-      }
+      setDictionary(instance);
+      setIsLoading(false);
     } catch (err) {
-      if (mountedRef.current) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-        setIsLoading(false);
-      }
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setIsLoading(false);
     }
   }, [dictionaryClass, language]);
 

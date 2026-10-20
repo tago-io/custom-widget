@@ -1,5 +1,5 @@
-import { renderHook, act } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { render, renderHook, act } from "@testing-library/react";
+import { Activity, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useDeleteData } from "../../src/hooks/use-delete-data.js";
@@ -268,6 +268,113 @@ describe("mutation hooks", () => {
       });
 
       expect(result.current.isEditing).toBe(false);
+    });
+  });
+
+  describe("inside an <Activity> hidden while the reply arrives", () => {
+    // Hiding an <Activity> runs the effect cleanups of the hidden tree. The reply that lands meanwhile still has to
+    // clear the busy flag, and store a failure, so both show once the tree is visible again.
+    function renderInActivity<T>(useHook: () => T) {
+      const latest: { current?: T } = {};
+      function Probe() {
+        latest.current = useHook();
+        return null;
+      }
+      const tree = (mode: "visible" | "hidden") => (
+        <TagoIOProvider>
+          <Activity mode={mode}>
+            <Probe />
+          </Activity>
+        </TagoIOProvider>
+      );
+      const view = render(tree("visible"));
+      return {
+        hook: () => latest.current as T,
+        replyWhileHidden: async (promise: Promise<unknown>, status: boolean) => {
+          view.rerender(tree("hidden"));
+          await act(async () => {
+            respondToLastMessage(status);
+            await promise;
+          });
+          view.rerender(tree("visible"));
+        },
+      };
+    }
+
+    it("useSendData clears isSending", async () => {
+      const { hook, replyWhileHidden } = renderInActivity(() => useSendData());
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = hook().sendData({ variable: "temp", value: 42 });
+      });
+      expect(hook().isSending).toBe(true);
+
+      await replyWhileHidden(promise!, true);
+
+      expect(hook().isSending).toBe(false);
+      expect(hook().error).toBeNull();
+    });
+
+    it("useSendData stores the rejection and clears isSending", async () => {
+      const { hook, replyWhileHidden } = renderInActivity(() => useSendData());
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = hook()
+          .sendData({ variable: "temp", value: 42 })
+          .catch(() => {});
+      });
+
+      await replyWhileHidden(promise!, false);
+
+      expect(hook().isSending).toBe(false);
+      expect(hook().error).toMatchObject({ status: false, message: "failed" });
+    });
+
+    it("useEditData clears isEditing", async () => {
+      const { hook, replyWhileHidden } = renderInActivity(() => useEditData());
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = hook().editData({ variable: "temp", value: 42 });
+      });
+
+      await replyWhileHidden(promise!, true);
+
+      expect(hook().isEditing).toBe(false);
+    });
+
+    it("useDeleteData clears isDeleting", async () => {
+      const { hook, replyWhileHidden } = renderInActivity(() => useDeleteData());
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = hook().deleteData({
+          id: "rec-1",
+          device: "dev-1",
+          variable: "temp",
+          value: 42,
+          time: "2024-01-01T00:00:00Z",
+        });
+      });
+
+      await replyWhileHidden(promise!, true);
+
+      expect(hook().isDeleting).toBe(false);
+    });
+
+    it("useEditResourceData clears isEditing", async () => {
+      const { hook, replyWhileHidden } = renderInActivity(() => useEditResourceData());
+
+      let promise: Promise<unknown>;
+      act(() => {
+        promise = hook().editResourceData({ device: "dev-1", name: "Renamed" });
+      });
+
+      await replyWhileHidden(promise!, true);
+
+      expect(hook().isEditing).toBe(false);
     });
   });
 });
