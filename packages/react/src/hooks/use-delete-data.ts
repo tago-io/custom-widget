@@ -1,5 +1,5 @@
 import type { TData, TDataRecord, TError } from "@tago-io/custom-widget-core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useStore } from "./use-store-selector.js";
 
@@ -22,27 +22,20 @@ export function useDeleteData(): UseDeleteDataReturn {
   const { store } = useStore();
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<TError | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   const deleteData = useCallback(
     async (records: TDataRecord | TDataRecord[]) => {
       setIsDeleting(true);
       setError(null);
+      // No mounted guard: a reply that lands while StrictMode replays effects or an <Activity> hides this
+      // component must still clear the flag, and React 18 and later ignore an update after unmount.
       try {
         const result = await store.deleteData(toDeletePayload(records));
-        if (mountedRef.current) setIsDeleting(false);
+        setIsDeleting(false);
         return result;
       } catch (err) {
-        if (mountedRef.current) {
-          setError(err as TError);
-          setIsDeleting(false);
-        }
+        setError(err as TError);
+        setIsDeleting(false);
         throw err;
       }
     },

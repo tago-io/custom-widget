@@ -41,6 +41,7 @@
       return this.pending.has(key);
     }
   };
+  var BRIDGE_DESTROYED = "MessageBridge destroyed";
   var MessageBridge = class {
     constructor(options = {}) {
       this.handlers = /* @__PURE__ */ new Set();
@@ -80,11 +81,18 @@
       window.parent.postMessage(message, "*");
     }
     sendWithResponse(message) {
+      if (this.destroyed) {
+        return Promise.reject(new Error(BRIDGE_DESTROYED));
+      }
       const key = generateId();
       const messageWithKey = { ...message, key };
       return new Promise((resolve, reject) => {
         this.pool.add(key, { resolve, reject });
-        this.send(messageWithKey);
+        try {
+          this.send(messageWithKey);
+        } catch (error) {
+          this.pool.reject(key, error);
+        }
       });
     }
     onMessage(handler) {
@@ -98,7 +106,7 @@
       if (typeof window !== "undefined") {
         window.removeEventListener("message", this.boundReceive, false);
       }
-      this.pool.rejectAll(new Error("MessageBridge destroyed"));
+      this.pool.rejectAll(new Error(BRIDGE_DESTROYED));
       this.handlers.clear();
     }
     get pendingCount() {
@@ -210,10 +218,45 @@
     blueprintDevices: null,
     errors: [],
     isReady: false,
+    capabilities: null,
     realtimeEventCount: 0,
     lastRealtimeAt: null
   };
   var SERVER_SNAPSHOT = { ...INITIAL_STATE };
+  var ENDPOINT_ID_PATTERN = /^[a-z0-9]{24}$/i;
+  function isObject(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function endpointCallError(code, message) {
+    return { code, message };
+  }
+  function errorMessage(error) {
+    return isObject(error) && typeof error.message === "string" ? error.message : String(error);
+  }
+  function toEndpointCallError(reason) {
+    if (isObject(reason) && reason.status === false) {
+      const code = typeof reason.code === "string" && reason.code ? reason.code : "api_error";
+      const message = typeof reason.message === "string" && reason.message ? reason.message : "The dashboard could not call the Endpoint.";
+      return endpointCallError(code, message);
+    }
+    if (reason instanceof Error && reason.message === BRIDGE_DESTROYED) {
+      return endpointCallError("aborted", "The widget stopped before the dashboard answered.");
+    }
+    return endpointCallError("bad_request", `The request could not be posted to the dashboard: ${errorMessage(reason)}`);
+  }
+  function encodeEndpointBody(body) {
+    if (body === void 0 || typeof body === "string") return body;
+    const json = JSON.stringify(body);
+    if (json === void 0) throw new TypeError(`A ${typeof body} is not a JSON value.`);
+    return JSON.parse(json);
+  }
+  function readEndpointResult(reply) {
+    const result = isObject(reply) ? reply.result : void 0;
+    if (isObject(result) && typeof result.status === "number" && isObject(result.headers)) {
+      return result;
+    }
+    throw endpointCallError("api_error", "The dashboard sent a malformed reply.");
+  }
   var WidgetStore = class {
     constructor(options = {}) {
       this.state = { ...INITIAL_STATE };
@@ -231,8 +274,9 @@
         if (data.widget) {
           partial.widget = data.widget;
           partial.isReady = true;
+          partial.capabilities = Array.isArray(data.capabilities) ? data.capabilities : [];
         }
-        if (data.status === false) {
+        if (data.status === false && data.method !== "call-endpoint") {
           const error = data;
           partial.errors = [...this.state.errors, error];
         }
@@ -328,6 +372,43 @@
     editResourceData(records) {
       const vars = Array.isArray(records) ? records : [records];
       return this.bridge.sendWithResponse({ variables: vars, method: "edit-resource" });
+    }
+    /**
+     * Call an Analysis Endpoint through the dashboard, which sends the viewer's session. Every HTTP answer
+     * resolves, 4xx and 5xx included, except a redirect, which the dashboard refuses; the promise rejects with a
+     * TEndpointCallError only when the call did not complete.
+     */
+    async callEndpoint(endpointID, options) {
+      if (typeof endpointID !== "string" || !ENDPOINT_ID_PATTERN.test(endpointID)) {
+        throw endpointCallError(
+          "bad_request",
+          `Invalid Endpoint ID "${String(endpointID)}": pass the 24-character ID of the Analysis.`
+        );
+      }
+      const { capabilities } = this.state;
+      if (capabilities === null) {
+        throw endpointCallError(
+          "not_ready",
+          "The widget settings have not arrived yet. Call callEndpoint after the widget starts."
+        );
+      }
+      if (!capabilities.includes("call-endpoint")) {
+        throw endpointCallError("unsupported", "This dashboard does not support Endpoint calls from custom widgets.");
+      }
+      let payload;
+      try {
+        const { method, path, query, body } = options ?? {};
+        payload = { endpoint_id: endpointID, method, path, query, body: encodeEndpointBody(body) };
+      } catch (error) {
+        throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
+      }
+      let reply;
+      try {
+        reply = await this.bridge.sendWithResponse({ method: "call-endpoint", payload });
+      } catch (reason) {
+        throw toEndpointCallError(reason);
+      }
+      return readEndpointResult(reply);
     }
     openLink(url) {
       this.bridge.send({ method: "open-link", url });
@@ -499,6 +580,7 @@
   var refreshResources = () => {
     store.refreshResources();
   };
+  var callEndpoint = (endpointID, options) => store.callEndpoint(endpointID, options);
   window.TagoIO.ready = onReady;
   window.TagoIO.onStart = onStart;
   window.TagoIO.onRealtime = onRealtime;
@@ -513,4 +595,5 @@
   window.TagoIO.closeModal = closeModal;
   window.TagoIO.runAnalysis = runAnalysis;
   window.TagoIO.refreshResources = refreshResources;
+  window.TagoIO.callEndpoint = callEndpoint;
 })();

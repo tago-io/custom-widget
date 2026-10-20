@@ -30,6 +30,8 @@ store.initialize(); // sends ready signal to platform
 store.subscribe(() => console.log(store.getSnapshot()));
 ```
 
+`WidgetState.capabilities` holds the list the dashboard sends with the widget settings: the request operations it answers that older dashboards do not, today only `"call-endpoint"`. It is `null` until the dashboard's first message and empty when the dashboard sends no list. On a dashboard without `"call-endpoint"`, `callEndpoint` rejects with `unsupported` and sends nothing, so check the list to hide a control the dashboard cannot serve.
+
 ### MessageBridge
 
 Low-level postMessage communication with origin validation and request/response correlation.
@@ -58,4 +60,4 @@ import {
 
 ### Types
 
-All types are exported: `TWidget`, `TDataRecord`, `TDataRecordInput`, `TRealtimeData`, `TResource`, `TResourceGroup`, `TResourceEditInput`, `TUserInformation`, `WidgetState`, etc.
+All types are exported: `TWidget`, `TDataRecord`, `TDataRecordInput`, `TRealtimeData`, `TResource`, `TResourceGroup`, `TResourceEditInput`, `TEndpointCallOptions`, `TEndpointCallResult`, `TEndpointCallError`, `TEndpointCallErrorCode`, `TEndpointMethod`, `TEndpointQueryValue`, `TUserInformation`, `WidgetState`, etc.

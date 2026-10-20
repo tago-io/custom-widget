@@ -50,6 +50,7 @@ describe("WidgetStore", () => {
       expect(state.blueprintDevices).toBeNull();
       expect(state.errors).toEqual([]);
       expect(state.isReady).toBe(false);
+      expect(state.capabilities).toBeNull();
       expect(state.realtimeEventCount).toBe(0);
       expect(state.lastRealtimeAt).toBeNull();
     });
@@ -120,6 +121,20 @@ describe("WidgetStore", () => {
       const state = store.getSnapshot();
       expect(state.widget).toEqual(mockWidget);
       expect(state.isReady).toBe(true);
+    });
+
+    it("stores the capabilities sent with the widget settings", () => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { widget: mockWidget, capabilities: ["call-endpoint"] } })
+      );
+
+      expect(store.getSnapshot().capabilities).toEqual(["call-endpoint"]);
+    });
+
+    it("settles capabilities as empty when the host sends none", () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget } }));
+
+      expect(store.getSnapshot().capabilities).toEqual([]);
     });
 
     it("handles userInformation message", () => {
@@ -272,6 +287,186 @@ describe("WidgetStore", () => {
       store.editResourceData([{ id: "ent-1", entity: "entity-abc", status: "closed", value: 42 }]).catch(() => {});
       const sentMessage = mockPostMessage.mock.calls[0][0];
       expect(sentMessage.variables).toEqual([{ id: "ent-1", entity: "entity-abc", status: "closed", value: 42 }]);
+    });
+  });
+
+  describe("callEndpoint", () => {
+    const endpointID = "65f1c0a2b3d4e5f6a7b8c9d0";
+
+    function hostReady(data: Record<string, unknown> = { capabilities: ["call-endpoint"] }) {
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget, ...data } }));
+    }
+
+    function lastSent(): Record<string, unknown> {
+      const calls = mockPostMessage.mock.calls;
+      return calls[calls.length - 1][0] as Record<string, unknown>;
+    }
+
+    function reply(data: Record<string, unknown>) {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { key: lastSent().key, method: "call-endpoint", ...data } })
+      );
+    }
+
+    it("rejects with not_ready before the widget settings arrive, posting nothing", async () => {
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({ code: "not_ready", message: expect.any(String) });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("rejects with unsupported on a host without the capability, posting nothing", async () => {
+      hostReady({});
+
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({
+        code: "unsupported",
+        message: expect.any(String),
+      });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed ID with bad_request before the readiness check, posting nothing", async () => {
+      await expect(store.callEndpoint("YOUR_ANALYSIS_ID")).rejects.toEqual({
+        code: "bad_request",
+        message: expect.any(String),
+      });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("posts the payload under call-endpoint without variables", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID, {
+        method: "POST",
+        path: "/setpoint",
+        query: { dry_run: true, tag: ["a", "b"] },
+        body: { setpoint: 22 },
+      });
+
+      expect(mockPostMessage).toHaveBeenLastCalledWith(
+        {
+          method: "call-endpoint",
+          key: expect.any(String),
+          payload: {
+            endpoint_id: endpointID,
+            method: "POST",
+            path: "/setpoint",
+            query: { dry_run: true, tag: ["a", "b"] },
+            body: { setpoint: 22 },
+          },
+        },
+        "*"
+      );
+      expect(lastSent()).not.toHaveProperty("variables");
+
+      reply({ status: true, result: { status: 200, headers: {}, body: { ok: true } } });
+      await promise;
+    });
+
+    it.each([200, 404, 422])("resolves with the unwrapped result for HTTP %i", async (status) => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+      const result = { status, headers: { "content-type": "application/json" }, body: { status } };
+
+      reply({ status: true, result });
+
+      await expect(promise).resolves.toEqual(result);
+    });
+
+    it("maps a failure reply to { code, message } and keeps it out of state.errors", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      reply({ status: false, code: "bad_request", message: "Invalid endpoint.call payload" });
+
+      await expect(promise).rejects.toEqual({ code: "bad_request", message: "Invalid endpoint.call payload" });
+      expect(store.getSnapshot().errors).toEqual([]);
+    });
+
+    it("uses api_error when a failure reply has no code", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      reply({ status: false, message: "The Endpoint call failed" });
+
+      await expect(promise).rejects.toEqual({ code: "api_error", message: "The Endpoint call failed" });
+    });
+
+    it.each([
+      { label: "no result", data: {} },
+      { label: "a data operation result", data: { result: [] } },
+      { label: "a result without headers", data: { result: { status: 200, body: null } } },
+    ])("rejects a success reply with $label as api_error", async ({ data }) => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      reply({ status: true, ...data });
+
+      await expect(promise).rejects.toEqual({ code: "api_error", message: expect.any(String) });
+    });
+
+    it("maps a DataCloneError to bad_request and keeps nothing pending", async () => {
+      hostReady();
+      mockPostMessage.mockImplementationOnce(() => {
+        throw new DOMException("() => {} could not be cloned.", "DataCloneError");
+      });
+
+      await expect(
+        store.callEndpoint(endpointID, { query: { done: (() => {}) as unknown as string } })
+      ).rejects.toEqual({ code: "bad_request", message: expect.any(String) });
+      expect(store.getBridge().pendingCount).toBe(0);
+    });
+
+    it("encodes the body with JSON rules before posting", async () => {
+      hostReady();
+      // No answer comes, so the call settles with aborted when afterEach destroys the store.
+      store
+        .callEndpoint(endpointID, {
+          method: "POST",
+          body: { when: new Date("2026-10-20T12:00:00Z"), skipped: undefined, save: () => {} },
+        })
+        .catch(() => {});
+
+      expect((lastSent().payload as Record<string, unknown>).body).toEqual({ when: "2026-10-20T12:00:00.000Z" });
+    });
+
+    it("refuses a body JSON cannot encode with bad_request, posting nothing", async () => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, { method: "POST", body: { total: 10n } })).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("BigInt"),
+      });
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+    });
+
+    it("maps an options getter that throws to bad_request", async () => {
+      hostReady();
+      const options = {
+        get body(): unknown {
+          throw new RangeError("not ready");
+        },
+      };
+
+      await expect(store.callEndpoint(endpointID, options)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("not ready"),
+      });
+    });
+
+    it("rejects with aborted when called after destroy, posting nothing", async () => {
+      hostReady();
+      store.destroy();
+      mockPostMessage.mockClear();
+
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({ code: "aborted", message: expect.any(String) });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("rejects with aborted when the store is destroyed mid-call", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      store.destroy();
+
+      await expect(promise).rejects.toEqual({ code: "aborted", message: expect.any(String) });
     });
   });
 
