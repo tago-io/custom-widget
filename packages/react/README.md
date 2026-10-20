@@ -357,7 +357,7 @@ function SetpointForm() {
         path: "/setpoint",
         body: { setpoint },
       });
-      // Every HTTP status resolves, so check it before reading the body.
+      // Every HTTP status except a redirect resolves, so check it before reading the body.
       if (answer.status === 422) {
         setFeedback(answer.body?.errors?.setpoint ?? "Invalid setpoint.");
       } else if (answer.status >= 400) {

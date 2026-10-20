@@ -106,13 +106,13 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 ### Utilities
 
-| Function                                   | Description                                                                                                                                                                                 |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.openLink(url)`                     | Open a dashboard in the same tab or a web page in a new tab ([Navigation](#navigation))                                                                                                     |
-| `TagoIO.closeModal()`                      | Close the modal a header button opened the widget in. Does nothing on a dashboard tile                                                                                                      |
-| `TagoIO.runAnalysis(scope)`                | Run the Analysis selected in the widget settings, with `scope` as its input. No reply ([Running an Analysis](#running-an-analysis))                                                         |
-| `TagoIO.callEndpoint(endpointID, options)` | Call an Analysis Endpoint with the viewer's session. Returns a Promise of `{ status, headers, body }` for every HTTP status ([Calling an Analysis Endpoint](#calling-an-analysis-endpoint)) |
-| `TagoIO.autoFill`                          | `true` by default: `sendData` and `editData` fill each record's `device` and `origin` from the widget's bound variables                                                                     |
+| Function                                   | Description                                                                                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TagoIO.openLink(url)`                     | Open a dashboard in the same tab or a web page in a new tab ([Navigation](#navigation))                                                                                                                       |
+| `TagoIO.closeModal()`                      | Close the modal a header button opened the widget in. Does nothing on a dashboard tile                                                                                                                        |
+| `TagoIO.runAnalysis(scope)`                | Run the Analysis selected in the widget settings, with `scope` as its input. No reply ([Running an Analysis](#running-an-analysis))                                                                           |
+| `TagoIO.callEndpoint(endpointID, options)` | Call an Analysis Endpoint with the viewer's session. Returns a Promise of `{ status, headers, body }` for every HTTP status except a redirect ([Calling an Analysis Endpoint](#calling-an-analysis-endpoint)) |
+| `TagoIO.autoFill`                          | `true` by default: `sendData` and `editData` fill each record's `device` and `origin` from the widget's bound variables                                                                                       |
 
 ## Working with Real-time Data
 
@@ -316,7 +316,7 @@ form.addEventListener("submit", async function (event) {
       path: "/setpoint",
       body: { setpoint: form.elements.setpoint.value },
     });
-    // Every HTTP status resolves, so check it before reading the body.
+    // Every HTTP status except a redirect resolves, so check it before reading the body.
     if (answer.status === 422) {
       feedback.textContent = (answer.body && answer.body.errors && answer.body.errors.setpoint) || "Invalid setpoint.";
     } else if (answer.status >= 400) {
