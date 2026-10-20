@@ -158,6 +158,24 @@ describe("MessageBridge", () => {
 
       await expect(promise).rejects.toEqual({ status: false, key, message: "error", result: [] });
     });
+
+    it("rejects at once after destroy, posting nothing", async () => {
+      bridge.destroy();
+
+      await expect(bridge.sendWithResponse({ variables: [] })).rejects.toThrow("MessageBridge destroyed");
+      expect(mockPostMessage).not.toHaveBeenCalled();
+      expect(bridge.pendingCount).toBe(0);
+    });
+
+    it("rejects with what postMessage threw and keeps nothing pending", async () => {
+      const cloneError = new DOMException("() => {} could not be cloned.", "DataCloneError");
+      mockPostMessage.mockImplementationOnce(() => {
+        throw cloneError;
+      });
+
+      await expect(bridge.sendWithResponse({ variables: [] })).rejects.toBe(cloneError);
+      expect(bridge.pendingCount).toBe(0);
+    });
   });
 
   describe("destroy", () => {

@@ -1,4 +1,4 @@
-import { MessageBridge } from "../bridge/message-bridge.js";
+import { BRIDGE_DESTROYED, MessageBridge } from "../bridge/message-bridge.js";
 import type {
   InboundMessage,
   RealtimeStrategy,
@@ -42,7 +42,14 @@ function endpointCallError(code: TEndpointCallErrorCode, message: string): TEndp
   return { code, message };
 }
 
-/** The bridge rejects with the dashboard's failure reply, a postMessage DataCloneError, or destroy()'s Error. */
+function errorMessage(error: unknown): string {
+  return isObject(error) && typeof error.message === "string" ? error.message : String(error);
+}
+
+/**
+ * The bridge rejects with the dashboard's failure reply, with BRIDGE_DESTROYED once the store is destroyed, or with
+ * what postMessage threw before posting, such as a DataCloneError.
+ */
 function toEndpointCallError(reason: unknown): TEndpointCallError {
   if (isObject(reason) && reason.status === false) {
     const code = typeof reason.code === "string" && reason.code ? reason.code : "api_error";
@@ -52,13 +59,21 @@ function toEndpointCallError(reason: unknown): TEndpointCallError {
         : "The dashboard could not call the Endpoint.";
     return endpointCallError(code, message);
   }
-  if (isObject(reason) && reason.name === "DataCloneError") {
-    return endpointCallError(
-      "bad_request",
-      `The request could not be posted to the dashboard: ${String(reason.message)}`
-    );
+  if (reason instanceof Error && reason.message === BRIDGE_DESTROYED) {
+    return endpointCallError("aborted", "The widget stopped before the dashboard answered.");
   }
-  return endpointCallError("aborted", "The widget stopped before the dashboard answered.");
+  return endpointCallError("bad_request", `The request could not be posted to the dashboard: ${errorMessage(reason)}`);
+}
+
+/**
+ * The dashboard sends a body that is not a string as JSON, so it takes JSON's rules here: toJSON() applies, as for a
+ * Date, and a value JSON cannot encode, such as a BigInt or a cycle, is refused before anything is posted.
+ */
+function encodeEndpointBody(body: unknown): unknown {
+  if (body === undefined || typeof body === "string") return body;
+  const json = JSON.stringify(body);
+  if (json === undefined) throw new TypeError(`A ${typeof body} is not a JSON value.`);
+  return JSON.parse(json) as unknown;
 }
 
 /** The reply comes from another window, so its shape is checked before the caller gets it. */
@@ -223,8 +238,8 @@ export class WidgetStore {
 
   /**
    * Call an Analysis Endpoint through the dashboard, which sends the viewer's session. Every HTTP answer
-   * resolves, 4xx and 5xx included; the promise rejects with a TEndpointCallError only when the call did
-   * not complete.
+   * resolves, 4xx and 5xx included, except a redirect, which the dashboard refuses; the promise rejects with a
+   * TEndpointCallError only when the call did not complete.
    */
   async callEndpoint<TBody = unknown>(
     endpointID: string,
@@ -249,9 +264,14 @@ export class WidgetStore {
       throw endpointCallError("unsupported", "This dashboard does not support Endpoint calls from custom widgets.");
     }
 
-    // Named fields only, and no `variables`: the dashboard sends any message with `variables` to the data operations.
-    const { method, path, query, body } = options ?? {};
-    const payload = { endpoint_id: endpointID, method, path, query, body };
+    let payload: Record<string, unknown>;
+    try {
+      // Named fields only, and no `variables`: the dashboard sends any message with `variables` to the data operations.
+      const { method, path, query, body } = options ?? {};
+      payload = { endpoint_id: endpointID, method, path, query, body: encodeEndpointBody(body) };
+    } catch (error) {
+      throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
+    }
 
     let reply: unknown;
     try {

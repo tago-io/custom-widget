@@ -402,16 +402,62 @@ describe("WidgetStore", () => {
       await expect(promise).rejects.toEqual({ code: "api_error", message: expect.any(String) });
     });
 
-    it("maps a DataCloneError to bad_request", async () => {
+    it("maps a DataCloneError to bad_request and keeps nothing pending", async () => {
       hostReady();
       mockPostMessage.mockImplementationOnce(() => {
         throw new DOMException("() => {} could not be cloned.", "DataCloneError");
       });
 
-      await expect(store.callEndpoint(endpointID, { method: "POST", body: { save: () => {} } })).rejects.toEqual({
+      await expect(
+        store.callEndpoint(endpointID, { query: { done: (() => {}) as unknown as string } })
+      ).rejects.toEqual({ code: "bad_request", message: expect.any(String) });
+      expect(store.getBridge().pendingCount).toBe(0);
+    });
+
+    it("encodes the body with JSON rules before posting", async () => {
+      hostReady();
+      // No answer comes, so the call settles with aborted when afterEach destroys the store.
+      store
+        .callEndpoint(endpointID, {
+          method: "POST",
+          body: { when: new Date("2026-10-20T12:00:00Z"), skipped: undefined, save: () => {} },
+        })
+        .catch(() => {});
+
+      expect((lastSent().payload as Record<string, unknown>).body).toEqual({ when: "2026-10-20T12:00:00.000Z" });
+    });
+
+    it("refuses a body JSON cannot encode with bad_request, posting nothing", async () => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, { method: "POST", body: { total: 10n } })).rejects.toEqual({
         code: "bad_request",
-        message: expect.any(String),
+        message: expect.stringContaining("BigInt"),
       });
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+    });
+
+    it("maps an options getter that throws to bad_request", async () => {
+      hostReady();
+      const options = {
+        get body(): unknown {
+          throw new RangeError("not ready");
+        },
+      };
+
+      await expect(store.callEndpoint(endpointID, options)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("not ready"),
+      });
+    });
+
+    it("rejects with aborted when called after destroy, posting nothing", async () => {
+      hostReady();
+      store.destroy();
+      mockPostMessage.mockClear();
+
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({ code: "aborted", message: expect.any(String) });
+      expect(mockPostMessage).not.toHaveBeenCalled();
     });
 
     it("rejects with aborted when the store is destroyed mid-call", async () => {

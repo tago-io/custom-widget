@@ -278,12 +278,16 @@ export type TEndpointCallOptions = {
   query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[]>;
   /**
    * Send a JSON value; a string is sent as text/plain, so the Analysis gets `scope` as nil and reads
-   * `context.request.body`. Not allowed with GET.
+   * `context.request.body`. Not allowed with GET. Any other value is encoded with JSON's rules, so toJSON()
+   * applies, and a value JSON cannot encode, such as a BigInt, rejects with `bad_request`.
    */
   body?: unknown;
 };
 
-/** The Endpoint's answer. Every HTTP status resolves with it, 4xx and 5xx included. */
+/**
+ * The Endpoint's answer. Every HTTP status resolves with it, 4xx and 5xx included, except a redirect: the dashboard
+ * refuses to follow one, so a 3xx rejects with `api_error`.
+ */
 export type TEndpointCallResult<TBody = unknown> = {
   status: number;
   /** The response headers the browser can read, with lowercase names. */
@@ -294,13 +298,13 @@ export type TEndpointCallResult<TBody = unknown> = {
 
 /**
  * Why callEndpoint rejected:
- * - `bad_request`: the ID is not a 24-character ID, `options` holds a value a message cannot carry, or the
- *   dashboard refused the request.
+ * - `bad_request`: the ID is not a 24-character ID, `options` holds a value JSON or a message cannot carry, or the
+ *   dashboard refused the request. The Endpoint did not run.
  * - `api_error`: the dashboard could not complete the call, as with a refused redirect or a network failure,
- *   or its reply was malformed.
+ *   or its reply was malformed. The Endpoint may have run: a redirect is the Analysis's own answer.
  * - `not_ready`: the widget settings have not arrived yet. Nothing was sent.
  * - `unsupported`: the dashboard does not support Endpoint calls from custom widgets. Nothing was sent.
- * - `aborted`: the widget stopped before the answer arrived.
+ * - `aborted`: the widget stopped before the answer arrived, or before the call was made.
  *
  * A code from a newer dashboard passes through unchanged.
  */
