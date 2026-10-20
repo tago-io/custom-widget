@@ -158,17 +158,10 @@ async function sendSensorData() {
       window.TagoIO.sendData({ variable: "temperature", value: 25.5, unit: "°C" }),
       10000
     );
-    // The promise resolves even when the platform refused the write, so check each entry.
-    const refused = reply.result.filter(function (entry) {
-      return entry.status === "rejected";
-    });
-    if (refused.length > 0) {
-      console.error("Not stored:", refused[0].reason);
-      return;
-    }
     console.log("Data stored:", reply.result);
   } catch (error) {
-    console.error("Failed to send data:", error.message);
+    // A refused write rejects with the dashboard's reply, { status: false, message }.
+    console.error("Not stored:", error.message);
   }
 }
 ```
@@ -177,9 +170,9 @@ Plan for the following:
 
 - **Send after `onStart`, and only bound variables.** The SDK drops a record whose variable is not bound to the widget. When it drops every record, as it does before the widget settings arrive, the promise never settles.
 - **A variable bound on several devices is written to each.** The SDK makes one record per device the variable is bound on. To write to one device only, turn `autoFill` off and pass `origin` ([Editing and deleting data](#editing-and-deleting-data)).
-- **A resolved promise does not prove the write.** `result` holds one entry per request the dashboard made to the platform: `{ status: "fulfilled", value }` or `{ status: "rejected", reason }`.
+- **A refused write rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`. A resolved promise means every request succeeded, and `result` holds one `{ status: "fulfilled", value }` entry per request.
 - **Stop waiting after a while.** No request times out by itself, and some failures get no reply, so race each call against a timer, as `withTimeout` does.
-- **Rejections are plain objects.** A record whose `variable`, `origin` and `bucket` match none of the widget's bindings rejects with the dashboard's reply, `{ status: false, message: "Invalid variable" }`, not an `Error`, so read `error.message`. The same reply also reaches `onError`.
+- **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `onError`.
 
 ## Editing and deleting data
 
@@ -290,14 +283,14 @@ Plan for the following:
 
 ## Calling an Analysis Endpoint
 
-`callEndpoint(endpointID, options)` calls the Endpoint of a Luau Analysis through the dashboard, which makes the call with the viewer's session, so no token goes in your code. `endpointID` is the Analysis ID, the one in its Endpoint URL. The Promise resolves with the Endpoint's answer, `{ status, headers, body }`, for every HTTP status, and rejects with a plain `{ code, message }` object only when the call did not complete. There is no callback form.
+`callEndpoint(endpointID, options)` calls the Endpoint of a Luau Analysis through the dashboard, which makes the call with the viewer's session, so no token goes in your code. `endpointID` is the Analysis ID, the one in its Endpoint URL. The Promise resolves with the Endpoint's answer, `{ status, headers, body }`, for every HTTP status except a redirect, and rejects with a plain `{ code, message }` object only when the call did not complete. There is no callback form.
 
 | Option   | Default | Description                                                                                 |
 | -------- | ------- | ------------------------------------------------------------------------------------------- |
 | `method` | `"GET"` | `"GET"`, `"POST"`, `"PUT"`, `"PATCH"` or `"DELETE"`                                         |
 | `path`   | `"/"`   | Below the Endpoint root, such as `"/setpoint"`. The dashboard refuses `.` and `..` segments |
 | `query`  | None    | Strings, numbers and booleans, sent as text. An array repeats its key                       |
-| `body`   | None    | A JSON value. Not allowed with `GET`                                                        |
+| `body`   | None    | A JSON value, encoded with JSON's rules. Not allowed with `GET`                             |
 
 The call below saves a setpoint through the Analysis from the [Validate a Custom Dashboard form](https://docs.tago.io/docs/tagoio/analysis/endpoints/recipes/validate-dashboard-form) recipe, which stores a value from 5 to 30 and answers `422` with a field error otherwise.
 
@@ -325,15 +318,15 @@ form.addEventListener("submit", async function (event) {
     });
     // Every HTTP status resolves, so check it before reading the body.
     if (answer.status === 422) {
-      feedback.textContent = answer.body.errors.setpoint;
+      feedback.textContent = (answer.body && answer.body.errors && answer.body.errors.setpoint) || "Invalid setpoint.";
     } else if (answer.status >= 400) {
-      feedback.textContent = answer.body.error || "Request failed (" + answer.status + ").";
+      feedback.textContent = (answer.body && answer.body.error) || "Request failed (" + answer.status + ").";
     } else {
       feedback.textContent = "Saved: " + answer.body.setpoint + " C";
     }
   } catch (error) {
     // The call did not complete: error is a plain { code, message } object.
-    feedback.textContent = "Not sent (" + error.code + "): " + error.message;
+    feedback.textContent = "Not completed (" + error.code + "): " + error.message;
   } finally {
     form.querySelector("button").disabled = false;
   }
@@ -342,22 +335,22 @@ form.addEventListener("submit", async function (event) {
 
 The promise rejects with one of these codes:
 
-| `code`        | When                                                                                                                                                                                                                             |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bad_request` | `endpointID` is not a 24-character ID, `options` holds a value a message cannot carry, such as a function, or the dashboard refused the request, such as an unknown `method`, a `.` or `..` path segment, or a `body` with `GET` |
-| `api_error`   | The dashboard could not complete the call: the Endpoint answered with a redirect, the network failed, or the reply was malformed                                                                                                 |
-| `not_ready`   | The widget settings have not arrived yet. Nothing is sent                                                                                                                                                                        |
-| `unsupported` | The dashboard does not support Endpoint calls from custom widgets. Nothing is sent                                                                                                                                               |
-| `aborted`     | The SDK stopped before the dashboard answered. `window.TagoIO` runs for the life of the page, so a JavaScript widget does not get this code                                                                                      |
+| `code`        | When                                                                                                                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bad_request` | `endpointID` is not a 24-character ID, `options` holds a value JSON or a message cannot carry, such as a `BigInt`, or the dashboard refused the request, such as an unknown `method`, a `.` or `..` path segment, or a `body` with `GET`. The Endpoint did not run |
+| `api_error`   | The dashboard could not complete the call: the Endpoint answered with a redirect, the network failed, or the reply was malformed. The Endpoint may have run, as it does before a redirect                                                                          |
+| `not_ready`   | The widget settings have not arrived yet. Nothing is sent                                                                                                                                                                                                          |
+| `unsupported` | The dashboard does not support Endpoint calls from custom widgets. Nothing is sent                                                                                                                                                                                 |
+| `aborted`     | The SDK stopped before the dashboard answered. `window.TagoIO` runs for the life of the page, so a JavaScript widget does not get this code                                                                                                                        |
 
 Branch on `code`, and keep a default branch: a newer dashboard can send a code this table does not list.
 
 Plan for the following:
 
-- **Read `status` first.** Every HTTP answer resolves, 4xx and 5xx included, and a script that runs longer than 30 seconds answers `504`. `body` is parsed when the response is JSON and is text otherwise, and `headers` holds the response headers the browser can read, with lowercase names. [Limits and errors](https://docs.tago.io/docs/tagoio/analysis/endpoints/using-endpoints#limits-and-errors) lists what each status means.
+- **Read `status` first.** Every HTTP answer except a redirect resolves, 4xx and 5xx included, and a script that runs longer than 30 seconds answers `504`. `body` is parsed when the response is JSON and is text otherwise, and `headers` holds the response headers the browser can read, with lowercase names. [Limits and errors](https://docs.tago.io/docs/tagoio/analysis/endpoints/using-endpoints#limits-and-errors) lists what each status means.
 - **The Run user needs Call Endpoint.** The dashboard always sends the viewer's token, so in TagoRUN the Run user needs **Call Endpoint** on the Analysis in Access Management, separate from **Run Analysis**. Without it the answer is `404`, even on a Public Endpoint ([Choose who can call](https://docs.tago.io/docs/tagoio/analysis/endpoints/using-endpoints#choose-who-can-call)).
 - **Call on a user action, not on a timer or on every realtime update.** Every Endpoint call on the profile counts toward one allowance that all its callers share, 60 calls a minute on the Free plan, and a `429` answer means it ran out.
-- **Send a JSON value;** a string is sent as text/plain, so the Analysis gets `scope` as nil and reads `context.request.body`.
+- **Send a JSON value;** a string is sent as text/plain, so the Analysis gets `scope` as nil and reads `context.request.body`. Any other value is encoded with JSON's rules: `toJSON()` applies, as for a `Date`, and a value JSON cannot encode, such as a `BigInt`, rejects with `bad_request`.
 - **Dashboards without the operation reject with `unsupported`.** With the widget settings, the dashboard lists the request operations it answers that older dashboards do not, today only `"call-endpoint"`. On one without Endpoint calls for widgets, such as a TagoDeploy instance on an earlier Admin build, `callEndpoint` rejects at once and sends nothing.
 - **No custom headers, and redirects are refused.** The dashboard sends the viewer's token and, for a JSON body, `Content-Type: application/json`, and nothing else. An Endpoint that answers with a redirect still ran, but the call rejects with `api_error` and the redirect is not followed. To send the viewer elsewhere, return the URL in JSON and pass it to `openLink`.
 - **Rejections never reach `onError`.** They settle only that call's promise, so catch them where you call.
@@ -477,13 +470,13 @@ window.TagoIO.onStart((widget) => {
 window.TagoIO.ready();
 ```
 
-Declare `callEndpoint` the same way, with `TEndpointCallOptions` and `TEndpointCallResult` from the same package, and type its rejection as `TEndpointCallError`.
+Declare `callEndpoint` the same way, as `callEndpoint<TBody = unknown>(endpointID: string, options?: TEndpointCallOptions): Promise<TEndpointCallResult<TBody>>` with the types from the same package, and read a rejection with `error as TEndpointCallError`.
 
 The React SDK, `@tago-io/custom-widget-react`, ships its own type declarations.
 
 ## Error Handling
 
-`onError` receives every failure the dashboard reports with `status: false`, except the ones that answer `callEndpoint`, which reject only that call's promise. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `editData` and `deleteData` never reach `onError`: check results and set timeouts, as in [Sending Data](#sending-data).
+`onError` receives every failure the dashboard reports with `status: false`, except the ones that answer `callEndpoint`, which reject only that call's promise. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `editData` and `deleteData` never reach `onError`: the dashboard shows a toast and never replies, so race those calls against a timer, as `withTimeout` does in [Sending Data](#sending-data).
 
 ```javascript
 window.TagoIO.onError(function (error) {

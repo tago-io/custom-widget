@@ -4,8 +4,8 @@
  * Shows how to save a setpoint through an Analysis Endpoint and show the field error it answers with.
  * This is the React equivalent of the JavaScript "call-endpoint.html" example.
  *
- * useCallEndpoint returns { callEndpoint, isCalling, error, reset }. Every HTTP answer resolves,
- * 4xx and 5xx included, so the form reads its status. error holds a plain { code, message }
+ * useCallEndpoint returns { callEndpoint, isCalling, error, reset }. Every HTTP answer except a
+ * redirect resolves, 4xx and 5xx included, so the form reads its status. error holds a plain { code, message }
  * object only when the call did not complete.
  *
  * The Analysis is the one from the "Validate a Custom Dashboard form" recipe. Set it up as the
@@ -63,9 +63,10 @@ function SetpointForm() {
         path: "/setpoint",
         body: { setpoint },
       });
-      // Every HTTP status resolves, 4xx and 5xx included, so check it before reading the body.
+      // Every HTTP status except a redirect resolves, 4xx and 5xx included, so check it before
+      // reading the body.
       if (result.status === 422) {
-        setAnswer({ text: result.body.errors?.setpoint ?? "Invalid setpoint.", failed: true });
+        setAnswer({ text: result.body?.errors?.setpoint ?? "Invalid setpoint.", failed: true });
       } else if (result.status >= 400) {
         // Such as 403 "Sign in first." outside TagoRUN, 404 without Call Endpoint, or 429 when
         // the profile's allowance ran out.
@@ -86,7 +87,7 @@ function SetpointForm() {
     feedback = { text: "Saving...", failed: false };
   } else if (error) {
     // The call did not complete: error is a plain { code, message } object.
-    feedback = { text: `Not sent (${error.code}): ${error.message}`, failed: true };
+    feedback = { text: `Not completed (${error.code}): ${error.message}`, failed: true };
   }
 
   return (
