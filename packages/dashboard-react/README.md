@@ -61,7 +61,7 @@ createRoot(document.getElementById("root")).render(
 | `useSqlQuery(queryID, params?, options?)` | `{ data, isLoading, error, refetch }` — pass `null` to stay idle |
 | `useTheme()`                              | `"dark" \| "light"`                                              |
 | `useDashboardStyle()`                     | the host's style object                                          |
-| `useDashboardParams()`                    | the parent page's querystring, `Record<string, string>`          |
+| `useDashboardParams()`                    | the parent page's querystring, read-only, string values          |
 | `useDashboardClient()`                    | the underlying client, for imperative calls                      |
 
 `params` is the wire shape, `[{ key: "$1", value: "30" }]`. A fresh array literal on every render is fine — the hook keys off the serialized contents, not the array's identity.
@@ -99,7 +99,7 @@ const { device } = useDashboardParams();
 const { data } = useSqlQuery(device ? QUERY_ID : null, device ? [{ key: "$1", value: device }] : []);
 ```
 
-It starts as `{}`, fills in after the handshake, and re-renders when the parent URL changes without a reload. Values are strings, and the host never forwards its own keys. The [core README](../dashboard/README.md#link-parameters) lists them and covers what does not survive the trip. The name is not `useParams` on purpose: a router's `useParams` reads path segments, and this reads the querystring.
+It starts as `{}`, fills in after the handshake, and re-renders when the parent URL changes without a reload, so the first render sees `{}` even on a scoped link. Values are strings, a key the link does not carry is `undefined`, and the host never forwards its own keys. Anyone can write the link, so render values as text, never through `dangerouslySetInnerHTML`. The [core README](../dashboard/README.md#link-parameters) lists them and covers what does not survive the trip. The name is not `useParams` on purpose: a router's `useParams` reads path segments, and this reads the querystring.
 
 ## Where this package stops
 

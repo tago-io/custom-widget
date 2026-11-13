@@ -31,7 +31,8 @@ function DeviceReadings() {
   );
 
   if (!device) {
-    return <p style={{ padding: 20 }}>Add ?device=&lt;id&gt; to the link to scope this dashboard.</p>;
+    // Also the first render on a scoped link: the host sends the params after the handshake.
+    return <p style={{ padding: 20 }}>No device on the link.</p>;
   }
 
   return (
