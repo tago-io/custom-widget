@@ -130,6 +130,20 @@ describe("style", () => {
   });
 });
 
+describe("style equality", () => {
+  it("tells a missing key apart from an undefined value", () => {
+    ctx = setupClient();
+    const listener = vi.fn();
+    ctx.client.style.subscribe(listener);
+
+    ctx.fromHost({ type: "dashboard:style", style: { a: undefined } });
+    ctx.fromHost({ type: "dashboard:style", style: { b: undefined } });
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(Object.keys(ctx.client.style.get())).toEqual(["b"]);
+  });
+});
+
 describe("subscriber isolation", () => {
   it("keeps going when one subscriber throws", () => {
     ctx = setupClient();

@@ -24,9 +24,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Keep only string values. The host already coerces to strings, so anything else is a forged or
  * future-shaped entry, and handing it on would break the "every value is a string" promise.
+ * No prototype, so a key the link does not carry reads `undefined` (not an inherited method), and
+ * a link key such as `constructor` or `__proto__` is just a key.
  */
 function readParams(raw: Record<string, unknown>): TDashboardParams {
-  const params: TDashboardParams = {};
+  const params = Object.create(null) as Record<string, string>;
   for (const [key, value] of Object.entries(raw)) {
     if (typeof value === "string") {
       params[key] = value;

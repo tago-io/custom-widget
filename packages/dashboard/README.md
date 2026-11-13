@@ -36,7 +36,9 @@ So future changes have something to point at:
 
 ### What you must never do
 
-`error.message` is API text forwarded verbatim, and column names, row keys, and query names all come from the database or from whoever wrote the query. **Never** put any of it through `innerHTML`, `eval`, or `new Function`. Render with text nodes. Every example here does.
+`error.message` is API text forwarded verbatim, and column names, row keys, and query names all come from the database or from whoever wrote the query. Link parameters (`params`) come from whoever wrote the link. **Never** put any of it through `innerHTML`, `eval`, or `new Function`. Render with text nodes. Every example here does.
+
+A link parameter rendered as HTML is reflected XSS: anyone can send a viewer `?device=<img src=x onerror=...>`, and that script runs with the viewer's session on the shell's origin.
 
 ## Install
 
@@ -114,39 +116,46 @@ Subscribers fire only on a real change. The host re-sends the current theme on a
 ### Link parameters
 
 ```ts
-params.get(): Record<string, string>
+params.get(): Readonly<Partial<Record<string, string>>>
 params.subscribe(listener): () => void
 ```
 
 The host forwards the querystring of the page that shows your dashboard, so a link can open it already scoped. A link to `/dashboards/<id>?device=6a1f...` hands the shell `{ device: "6a1f..." }`:
 
 ```js
-async function render() {
+let latest = 0;
+
+function render() {
+  const run = ++latest;
   const { device } = TagoDashboard.params.get();
   if (!device) {
     show("Pick a device.");
     return;
   }
-  const result = await TagoDashboard.sql.run(QUERY_ID, [{ key: "$1", value: device }]);
-  draw(result);
+  // A reply for an earlier device can land after the current one; drop it.
+  TagoDashboard.sql.run(QUERY_ID, [{ key: "$1", value: device }]).then(
+    (result) => run === latest && draw(result),
+    (error) => run === latest && show(error.message)
+  );
 }
 
 render();
 TagoDashboard.params.subscribe(render);
 ```
 
-- **Every value is a string**, so it goes straight into a `sql.run` param. Read numbers and dates from a string yourself.
-- **It starts as `{}`.** The host sends the map after the handshake, and only when the URL has a key to forward, so read `get()` once and subscribe for the rest.
+- **Every value is a string**, so it goes straight into a `sql.run` param. Read numbers and dates from a string yourself. A key the link does not carry is absent, which is why the type is `Partial`.
+- **It starts as `{}`.** The host sends the map after the handshake, and only when the URL has a key to forward, so the first `render()` sees `{}` even on a scoped link and the map follows about one round trip later. A shell cannot tell that first `{}` from a link with no params, so avoid spending a query on it.
 - **It follows the URL.** When the parent page changes its querystring without reloading, subscribers fire with the new map. Removing every key gives you `{}`.
+- **It is read-only.** The map is frozen and has no prototype, and only the host window can change it; a message from any other frame is ignored. Check a key with `"device" in params` or `Object.hasOwn`, not `params.hasOwnProperty`, and copy it with `{ ...params }` before handing it to code that expects a plain object or calls `String()` on it.
 - **Some keys never arrive.** The host keeps its own: `tab`, `tabKey`, `edit`, `panel`, `dialog`, `period_start`, `period_end`, `prompt`, `user`, `anonymousToken`, `by_token`, `byToken`, `bytoken`, `redirect_to`, `redirect`, `debug_url` and `local_login`. Name yours something else; for a time range, `from` and `to` work.
-- **Keep values plain.** Admin and TagoRUN parse the URL differently before forwarding it, so `null`, JSON, quoted strings and bracket keys (`?f[a]=b`) do not come through the same in both. Ids, numbers, words and ISO dates do.
+- **Keep values plain.** Admin and TagoRUN parse the URL differently before forwarding it, so `null`, JSON, quoted strings and bracket keys (`?f[a]=b`) do not come through the same in both. Neither do repeated keys: `?site=a&site=b` gives `{ site: "b" }` in Admin and no `site` at all in TagoRUN. Ids, numbers, words and ISO dates come through the same.
 
-A querystring is user input. Anyone can edit the link, so treat a value as a request, never as proof of access: the query still runs with the viewer's permissions, and its result is what to trust.
+A querystring is user input. Anyone can edit the link, so treat a value as a request, never as proof of access: the query still runs with the viewer's permissions, and its result is what to trust. Render it as text, never as HTML (see [What you must never do](#what-you-must-never-do)).
 
 ### Lifecycle
 
 ```ts
-start(): void   // attach the listener and announce the shell. Idempotent.
+start(): void   // attach the listener and announce the shell, starting params from {}. Idempotent.
 stop(): void    // detach, fail everything in flight, clear timers. Reversible.
 isEmbedded: boolean
 ```

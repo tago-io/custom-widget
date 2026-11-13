@@ -18,6 +18,6 @@ That writes uploadable copies to `examples/dist/`. Upload one via the dashboard'
 
 ## Developing without uploading
 
-Open `dev-host.html` in a browser. It frames your shell, answers `dashboard:ready` with a theme, and serves canned rows for `sql.list` and `sql.run`. It deliberately mirrors two host behaviors that are easy to miss otherwise: a request with an empty `id` gets no answer at all, and an unknown query id comes back as `not_found`.
+Open `dev-host.html` in a browser. It frames your shell, answers `dashboard:ready` with a theme and the link params you type, and serves canned rows for `sql.list` and `sql.run`. It deliberately mirrors two host behaviors that are easy to miss otherwise: a request with an empty `id` gets no answer at all, and an unknown query id comes back as `not_found`.
 
 Opened directly, with no host at all, the SDK reports `isEmbedded === false` and fails every call immediately with `no_host` rather than leaving you watching a spinner.

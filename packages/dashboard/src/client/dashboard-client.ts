@@ -32,12 +32,19 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  */
 const READY_RETRY_DELAYS_MS = [100, 300, 700, 1500];
 
-function shallowEqual<TValue>(left: Record<string, TValue>, right: Record<string, TValue>): boolean {
+// Prototype-free, like every map `readInboundMessage` builds, so `params.constructor` is undefined.
+const EMPTY_PARAMS: TDashboardParams = Object.freeze(Object.create(null) as Record<string, string>);
+
+function shallowEqual<TValue>(
+  left: Readonly<Record<string, TValue>>,
+  right: Readonly<Record<string, TValue>>
+): boolean {
   const leftKeys = Object.keys(left);
   if (leftKeys.length !== Object.keys(right).length) {
     return false;
   }
-  return leftKeys.every((key) => left[key] === right[key]);
+  // The own-key check keeps `{ a: undefined }` and `{ b: undefined }` apart.
+  return leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && left[key] === right[key]);
 }
 
 export class DashboardClient {
@@ -70,9 +77,9 @@ export class DashboardClient {
   // and a shared one would let a mutation in one shell reach every client in the document.
   private styleValue: TDashboardStyle = {};
   private styleReceived = false;
-  // Per instance for the same reason as `styleValue`. Starts empty: the host posts params only
-  // when the parent URL carries some, so "nothing arrived" and "no params" read the same.
-  private paramsValue: TDashboardParams = {};
+  // Frozen, so one shared empty map is safe. Starts empty: the host posts params only when the
+  // parent URL carries some, so "nothing arrived" and "no params" read the same.
+  private paramsValue: TDashboardParams = EMPTY_PARAMS;
   private learnedOrigin: string | null = null;
   private readyTimers: ReturnType<typeof setTimeout>[] = [];
   private warnedNoHost = false;
@@ -144,6 +151,12 @@ export class DashboardClient {
     if (this.selfWindow) {
       this.selfWindow.addEventListener("message", this.handleMessage, false);
     }
+
+    // Forget any params from before a stop(): a change posted while detached was lost, and the host
+    // answers ready with params only when the map is non-empty, so a URL cleared in between would
+    // otherwise stay live. Done here rather than in stop() so a subscriber that reacts with sql.run
+    // talks to a started client instead of one being torn down.
+    this.setParams(EMPTY_PARAMS);
 
     if (!this.isEmbedded && !this.warnedNoHost) {
       this.warnedNoHost = true;
@@ -232,7 +245,12 @@ export class DashboardClient {
       return;
     }
     if (message.kind === "params") {
-      this.setParams(message.params);
+      // Only the host window may re-scope the shell. Params decide which data the queries fetch,
+      // so a child frame or an extension posting to this window must not be able to change them.
+      // Opened standalone, the target is this very window, so nothing qualifies.
+      if (this.isEmbedded && event.source === this.targetWindow) {
+        this.setParams(message.params);
+      }
       return;
     }
 
@@ -290,8 +308,9 @@ export class DashboardClient {
       return;
     }
     // Adopting is safe here, unlike `style`: `readInboundMessage` runs once per client and builds a
-    // fresh object each time, so no two clients ever share this map.
-    this.paramsValue = params;
+    // fresh object each time, so no two clients ever share this map. Frozen, because `get()` hands
+    // it to the author and an in-place edit would skip the subscribers and corrupt the dedupe.
+    this.paramsValue = Object.freeze(params);
     this.emit(this.paramsListeners);
   }
 

@@ -42,6 +42,8 @@
         <option value="light">light</option>
         <option value="dark">dark</option>
       </select>
+      <label for="params">Link params</label>
+      <input id="params" value="device=abc123" placeholder="device=abc123&amp;from=2026-01-01" />
       <button id="reload">Reload</button>
     </header>
 
@@ -60,6 +62,38 @@
         var shell = document.getElementById("shell");
         var themeSelect = document.getElementById("theme");
         var srcInput = document.getElementById("src");
+        var paramsInput = document.getElementById("params");
+
+        // Keys the real host keeps for itself and never forwards. Mirrors
+        // CUSTOM_DASHBOARD_RESERVED_PARAM_KEYS in tago-io/admin packages/dashboard/custom-dashboard/params.ts.
+        var RESERVED_PARAMS = [
+          "tab",
+          "tabKey",
+          "edit",
+          "panel",
+          "dialog",
+          "period_start",
+          "period_end",
+          "prompt",
+          "user",
+          "anonymousToken",
+          "by_token",
+          "byToken",
+          "bytoken",
+          "redirect_to",
+          "redirect",
+          "debug_url",
+          "local_login",
+        ];
+
+        // What the real host forwards: the parent querystring minus its own keys and empty values.
+        function readParams() {
+          var params = {};
+          new URLSearchParams(paramsInput.value).forEach(function (value, key) {
+            if (value !== "" && RESERVED_PARAMS.indexOf(key) === -1) params[key] = value;
+          });
+          return params;
+        }
 
         function reply(message) {
           shell.contentWindow.postMessage(message, "*");
@@ -85,6 +119,9 @@
           if (data.type === "dashboard:ready") {
             reply({ type: "dashboard:theme", theme: themeSelect.value });
             reply({ type: "dashboard:style", style: {} });
+            // Like the real host, send params on ready only when there is something to forward.
+            var params = readParams();
+            if (Object.keys(params).length > 0) reply({ type: "dashboard:params", params: params });
             return;
           }
 
@@ -153,6 +190,10 @@
         document.getElementById("reload").addEventListener("click", load);
         themeSelect.addEventListener("change", function () {
           reply({ type: "dashboard:theme", theme: themeSelect.value });
+        });
+        // A change here stands in for the parent URL changing without a reload.
+        paramsInput.addEventListener("change", function () {
+          reply({ type: "dashboard:params", params: readParams() });
         });
 
         load();

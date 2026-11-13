@@ -37,6 +37,19 @@ describe("error code types", () => {
 });
 
 describe("readInboundMessage", () => {
+  it("accepts the four host messages", () => {
+    expect(readInboundMessage({ type: "dashboard:theme", theme: "dark" })).toEqual({ kind: "theme", theme: "dark" });
+    expect(readInboundMessage({ type: "dashboard:style", style: {} })).toEqual({ kind: "style", style: {} });
+    expect(readInboundMessage({ type: "dashboard:params", params: { device: "abc" } })).toEqual({
+      kind: "params",
+      params: { device: "abc" },
+    });
+    expect(readInboundMessage({ type: "dashboard:response", id: "a", ok: true, result: 1 })).toMatchObject({
+      kind: "response",
+      id: "a",
+    });
+  });
+
   it("accepts a params map and keeps only string values", () => {
     expect(readInboundMessage({ type: "dashboard:params", params: { device: "abc123", count: 30 } })).toEqual({
       kind: "params",
@@ -44,15 +57,6 @@ describe("readInboundMessage", () => {
     });
     expect(readInboundMessage({ type: "dashboard:params", params: [] })).toBeNull();
     expect(readInboundMessage({ type: "dashboard:params" })).toBeNull();
-  });
-
-  it("accepts the three host messages", () => {
-    expect(readInboundMessage({ type: "dashboard:theme", theme: "dark" })).toEqual({ kind: "theme", theme: "dark" });
-    expect(readInboundMessage({ type: "dashboard:style", style: {} })).toEqual({ kind: "style", style: {} });
-    expect(readInboundMessage({ type: "dashboard:response", id: "a", ok: true, result: 1 })).toMatchObject({
-      kind: "response",
-      id: "a",
-    });
   });
 
   it.each([

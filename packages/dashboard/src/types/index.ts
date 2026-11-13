@@ -39,8 +39,10 @@ export type TDashboardStyle = Record<string, string | number | null | undefined>
  *
  * Values are strings so one flows straight into a `sql.run` param. Keys the host owns (dashboard
  * UI state, TagoRUN session keys, auth tokens) are never forwarded, so they never appear here.
+ * `Partial` because a key the link does not carry is simply absent, and `Readonly` because the
+ * client freezes the map it hands out.
  */
-export type TDashboardParams = Record<string, string>;
+export type TDashboardParams = Readonly<Partial<Record<string, string>>>;
 
 /** One entry of the `sql.list` result. `id` is the wire field name, kept verbatim. */
 export type TSqlQuerySummary = { id: string; name: string };
