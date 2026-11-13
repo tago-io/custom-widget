@@ -1,4 +1,5 @@
 export { useDashboardClient } from "./hooks/use-dashboard-client.js";
+export { useDashboardParams } from "./hooks/use-dashboard-params.js";
 export { useSqlQueries } from "./hooks/use-sql-queries.js";
 export type { TUseSqlQueriesReturn } from "./hooks/use-sql-queries.js";
 export { useSqlQuery } from "./hooks/use-sql-query.js";

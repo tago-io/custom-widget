@@ -61,6 +61,7 @@ createRoot(document.getElementById("root")).render(
 | `useSqlQuery(queryID, params?, options?)` | `{ data, isLoading, error, refetch }` — pass `null` to stay idle |
 | `useTheme()`                              | `"dark" \| "light"`                                              |
 | `useDashboardStyle()`                     | the host's style object                                          |
+| `useDashboardParams()`                    | the parent page's querystring, `Record<string, string>`          |
 | `useDashboardClient()`                    | the underlying client, for imperative calls                      |
 
 `params` is the wire shape, `[{ key: "$1", value: "30" }]`. A fresh array literal on every render is fine — the hook keys off the serialized contents, not the array's identity.
@@ -88,6 +89,17 @@ For a correct first paint, set it before React mounts — Vite's module entry is
 ```
 
 `useTheme` re-renders only on a real change: the host re-sends the current theme on any `<html>` class mutation, and those are filtered out before they reach React.
+
+## Link parameters
+
+`useDashboardParams()` returns the querystring of the page that shows your dashboard, so a link such as `/dashboards/<id>?device=6a1f...` can open it scoped to one device:
+
+```tsx
+const { device } = useDashboardParams();
+const { data } = useSqlQuery(device ? QUERY_ID : null, device ? [{ key: "$1", value: device }] : []);
+```
+
+It starts as `{}`, fills in after the handshake, and re-renders when the parent URL changes without a reload. Values are strings, and the host never forwards its own keys. The [core README](../dashboard/README.md#link-parameters) lists them and covers what does not survive the trip. The name is not `useParams` on purpose: a router's `useParams` reads path segments, and this reads the querystring.
 
 ## Where this package stops
 
