@@ -18,6 +18,7 @@ const TagoDashboard = {
   },
   theme: client.theme,
   style: client.style,
+  params: client.params,
   sql: client.sql,
   start: () => client.start(),
   stop: () => client.stop(),

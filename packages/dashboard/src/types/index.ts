@@ -34,6 +34,14 @@ export type TDashboardErrorCode = TKnownErrorCode | (string & {});
 /** Host-driven body styles. The host currently always sends `{}`. */
 export type TDashboardStyle = Record<string, string | number | null | undefined>;
 
+/**
+ * The parent page's querystring, as the host forwards it: a flat map of string values.
+ *
+ * Values are strings so one flows straight into a `sql.run` param. Keys the host owns (dashboard
+ * UI state, TagoRUN session keys, auth tokens) are never forwarded, so they never appear here.
+ */
+export type TDashboardParams = Record<string, string>;
+
 /** One entry of the `sql.list` result. `id` is the wire field name, kept verbatim. */
 export type TSqlQuerySummary = { id: string; name: string };
 
@@ -86,6 +94,7 @@ export type TDashboardClientOptions = {
 export type TInboundMessage =
   | { type: "dashboard:theme"; theme: TDashboardTheme }
   | { type: "dashboard:style"; style: TDashboardStyle }
+  | { type: "dashboard:params"; params: TDashboardParams }
   | { type: "dashboard:response"; id: string; ok: true; result: unknown }
   | { type: "dashboard:response"; id: string; ok: false; error: { code: string; message: string } };
 

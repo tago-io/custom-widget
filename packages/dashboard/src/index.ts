@@ -7,6 +7,7 @@ export type {
   TCallOptions,
   TDashboardClientOptions,
   TDashboardErrorCode,
+  TDashboardParams,
   TDashboardStyle,
   TDashboardTheme,
   THostErrorCode,

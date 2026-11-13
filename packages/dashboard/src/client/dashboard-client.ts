@@ -10,6 +10,7 @@ import { isValidQueryId, serializeQueryParams } from "../protocol/params.js";
 import type {
   TCallOptions,
   TDashboardClientOptions,
+  TDashboardParams,
   TDashboardStyle,
   TDashboardTheme,
   TOutboundMessage,
@@ -31,7 +32,7 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  */
 const READY_RETRY_DELAYS_MS = [100, 300, 700, 1500];
 
-function shallowEqual(left: TDashboardStyle, right: TDashboardStyle): boolean {
+function shallowEqual<TValue>(left: Record<string, TValue>, right: Record<string, TValue>): boolean {
   const leftKeys = Object.keys(left);
   if (leftKeys.length !== Object.keys(right).length) {
     return false;
@@ -42,6 +43,7 @@ function shallowEqual(left: TDashboardStyle, right: TDashboardStyle): boolean {
 export class DashboardClient {
   readonly theme: TReadableStore<TDashboardTheme>;
   readonly style: TReadableStore<TDashboardStyle>;
+  readonly params: TReadableStore<TDashboardParams>;
   readonly sql: {
     list: (options?: TCallOptions) => Promise<TSqlQuerySummary[]>;
     run: <TRow extends TSqlRow = TSqlRow>(
@@ -60,6 +62,7 @@ export class DashboardClient {
   private readonly inFlight = new Map<string, Promise<{ result: unknown; requestID: string }>>();
   private readonly themeListeners = new Set<() => void>();
   private readonly styleListeners = new Set<() => void>();
+  private readonly paramsListeners = new Set<() => void>();
 
   private started = false;
   private themeValue: TDashboardTheme;
@@ -67,6 +70,9 @@ export class DashboardClient {
   // and a shared one would let a mutation in one shell reach every client in the document.
   private styleValue: TDashboardStyle = {};
   private styleReceived = false;
+  // Per instance for the same reason as `styleValue`. Starts empty: the host posts params only
+  // when the parent URL carries some, so "nothing arrived" and "no params" read the same.
+  private paramsValue: TDashboardParams = {};
   private learnedOrigin: string | null = null;
   private readyTimers: ReturnType<typeof setTimeout>[] = [];
   private warnedNoHost = false;
@@ -95,6 +101,16 @@ export class DashboardClient {
         this.styleListeners.add(listener);
         return () => {
           this.styleListeners.delete(listener);
+        };
+      },
+    };
+
+    this.params = {
+      get: () => this.paramsValue,
+      subscribe: (listener) => {
+        this.paramsListeners.add(listener);
+        return () => {
+          this.paramsListeners.delete(listener);
         };
       },
     };
@@ -215,6 +231,10 @@ export class DashboardClient {
       this.setStyle(message.style);
       return;
     }
+    if (message.kind === "params") {
+      this.setParams(message.params);
+      return;
+    }
 
     this.settleResponse(message.id, message.body);
   };
@@ -262,6 +282,17 @@ export class DashboardClient {
     // same object out of `style.get()`, and a mutation through one would show up in the other.
     this.styleValue = { ...style };
     this.emit(this.styleListeners);
+  }
+
+  private setParams(params: TDashboardParams): void {
+    // The host already skips unchanged maps, but a second client or a re-sent ready can repeat one.
+    if (shallowEqual(this.paramsValue, params)) {
+      return;
+    }
+    // Adopting is safe here, unlike `style`: `readInboundMessage` runs once per client and builds a
+    // fresh object each time, so no two clients ever share this map.
+    this.paramsValue = params;
+    this.emit(this.paramsListeners);
   }
 
   private emit(listeners: Set<() => void>): void {

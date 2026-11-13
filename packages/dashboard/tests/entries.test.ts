@@ -46,6 +46,8 @@ describe("src/global.ts", () => {
 
     expect(window.TagoDashboard).toBeDefined();
     expect(typeof window.TagoDashboard.sql.list).toBe("function");
+    expect(typeof window.TagoDashboard.params.get).toBe("function");
+    expect(typeof window.TagoDashboard.params.subscribe).toBe("function");
     expect(typeof window.TagoDashboard.getInitialTheme).toBe("function");
     expect(postMessage).toHaveBeenCalledWith({ type: "dashboard:ready" }, "*");
 

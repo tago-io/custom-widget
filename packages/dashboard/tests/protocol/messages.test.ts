@@ -37,6 +37,15 @@ describe("error code types", () => {
 });
 
 describe("readInboundMessage", () => {
+  it("accepts a params map and keeps only string values", () => {
+    expect(readInboundMessage({ type: "dashboard:params", params: { device: "abc123", count: 30 } })).toEqual({
+      kind: "params",
+      params: { device: "abc123" },
+    });
+    expect(readInboundMessage({ type: "dashboard:params", params: [] })).toBeNull();
+    expect(readInboundMessage({ type: "dashboard:params" })).toBeNull();
+  });
+
   it("accepts the three host messages", () => {
     expect(readInboundMessage({ type: "dashboard:theme", theme: "dark" })).toEqual({ kind: "theme", theme: "dark" });
     expect(readInboundMessage({ type: "dashboard:style", style: {} })).toEqual({ kind: "style", style: {} });

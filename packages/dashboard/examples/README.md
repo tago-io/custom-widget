@@ -13,6 +13,7 @@ That writes uploadable copies to `examples/dist/`. Upload one via the dashboard'
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `hello-dashboard.html` | The starting point: list saved queries, run one, render the table, handle errors, follow the theme.                 |
 | `error-handling.html`  | One button per outcome, plus a live log of every message in both directions. Useful when something is not behaving. |
+| `link-params.html`     | Read the link's querystring and scope a query to `?device=`, following URL changes without a reload.                |
 | `dev-host.html`        | A stand-in host so you can build without uploading. Open this one, not the shell.                                   |
 
 ## Developing without uploading

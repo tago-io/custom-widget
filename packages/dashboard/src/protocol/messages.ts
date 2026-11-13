@@ -1,6 +1,7 @@
 import { TagoDashboardError } from "../errors.js";
 import type {
   TDashboardErrorCode,
+  TDashboardParams,
   TDashboardStyle,
   TDashboardTheme,
   TSqlQuerySummary,
@@ -13,10 +14,25 @@ type ErrorMeta = { op: string; requestID: string };
 export type TReadInbound =
   | { kind: "theme"; theme: TDashboardTheme }
   | { kind: "style"; style: TDashboardStyle }
+  | { kind: "params"; params: TDashboardParams }
   | { kind: "response"; id: string; body: Record<string, unknown> };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Keep only string values. The host already coerces to strings, so anything else is a forged or
+ * future-shaped entry, and handing it on would break the "every value is a string" promise.
+ */
+function readParams(raw: Record<string, unknown>): TDashboardParams {
+  const params: TDashboardParams = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      params[key] = value;
+    }
+  }
+  return params;
 }
 
 /**
@@ -36,6 +52,10 @@ export function readInboundMessage(data: unknown): TReadInbound | null {
 
   if (data.type === "dashboard:style") {
     return isRecord(data.style) ? { kind: "style", style: data.style as TDashboardStyle } : null;
+  }
+
+  if (data.type === "dashboard:params") {
+    return isRecord(data.params) ? { kind: "params", params: readParams(data.params) } : null;
   }
 
   if (data.type === "dashboard:response") {

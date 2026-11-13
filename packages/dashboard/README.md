@@ -111,6 +111,38 @@ TagoDashboard.theme.subscribe(() => {
 
 Subscribers fire only on a real change. The host re-sends the current theme on any `<html>` class mutation, and the SDK filters those out.
 
+### Link parameters
+
+```ts
+params.get(): Record<string, string>
+params.subscribe(listener): () => void
+```
+
+The host forwards the querystring of the page that shows your dashboard, so a link can open it already scoped. A link to `/dashboards/<id>?device=6a1f...` hands the shell `{ device: "6a1f..." }`:
+
+```js
+async function render() {
+  const { device } = TagoDashboard.params.get();
+  if (!device) {
+    show("Pick a device.");
+    return;
+  }
+  const result = await TagoDashboard.sql.run(QUERY_ID, [{ key: "$1", value: device }]);
+  draw(result);
+}
+
+render();
+TagoDashboard.params.subscribe(render);
+```
+
+- **Every value is a string**, so it goes straight into a `sql.run` param. Read numbers and dates from a string yourself.
+- **It starts as `{}`.** The host sends the map after the handshake, and only when the URL has a key to forward, so read `get()` once and subscribe for the rest.
+- **It follows the URL.** When the parent page changes its querystring without reloading, subscribers fire with the new map. Removing every key gives you `{}`.
+- **Some keys never arrive.** The host keeps its own: `tab`, `tabKey`, `edit`, `panel`, `dialog`, `period_start`, `period_end`, `prompt`, `user`, `anonymousToken`, `by_token`, `byToken`, `bytoken`, `redirect_to`, `redirect`, `debug_url` and `local_login`. Name yours something else; for a time range, `from` and `to` work.
+- **Keep values plain.** Admin and TagoRUN parse the URL differently before forwarding it, so `null`, JSON, quoted strings and bracket keys (`?f[a]=b`) do not come through the same in both. Ids, numbers, words and ISO dates do.
+
+A querystring is user input. Anyone can edit the link, so treat a value as a request, never as proof of access: the query still runs with the viewer's permissions, and its result is what to trust.
+
 ### Lifecycle
 
 ```ts
