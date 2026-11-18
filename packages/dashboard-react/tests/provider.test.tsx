@@ -4,6 +4,7 @@ import { type ReactNode, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useDashboardClient } from "../src/hooks/use-dashboard-client.js";
+import { useSqlQueries } from "../src/hooks/use-sql-queries.js";
 import { DashboardProvider } from "../src/provider/dashboard-provider.js";
 import { createHarness, createHostStub } from "./helpers/harness.js";
 
@@ -54,19 +55,36 @@ describe("DashboardProvider with a client it creates", () => {
 
   it("leaves a working client after StrictMode's mount, unmount, mount cycle", async () => {
     const host = createHostStub();
+    // reactStrictMode, not a <StrictMode> inside the wrapper: React 19 double-invokes effects only
+    // when StrictMode sits at or above the topmost newly mounted fiber, which the wrapper is.
     const { result } = renderHook(() => useDashboardClient(), {
-      wrapper: ({ children }) => (
-        <StrictMode>
-          <DashboardProvider targetWindow={host.hostWindow}>{children}</DashboardProvider>
-        </StrictMode>
-      ),
+      reactStrictMode: true,
+      wrapper: ({ children }) => <DashboardProvider targetWindow={host.hostWindow}>{children}</DashboardProvider>,
     });
+    await waitFor(() => expect(host.readyCount()).toBe(2));
 
     const promise = result.current.sql.list();
     await waitFor(() => expect(host.requests()).toHaveLength(1));
     host.respondOk({ queries: [{ id: "a", name: "a" }] });
 
     await expect(promise).resolves.toEqual([{ id: "a", name: "a" }]);
+  });
+
+  it("answers a child's query issued in StrictMode's remount, before the provider restarts", async () => {
+    const host = createHostStub();
+    const { result } = renderHook(() => useSqlQueries(), {
+      reactStrictMode: true,
+      wrapper: ({ children }) => <DashboardProvider targetWindow={host.hostWindow}>{children}</DashboardProvider>,
+    });
+
+    // The remount re-runs the hook's effect while the client is still stopped. That call must
+    // wait for the provider's start() in the same tick, not fail as aborted.
+    await waitFor(() => expect(host.requests()).toHaveLength(2));
+    host.respondOk({ queries: [{ id: "a", name: "a" }] });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.error).toBeNull();
+    expect(result.current.queries).toEqual([{ id: "a", name: "a" }]);
   });
 
   it("stops it on unmount", () => {

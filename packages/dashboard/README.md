@@ -168,6 +168,8 @@ isEmbedded: boolean
 
 The `<script>` build starts automatically. Opened outside a dashboard, `isEmbedded` is `false` and every call fails immediately with `no_host` rather than hanging.
 
+A call made after `stop()` rejects with `aborted` right away instead of waiting for an answer nobody would read. The one exception is a `start()` in the same tick: React StrictMode and a revealed `<Activity>` re-run a child's effects before the provider restarts its client, so the client waits one microtask for that restart before giving up. A call made before the first `start()` is still sent, for the same reason, but its answer is read only if `start()` runs before the host replies.
+
 ## Errors
 
 Every failure throws a `TagoDashboardError` with a `code`. The `Raised by` column is not decoration: two codes come from either side, and knowing which side you are looking at changes what you do about it.
@@ -185,7 +187,7 @@ Every failure throws a `TagoDashboardError` with a `code`. The `Raised by` colum
 | `bad_request`  | Both      | SDK: the query id failed its local format check, and nothing was sent. Host: some other part of the payload was rejected |
 | `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts)                                                                |
 | `no_host`      | SDK       | The page is not running inside a dashboard                                                                               |
-| `aborted`      | SDK       | `stop()` was called while the request was in flight                                                                      |
+| `aborted`      | SDK       | `stop()` was called while the request was in flight, or the call was made on a stopped client                            |
 | `internal`     | SDK       | The SDK could not issue the request                                                                                      |
 
 In practice `bad_request` reaches you from the SDK, not the host: the query id is checked before anything is posted, so an invalid one costs no round trip. And an `api_error` whose message mentions a malformed reply is the SDK telling you the host answered with something it could not read, which is a different problem from a query that failed.

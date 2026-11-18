@@ -72,6 +72,9 @@ export class DashboardClient {
   private readonly paramsListeners = new Set<() => void>();
 
   private started = false;
+  // True only between an explicit stop() and the next start(). A client that was never started
+  // is not stopped: the provider starts it after its children's first effects have already run.
+  private stopped = false;
   private themeValue: TDashboardTheme;
   // Per instance, not a shared module constant: `style.get()` hands this object to the author,
   // and a shared one would let a mutation in one shell reach every client in the document.
@@ -147,6 +150,7 @@ export class DashboardClient {
       return;
     }
     this.started = true;
+    this.stopped = false;
 
     if (this.selfWindow) {
       this.selfWindow.addEventListener("message", this.handleMessage, false);
@@ -166,12 +170,17 @@ export class DashboardClient {
     this.postReady();
   }
 
-  /** Detach, fail everything in flight, and clear every timer. The client stays reusable. */
+  /**
+   * Detach, fail everything in flight, and clear every timer. The client stays reusable. A call
+   * made while stopped rejects with `aborted` instead of waiting out the timeout for an answer
+   * nobody would read, unless `start()` runs again in the same tick.
+   */
   stop(): void {
     if (!this.started) {
       return;
     }
     this.started = false;
+    this.stopped = true;
 
     if (this.selfWindow) {
       this.selfWindow.removeEventListener("message", this.handleMessage, false);
@@ -368,6 +377,18 @@ export class DashboardClient {
   }
 
   private dispatch(op: string, payload: unknown, timeoutMs: number): Promise<{ result: unknown; requestID: string }> {
+    if (this.stopped) {
+      // StrictMode and a revealed <Activity> re-run the children's effects before the provider's,
+      // so a hook calls into a client its provider restarts a moment later in the same tick. Wait
+      // one microtask for that restart; a client still stopped after it was never coming back.
+      return Promise.resolve().then(() => {
+        if (this.stopped) {
+          throw new TagoDashboardError("aborted", "The dashboard client is stopped.", { op });
+        }
+        return this.dispatch(op, payload, timeoutMs);
+      });
+    }
+
     if (!this.isEmbedded) {
       return Promise.reject(
         new TagoDashboardError(
