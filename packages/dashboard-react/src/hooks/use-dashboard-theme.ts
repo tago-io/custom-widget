@@ -9,7 +9,7 @@ import { useDashboardClient } from "./use-dashboard-client.js";
  * Re-renders only on a real change: the host re-sends the same theme on any `<html>` class
  * mutation, and the client filters those out before they reach React.
  */
-export function useTheme(): TDashboardTheme {
+export function useDashboardTheme(): TDashboardTheme {
   const client = useDashboardClient();
   return useSyncExternalStore(client.theme.subscribe, client.theme.get, client.theme.get);
 }

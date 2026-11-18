@@ -4,7 +4,7 @@ export { useSqlQueries } from "./hooks/use-sql-queries.js";
 export type { TUseSqlQueriesReturn } from "./hooks/use-sql-queries.js";
 export { useSqlQuery } from "./hooks/use-sql-query.js";
 export type { TUseSqlQueryReturn } from "./hooks/use-sql-query.js";
-export { useDashboardStyle, useTheme } from "./hooks/use-theme.js";
+export { useDashboardStyle, useDashboardTheme } from "./hooks/use-dashboard-theme.js";
 export { DashboardProvider } from "./provider/dashboard-provider.js";
 export type { TDashboardProviderProps } from "./provider/dashboard-provider.js";
 

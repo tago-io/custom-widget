@@ -59,7 +59,7 @@ createRoot(document.getElementById("root")).render(
 | ----------------------------------------- | ---------------------------------------------------------------- |
 | `useSqlQueries()`                         | `{ queries, isLoading, error, refetch }`                         |
 | `useSqlQuery(queryID, params?, options?)` | `{ data, isLoading, error, refetch }` — pass `null` to stay idle |
-| `useTheme()`                              | `"dark" \| "light"`                                              |
+| `useDashboardTheme()`                     | `"dark" \| "light"`                                              |
 | `useDashboardStyle()`                     | the host's style object                                          |
 | `useDashboardParams()`                    | the parent page's querystring, read-only, string values          |
 | `useDashboardClient()`                    | the underlying client, for imperative calls                      |
@@ -70,10 +70,10 @@ createRoot(document.getElementById("root")).render(
 
 ## Theme
 
-`useTheme()` gives you the value; applying it is yours, because your CSS contract is not the SDK's to invent:
+`useDashboardTheme()` gives you the value; applying it is yours, because your CSS contract is not the SDK's to invent:
 
 ```tsx
-const theme = useTheme();
+const theme = useDashboardTheme();
 useEffect(() => {
   document.documentElement.dataset.theme = theme;
 }, [theme]);
@@ -88,7 +88,7 @@ For a correct first paint, set it before React mounts — Vite's module entry is
 </script>
 ```
 
-`useTheme` re-renders only on a real change: the host re-sends the current theme on any `<html>` class mutation, and those are filtered out before they reach React.
+`useDashboardTheme` re-renders only on a real change: the host re-sends the current theme on any `<html>` class mutation, and those are filtered out before they reach React.
 
 ## Link parameters
 

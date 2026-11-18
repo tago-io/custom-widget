@@ -13,10 +13,10 @@
  *          new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light";
  *      </script>
  *
- * 2. Later changes, which is what useTheme is for.
+ * 2. Later changes, which is what useDashboardTheme is for.
  */
 
-import { DashboardProvider, useTheme } from "@tago-io/custom-dashboard-react";
+import { DashboardProvider, useDashboardTheme } from "@tago-io/custom-dashboard-react";
 import React, { useEffect } from "react";
 
 function App() {
@@ -28,7 +28,7 @@ function App() {
 }
 
 function ThemedShell() {
-  const theme = useTheme();
+  const theme = useDashboardTheme();
 
   // Mirror it wherever your styles expect it — a data attribute, a class, both.
   useEffect(() => {

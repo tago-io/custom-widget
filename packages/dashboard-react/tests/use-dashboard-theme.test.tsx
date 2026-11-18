@@ -2,8 +2,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { useDashboardStyle, useDashboardTheme } from "../src/hooks/use-dashboard-theme.js";
 import { useSqlQuery } from "../src/hooks/use-sql-query.js";
-import { useDashboardStyle, useTheme } from "../src/hooks/use-theme.js";
 import { createHarness, RUN_RESULT } from "./helpers/harness.js";
 
 const VALID_ID = "6fdbb0f233ea47fa36d331fa";
@@ -12,23 +12,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function useThemeWithRenderCount() {
-  const theme = useTheme();
+function useDashboardThemeWithRenderCount() {
+  const theme = useDashboardTheme();
   const renders = useRef(0);
   renders.current += 1;
   return { theme, renders: renders.current };
 }
 
-describe("useTheme", () => {
+describe("useDashboardTheme", () => {
   it("starts from the URL before any message arrives", () => {
     const harness = createHarness();
-    const { result } = renderHook(() => useTheme(), { wrapper: harness.wrapper });
+    const { result } = renderHook(() => useDashboardTheme(), { wrapper: harness.wrapper });
     expect(result.current).toBe("light");
   });
 
   it("re-renders once per real change", async () => {
     const harness = createHarness();
-    const { result } = renderHook(() => useThemeWithRenderCount(), { wrapper: harness.wrapper });
+    const { result } = renderHook(() => useDashboardThemeWithRenderCount(), { wrapper: harness.wrapper });
     const initial = result.current.renders;
 
     harness.fromHost({ type: "dashboard:theme", theme: "dark" });
@@ -39,7 +39,7 @@ describe("useTheme", () => {
 
   it("does not re-render when the host repeats the same theme", async () => {
     const harness = createHarness();
-    const { result } = renderHook(() => useThemeWithRenderCount(), { wrapper: harness.wrapper });
+    const { result } = renderHook(() => useDashboardThemeWithRenderCount(), { wrapper: harness.wrapper });
 
     harness.fromHost({ type: "dashboard:theme", theme: "dark" });
     await waitFor(() => expect(result.current.theme).toBe("dark"));
