@@ -57,7 +57,10 @@ type TTagoIO = {
   closeModal: () => void;
   runAnalysis: (scope?: unknown) => void;
   refreshResources: () => void;
-  callEndpoint: (endpointID: string, options?: TEndpointCallOptions) => Promise<TEndpointCallResult>;
+  callEndpoint: <TBody = unknown>(
+    endpointID: string,
+    options?: TEndpointCallOptions
+  ) => Promise<TEndpointCallResult<TBody>>;
 };
 
 declare global {
@@ -231,7 +234,8 @@ const refreshResources: TTagoIO["refreshResources"] = () => {
   store.refreshResources();
 };
 
-const callEndpoint: TTagoIO["callEndpoint"] = (endpointID, options) => store.callEndpoint(endpointID, options);
+const callEndpoint: TTagoIO["callEndpoint"] = <TBody = unknown>(endpointID: string, options?: TEndpointCallOptions) =>
+  store.callEndpoint<TBody>(endpointID, options);
 
 window.TagoIO.ready = onReady;
 window.TagoIO.onStart = onStart;

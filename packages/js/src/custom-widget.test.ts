@@ -1,5 +1,5 @@
-import type { TRealtimeData } from "@tago-io/custom-widget-core";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import type { TEndpointCallResult, TRealtimeData } from "@tago-io/custom-widget-core";
+import { beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi } from "vite-plus/test";
 
 import { closeModal, editResourceData, onError, onRealtime, onStart, runAnalysis, sendData } from "./custom-widget";
 
@@ -231,11 +231,14 @@ describe("callEndpoint", () => {
   });
 
   it("resolves through window.TagoIO with the Endpoint's answer", async () => {
-    const promise = window.TagoIO.callEndpoint(endpointID, {
+    type SetpointAnswer = { errors?: { setpoint?: string } };
+    const promise = window.TagoIO.callEndpoint<SetpointAnswer>(endpointID, {
       method: "POST",
       path: "/setpoint",
       body: { setpoint: 50 },
     });
+    // Checked by check:types: the body type passes through, as in the core and React APIs.
+    expectTypeOf(promise).resolves.toEqualTypeOf<TEndpointCallResult<SetpointAnswer>>();
 
     expect(mockPostMessage).toHaveBeenCalledWith(
       {
