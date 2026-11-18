@@ -48,26 +48,63 @@ describe("start", () => {
 });
 
 describe("before the first start", () => {
-  it("still sends a call, because a provider starts the client after its children's effects", async () => {
+  // A provider starts its client after its children's first effects, in the same tick, so a hook's
+  // first call lands on a client that is not running yet.
+  it("holds a call until a start() in the same tick, then sends it", async () => {
     const { hostWindow, postMessage } = createHostWindow();
     const client = new DashboardClient({ targetWindow: hostWindow });
+    const requests = () =>
+      postMessage.mock.calls
+        .map((call) => call[0] as Record<string, unknown>)
+        .filter((message) => message.type === "dashboard:request");
 
     try {
       const promise = client.sql.list();
-      const request = postMessage.mock.calls
-        .map((call) => call[0] as Record<string, unknown>)
-        .find((message) => message.type === "dashboard:request");
-      expect(request).toMatchObject({ op: "sql.list" });
+      // Nothing is posted before the listener that reads the answer is attached.
+      expect(requests()).toHaveLength(0);
 
       client.start();
+      await vi.waitFor(() => expect(requests()).toHaveLength(1));
       dispatch(
-        { type: "dashboard:response", id: request?.id, ok: true, result: { queries: [] } },
+        { type: "dashboard:response", id: requests()[0].id, ok: true, result: { queries: [] } },
         { source: hostWindow }
       );
       await expect(promise).resolves.toEqual([]);
     } finally {
       client.stop();
     }
+  });
+
+  it("rejects a call as aborted when no start() follows, instead of waiting out the timeout", async () => {
+    const { hostWindow, postMessage } = createHostWindow();
+    const client = new DashboardClient({ targetWindow: hostWindow });
+
+    await expect(client.sql.list()).rejects.toMatchObject({ code: "aborted", op: "sql.list" });
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(client.pendingCount).toBe(0);
+  });
+
+  it("fails a held call when stop() comes before it is sent, so it never reaches the host", async () => {
+    const { hostWindow, postMessage } = createHostWindow();
+    const client = new DashboardClient({ targetWindow: hostWindow });
+
+    // StrictMode's first mount: the child's call, the provider's start(), then the teardown.
+    const promise = client.sql.list();
+    client.start();
+    client.stop();
+
+    await expect(promise).rejects.toMatchObject({ code: "aborted", op: "sql.list" });
+    const requests = postMessage.mock.calls.filter(
+      (call) => (call[0] as Record<string, unknown>).type === "dashboard:request"
+    );
+    expect(requests).toHaveLength(0);
+  });
+
+  it("still fails fast with no_host when opened outside a dashboard", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const client = new DashboardClient();
+
+    await expect(client.sql.list()).rejects.toMatchObject({ code: "no_host" });
   });
 });
 

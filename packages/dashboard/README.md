@@ -168,7 +168,7 @@ isEmbedded: boolean
 
 The `<script>` build starts automatically. Opened outside a dashboard, `isEmbedded` is `false` and every call fails immediately with `no_host` rather than hanging.
 
-A call made after `stop()` rejects with `aborted` right away instead of waiting for an answer nobody would read. The one exception is a `start()` in the same tick: React StrictMode and a revealed `<Activity>` re-run a child's effects before the provider restarts its client, so the client waits one microtask for that restart before giving up. A call made before the first `start()` is still sent, for the same reason, but its answer is read only if `start()` runs before the host replies.
+A call made while the client is not running, before the first `start()` or after `stop()`, waits one microtask for a `start()` and then rejects with `aborted`, instead of waiting out the timeout for an answer nobody would read. The microtask is for React: a provider starts its client after its children's first effects, and StrictMode and a revealed `<Activity>` remount the children before the provider restarts it, all in the same tick. A `stop()` also fails a call that is still waiting, so it never reaches the host.
 
 ## Errors
 
@@ -187,7 +187,7 @@ Every failure throws a `TagoDashboardError` with a `code`. The `Raised by` colum
 | `bad_request`  | Both      | SDK: the query id failed its local format check, and nothing was sent. Host: some other part of the payload was rejected |
 | `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts)                                                                |
 | `no_host`      | SDK       | The page is not running inside a dashboard                                                                               |
-| `aborted`      | SDK       | `stop()` was called while the request was in flight, or the call was made on a stopped client                            |
+| `aborted`      | SDK       | `stop()` was called while the request was in flight, or the client was not running when the call was made                |
 | `internal`     | SDK       | The SDK could not issue the request                                                                                      |
 
 In practice `bad_request` reaches you from the SDK, not the host: the query id is checked before anything is posted, so an invalid one costs no round trip. And an `api_error` whose message mentions a malformed reply is the SDK telling you the host answered with something it could not read, which is a different problem from a query that failed.

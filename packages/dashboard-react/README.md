@@ -134,11 +134,11 @@ createRoot(document.getElementById("root")).render(
 );
 ```
 
-That client stays yours. The provider never starts or stops it, so the other code keeps getting answers after the React tree unmounts. Call `client.stop()` once nothing uses it. Options set on the provider, such as `timeoutMs`, apply only to a client it creates.
+That client stays yours. The provider never starts or stops it, so the other code keeps getting answers after the React tree unmounts. Start it before rendering: a hook's call on a client that is not running rejects with `aborted`. Call `client.stop()` once nothing uses it. Options set on the provider, such as `timeoutMs`, apply only to a client it creates.
 
 ## StrictMode
 
-Supported, with one dev-only wrinkle: StrictMode mounts, unmounts, and mounts again, so the shell announces itself twice. That is deliberate — making the client's `stop()` irreversible to avoid it would leave it dead after the first cleanup. The host answers every announcement, so the only cost is one extra theme message in development.
+Supported, with one dev-only wrinkle: StrictMode mounts, unmounts, and mounts again, so the shell announces itself twice. That is deliberate: making the client's `stop()` irreversible to avoid it would leave it dead after the first cleanup. The host answers every announcement, so the only cost is one extra theme message in development. Queries do not run twice: the first mount's calls wait for the provider to start the client, and the teardown cancels them before they are sent.
 
 ## License
 

@@ -72,9 +72,8 @@ export class DashboardClient {
   private readonly paramsListeners = new Set<() => void>();
 
   private started = false;
-  // True only between an explicit stop() and the next start(). A client that was never started
-  // is not stopped: the provider starts it after its children's first effects have already run.
-  private stopped = false;
+  // Calls made while the client is not running, each waiting one microtask for a start().
+  private readonly parked = new Set<() => void>();
   private themeValue: TDashboardTheme;
   // Per instance, not a shared module constant: `style.get()` hands this object to the author,
   // and a shared one would let a mutation in one shell reach every client in the document.
@@ -150,7 +149,6 @@ export class DashboardClient {
       return;
     }
     this.started = true;
-    this.stopped = false;
 
     if (this.selfWindow) {
       this.selfWindow.addEventListener("message", this.handleMessage, false);
@@ -172,15 +170,14 @@ export class DashboardClient {
 
   /**
    * Detach, fail everything in flight, and clear every timer. The client stays reusable. A call
-   * made while stopped rejects with `aborted` instead of waiting out the timeout for an answer
-   * nobody would read, unless `start()` runs again in the same tick.
+   * made while the client is not running rejects with `aborted` instead of waiting out the timeout
+   * for an answer nobody would read, unless `start()` runs in the same tick.
    */
   stop(): void {
     if (!this.started) {
       return;
     }
     this.started = false;
-    this.stopped = true;
 
     if (this.selfWindow) {
       this.selfWindow.removeEventListener("message", this.handleMessage, false);
@@ -188,6 +185,13 @@ export class DashboardClient {
 
     this.clearReadyTimers();
     this.inFlight.clear();
+
+    // A call still waiting for start() is in flight too. Failing it here, before it posts, is what
+    // keeps StrictMode's first mount from running every query twice.
+    for (const abort of this.parked) {
+      abort();
+    }
+    this.parked.clear();
 
     for (const entry of this.pending.drain()) {
       if (entry.timer) {
@@ -363,9 +367,9 @@ export class DashboardClient {
 
     const promise: Promise<{ result: unknown; requestID: string }> = this.dispatch(op, payload, timeoutMs).finally(
       () => {
-        // Retract only our own entry. `stop()` then `start()` then an identical call all land in
-        // one tick under React StrictMode, which registers a fresh promise under this key before
-        // the stopped one settles. Deleting unconditionally would drop the live entry and cost a
+        // Retract only our own entry. Under React StrictMode the first call, `stop()`, the remount's
+        // identical call and `start()` all land in one tick, which registers a fresh promise under
+        // this key before the stopped one settles. Deleting unconditionally would drop the live entry and cost a
         // second execution, defeating the coalescing this key exists for.
         if (this.inFlight.get(key) === promise) {
           this.inFlight.delete(key);
@@ -377,18 +381,6 @@ export class DashboardClient {
   }
 
   private dispatch(op: string, payload: unknown, timeoutMs: number): Promise<{ result: unknown; requestID: string }> {
-    if (this.stopped) {
-      // StrictMode and a revealed <Activity> re-run the children's effects before the provider's,
-      // so a hook calls into a client its provider restarts a moment later in the same tick. Wait
-      // one microtask for that restart; a client still stopped after it was never coming back.
-      return Promise.resolve().then(() => {
-        if (this.stopped) {
-          throw new TagoDashboardError("aborted", "The dashboard client is stopped.", { op });
-        }
-        return this.dispatch(op, payload, timeoutMs);
-      });
-    }
-
     if (!this.isEmbedded) {
       return Promise.reject(
         new TagoDashboardError(
@@ -397,6 +389,10 @@ export class DashboardClient {
           { op }
         )
       );
+    }
+
+    if (!this.started) {
+      return this.waitForStart(op, payload, timeoutMs);
     }
 
     return new Promise((resolve, reject) => {
@@ -465,6 +461,44 @@ export class DashboardClient {
           })
         );
       }
+    });
+  }
+
+  /**
+   * React runs a child's effects before its provider's, on the first mount and again when StrictMode
+   * or a revealed <Activity> remounts the tree, so a hook calls into a client that its provider
+   * starts a moment later in the same tick. Wait one microtask for that start(). A client still not
+   * running after it was never coming, and posting would only wait out the timeout for an answer
+   * that no listener reads.
+   */
+  private waitForStart(
+    op: string,
+    payload: unknown,
+    timeoutMs: number
+  ): Promise<{ result: unknown; requestID: string }> {
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(new TagoDashboardError("aborted", "The dashboard client was stopped.", { op }));
+      this.parked.add(abort);
+
+      queueMicrotask(() => {
+        // stop() already failed it.
+        if (!this.parked.delete(abort)) {
+          return;
+        }
+        if (!this.started) {
+          reject(
+            new TagoDashboardError(
+              "aborted",
+              "The dashboard client is not started. Call start() before making calls.",
+              {
+                op,
+              }
+            )
+          );
+          return;
+        }
+        this.dispatch(op, payload, timeoutMs).then(resolve, reject);
+      });
     });
   }
 

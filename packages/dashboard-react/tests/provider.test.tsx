@@ -78,13 +78,16 @@ describe("DashboardProvider with a client it creates", () => {
     });
 
     // The remount re-runs the hook's effect while the client is still stopped. That call must
-    // wait for the provider's start() in the same tick, not fail as aborted.
-    await waitFor(() => expect(host.requests()).toHaveLength(2));
+    // wait for the provider's start() in the same tick, not fail as aborted. The first mount's call
+    // was still waiting for start() when StrictMode stopped the client, so it never reached the
+    // host: one execution, not two.
+    await waitFor(() => expect(host.requests()).toHaveLength(1));
     host.respondOk({ queries: [{ id: "a", name: "a" }] });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.error).toBeNull();
     expect(result.current.queries).toEqual([{ id: "a", name: "a" }]);
+    expect(host.requests()).toHaveLength(1);
   });
 
   it("stops it on unmount", () => {
@@ -105,6 +108,20 @@ describe("DashboardProvider with a client it creates", () => {
 });
 
 describe("DashboardProvider with a client it is given", () => {
+  it("fails a hook's call on it as aborted when nobody started it, instead of waiting out the timeout", async () => {
+    const host = createHostStub();
+    const client = new DashboardClient({ targetWindow: host.hostWindow });
+    const { result } = renderHook(() => useSqlQueries(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <DashboardProvider client={client}>{children}</DashboardProvider>
+      ),
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.error?.code).toBe("aborted");
+    expect(host.requests()).toHaveLength(0);
+  });
+
   it("does not start it", () => {
     const host = createHostStub();
     const client = new DashboardClient({ targetWindow: host.hostWindow });
