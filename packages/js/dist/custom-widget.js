@@ -80,11 +80,14 @@
       if (typeof window === "undefined") return;
       window.parent.postMessage(message, "*");
     }
-    sendWithResponse(message) {
+    /**
+     * Post a request and settle with the reply that carries its key. Pass `key` to know it before the reply
+     * arrives; it defaults to a new ID.
+     */
+    sendWithResponse(message, key = generateId()) {
       if (this.destroyed) {
         return Promise.reject(new Error(BRIDGE_DESTROYED));
       }
-      const key = generateId();
       const messageWithKey = { ...message, key };
       return new Promise((resolve, reject) => {
         this.pool.add(key, { resolve, reject });
@@ -263,6 +266,7 @@
       this.listeners = /* @__PURE__ */ new Set();
       this.initialized = false;
       this.unsubBridge = null;
+      this.endpointCallKeys = /* @__PURE__ */ new Set();
       this.handleInbound = (data) => {
         const partial = {};
         if (data.userInformation) {
@@ -280,7 +284,8 @@
             partial.capabilities = [];
           }
         }
-        if (data.status === false && data.method !== "call-endpoint") {
+        const isEndpointCallReply = data.key !== void 0 && this.endpointCallKeys.has(data.key) || data.method === "call-endpoint";
+        if (data.status === false && !isEndpointCallReply) {
           const error = data;
           partial.errors = [...this.state.errors, error];
         }
@@ -406,11 +411,15 @@
       } catch (error) {
         throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
       }
+      const key = generateId();
+      this.endpointCallKeys.add(key);
       let reply;
       try {
-        reply = await this.bridge.sendWithResponse({ method: "call-endpoint", payload });
+        reply = await this.bridge.sendWithResponse({ method: "call-endpoint", payload }, key);
       } catch (reason) {
         throw toEndpointCallError(reason);
+      } finally {
+        this.endpointCallKeys.delete(key);
       }
       return readEndpointResult(reply);
     }

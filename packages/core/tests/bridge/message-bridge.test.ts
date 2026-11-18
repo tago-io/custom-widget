@@ -159,6 +159,16 @@ describe("MessageBridge", () => {
       await expect(promise).rejects.toEqual({ status: false, key, message: "error", result: [] });
     });
 
+    it("posts and settles under the key the caller passes", async () => {
+      const promise = bridge.sendWithResponse({ variables: [] }, "caller-key");
+
+      expect(mockPostMessage).toHaveBeenCalledWith({ variables: [], key: "caller-key" }, "*");
+
+      window.dispatchEvent(new MessageEvent("message", { data: { status: true, key: "caller-key", result: [] } }));
+
+      await expect(promise).resolves.toEqual({ status: true, key: "caller-key", result: [] });
+    });
+
     it("rejects at once after destroy, posting nothing", async () => {
       bridge.destroy();
 

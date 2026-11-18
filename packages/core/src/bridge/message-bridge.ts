@@ -60,13 +60,16 @@ export class MessageBridge {
     window.parent.postMessage(message, "*");
   }
 
-  sendWithResponse(message: OutboundMessage): Promise<TData> {
+  /**
+   * Post a request and settle with the reply that carries its key. Pass `key` to know it before the reply
+   * arrives; it defaults to a new ID.
+   */
+  sendWithResponse(message: OutboundMessage, key: string = generateId()): Promise<TData> {
     // A destroyed bridge posts nothing, so the request would never be answered.
     if (this.destroyed) {
       return Promise.reject(new Error(BRIDGE_DESTROYED));
     }
 
-    const key = generateId();
     const messageWithKey = { ...message, key };
 
     return new Promise<TData>((resolve, reject) => {

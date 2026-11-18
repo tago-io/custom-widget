@@ -270,6 +270,15 @@ describe("callEndpoint", () => {
     await expect(promise).rejects.toEqual({ code: "api_error", message: "The Endpoint call failed" });
     expect(mockOnError).not.toHaveBeenCalled();
   });
+
+  it("keeps a failure reply without method away from onError by its key", async () => {
+    const promise = window.TagoIO.callEndpoint(endpointID);
+
+    simulateMessage({ status: false, key: "staticKey", code: "api_error", message: "The Endpoint call failed" });
+
+    await expect(promise).rejects.toEqual({ code: "api_error", message: "The Endpoint call failed" });
+    expect(mockOnError).not.toHaveBeenCalled();
+  });
 });
 
 describe("closeModal", () => {

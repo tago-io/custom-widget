@@ -400,6 +400,62 @@ describe("WidgetStore", () => {
       expect(store.getSnapshot().errors).toEqual([]);
     });
 
+    it("keeps a failure reply without method out of state.errors by its key", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { status: false, key: lastSent().key, code: "api_error", message: "The Endpoint call failed" },
+        })
+      );
+
+      await expect(promise).rejects.toEqual({ code: "api_error", message: "The Endpoint call failed" });
+      expect(store.getSnapshot().errors).toEqual([]);
+    });
+
+    describe("forgets the call's key once it settles", () => {
+      // A later failure that reuses the key and carries no method is then an ordinary error again.
+      function strayFailure(key: unknown) {
+        window.dispatchEvent(new MessageEvent("message", { data: { status: false, key, message: "Stray" } }));
+      }
+
+      it.each([
+        { path: "an answer", settle: () => reply({ status: true, result: { status: 200, headers: {}, body: null } }) },
+        { path: "a failure reply", settle: () => reply({ status: false, code: "api_error", message: "Failed" }) },
+        {
+          path: "a destroy and a remount",
+          settle: () => {
+            store.destroy();
+            store.initialize();
+          },
+        },
+      ])("after $path", async ({ settle }) => {
+        hostReady();
+        const outcome = store.callEndpoint(endpointID).catch(() => {});
+        const { key } = lastSent();
+
+        settle();
+        await outcome;
+        strayFailure(key);
+
+        expect(store.getSnapshot().errors).toEqual([expect.objectContaining({ key, message: "Stray" })]);
+      });
+
+      it("after a post that throws", async () => {
+        hostReady();
+        mockPostMessage.mockImplementationOnce(() => {
+          throw new DOMException("() => {} could not be cloned.", "DataCloneError");
+        });
+
+        await store.callEndpoint(endpointID).catch(() => {});
+        const { key } = lastSent();
+        strayFailure(key);
+
+        expect(store.getSnapshot().errors).toEqual([expect.objectContaining({ key, message: "Stray" })]);
+      });
+    });
+
     it("uses api_error when a failure reply has no code", async () => {
       hostReady();
       const promise = store.callEndpoint(endpointID);

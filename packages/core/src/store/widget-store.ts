@@ -1,3 +1,4 @@
+import { generateId } from "../bridge/generate-id.js";
 import { BRIDGE_DESTROYED, MessageBridge } from "../bridge/message-bridge.js";
 import type {
   InboundMessage,
@@ -95,6 +96,8 @@ export class WidgetStore {
   private readyOptions: TReadyOptions;
   private bridgeOptions: { allowedOrigins?: string[] };
   private unsubBridge: (() => void) | null = null;
+  /** Keys of the callEndpoint requests in flight, so a failure reply to one is known even without `method`. */
+  private endpointCallKeys = new Set<string>();
 
   constructor(options: StoreOptions = {}) {
     this.strategy = options.realtimeStrategy ?? "merge";
@@ -132,8 +135,11 @@ export class WidgetStore {
       }
     }
 
-    // A call-endpoint failure already rejects that call's promise, so it stays out of `errors`.
-    if (data.status === false && data.method !== "call-endpoint") {
+    // A call-endpoint failure already rejects that call's promise, so it stays out of `errors`. The key identifies it
+    // while the call is in flight; the method the dashboard echoes identifies it after that.
+    const isEndpointCallReply =
+      (data.key !== undefined && this.endpointCallKeys.has(data.key)) || data.method === "call-endpoint";
+    if (data.status === false && !isEndpointCallReply) {
       const error = data as unknown as TError;
       partial.errors = [...this.state.errors, error];
     }
@@ -278,11 +284,18 @@ export class WidgetStore {
       throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
     }
 
+    // The bridge settles the request and runs handleInbound in one synchronous pass, and the await below resumes
+    // only after it, so handleInbound still finds the key of the reply that settles the call.
+    const key = generateId();
+    this.endpointCallKeys.add(key);
     let reply: unknown;
     try {
-      reply = await this.bridge.sendWithResponse({ method: "call-endpoint", payload });
+      reply = await this.bridge.sendWithResponse({ method: "call-endpoint", payload }, key);
     } catch (reason) {
       throw toEndpointCallError(reason);
+    } finally {
+      // Every way the request settles passes here: an answer, a failure reply, a destroyed bridge or a failed post.
+      this.endpointCallKeys.delete(key);
     }
     return readEndpointResult<TBody>(reply);
   }
