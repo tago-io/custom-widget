@@ -30,7 +30,7 @@ Treat uploading a shell the way you treat deploying code: review it, and permiss
 So future changes have something to point at:
 
 - **Never** write `localStorage`, `sessionStorage`, or cookies. No result cache, no persisted theme, no telemetry.
-- **Never** add a generic passthrough op, or wrap a new host op, without a separate security review. The two ops below are the entire attack surface.
+- **Never** add a generic passthrough op, or wrap a new host op, without a separate security review. This SDK wraps only the two `sql.*` ops below, but the host bridge answers others too, such as `endpoint.list` and `endpoint.call` for Analysis Endpoints. A shell can post those without this SDK, so judge what a shell can reach by the host's ops, not by this package.
 - **Never** add breadth helpers — no `runAll`, no `prefetchAll`, no find-query-by-name, no sub-second polling helper.
 - **Never** handle tokens. The SDK never sees one, and the iframe URL carries none.
 
