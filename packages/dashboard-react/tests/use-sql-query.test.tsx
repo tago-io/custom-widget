@@ -1,14 +1,16 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { useLayoutEffect } from "react";
+import { act, cleanup, render, renderHook, waitFor } from "@testing-library/react";
+import { Activity, useEffect, useLayoutEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useSqlQuery } from "../src/hooks/use-sql-query.js";
-import { createHarness, RUN_RESULT } from "./helpers/harness.js";
+import { DashboardProvider } from "../src/provider/dashboard-provider.js";
+import { createHarness, createHostStub, RUN_RESULT } from "./helpers/harness.js";
 
 const VALID_ID = "6fdbb0f233ea47fa36d331fa";
 const OTHER_ID = "aaaaaaaaaaaaaaaaaaaaaaaa";
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -249,5 +251,99 @@ describe("query identity changes", () => {
     await waitFor(() => expect(harness.requests()).toHaveLength(2));
     harness.respondOk({ columns: ["name"], rows: [{ name: "refreshed" }], meta: {} });
     await waitFor(() => expect(result.current.data?.rows).toEqual([{ name: "refreshed" }]));
+  });
+});
+
+describe("refetch from outside the current commit", () => {
+  it("ignores a refetch kept from an earlier query, so the current one still loads", async () => {
+    const harness = createHarness();
+    const { result, rerender } = renderHook(({ id }: { id: string }) => useSqlQuery(id), {
+      wrapper: harness.wrapper,
+      initialProps: { id: VALID_ID },
+    });
+    await waitFor(() => expect(harness.requests()).toHaveLength(1));
+    harness.respondOk(RUN_RESULT);
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    // An event handler that awaited something else, then called the refetch it closed over.
+    const staleRefetch = result.current.refetch;
+
+    rerender({ id: OTHER_ID });
+    await waitFor(() => expect(harness.requests()).toHaveLength(2));
+    await act(async () => {
+      await staleRefetch();
+    });
+
+    expect(harness.requests()).toHaveLength(2);
+    harness.respondOk({ columns: ["name"], rows: [{ name: "second" }], meta: {} });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.data?.rows).toEqual([{ name: "second" }]);
+  });
+
+  it("runs a params change once, even when a child's effect calls refetch before the hook's", async () => {
+    const harness = createHarness();
+    // Children's effects run before their parent's, so this one reaches the new refetch while the
+    // commit's own effects, the ones that record the new params, have not run yet.
+    function Child({ refetch }: { refetch: () => Promise<void> }) {
+      useEffect(() => {
+        void refetch();
+      }, [refetch]);
+      return null;
+    }
+    function Shell({ value }: { value: string }) {
+      const { refetch } = useSqlQuery(VALID_ID, [{ key: "$1", value }]);
+      return <Child refetch={refetch} />;
+    }
+
+    const { rerender } = render(<Shell value="30" />, { wrapper: harness.wrapper });
+    await waitFor(() => expect(harness.requests()).toHaveLength(1));
+    harness.respondOk(RUN_RESULT);
+    // Let the first run settle, so a repeat with the old params would post again instead of
+    // joining the request still in flight.
+    await act(async () => {});
+
+    rerender(<Shell value="60" />);
+    await waitFor(() => expect(harness.requests()).toHaveLength(2));
+    await act(async () => {});
+
+    const sent = harness
+      .requests()
+      .map((request) => (request.payload as { params: { value: string }[] }).params[0].value);
+    expect(sent).toEqual(["30", "60"]);
+  });
+});
+
+describe("a hidden Activity", () => {
+  it("does not show the aborted error of the run it stopped when it is revealed", async () => {
+    const host = createHostStub();
+    const commits: string[] = [];
+    function Probe() {
+      const query = useSqlQuery(VALID_ID);
+      useLayoutEffect(() => {
+        commits.push(`loading=${query.isLoading} error=${query.error?.code ?? "none"}`);
+      });
+      return null;
+    }
+    // The provider sits inside the Activity, so hiding it stops the client and fails the run.
+    function App({ mode }: { mode: "visible" | "hidden" }) {
+      return (
+        <Activity mode={mode}>
+          <DashboardProvider targetWindow={host.hostWindow}>
+            <Probe />
+          </DashboardProvider>
+        </Activity>
+      );
+    }
+
+    const { rerender } = render(<App mode="visible" />);
+    await waitFor(() => expect(host.requests()).toHaveLength(1));
+
+    rerender(<App mode="hidden" />);
+    await act(async () => {});
+    rerender(<App mode="visible" />);
+    await waitFor(() => expect(host.requests()).toHaveLength(2));
+    host.respondOk(RUN_RESULT);
+
+    await waitFor(() => expect(commits.at(-1)).toBe("loading=false error=none"));
+    expect(commits.filter((commit) => commit.includes("aborted"))).toEqual([]);
   });
 });

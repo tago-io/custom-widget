@@ -44,6 +44,12 @@ export function useSqlQueries(): TUseSqlQueriesReturn {
 
   useEffect(() => {
     void refetch();
+    // A run still in flight when the effect is torn down must not write its outcome. A hidden
+    // <Activity> stops the provider's client, which fails the run as aborted, and that error would
+    // show for a commit when the tree is revealed, before the next run starts.
+    return () => {
+      runID.current += 1;
+    };
   }, [refetch]);
 
   return { queries, isLoading, error, refetch };
