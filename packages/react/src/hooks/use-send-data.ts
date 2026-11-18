@@ -9,8 +9,11 @@ export interface UseSendDataReturn {
   sendData: (records: TDataRecordInput | TDataRecordInput[]) => Promise<TData>;
   /** True while the latest call waits for its answer. */
   isSending: boolean;
-  /** The latest call's rejection. */
-  error: TError | null;
+  /**
+   * The latest call's rejection: the dashboard's failure reply, or an Error when the request could not be posted
+   * or the provider unmounted before the answer.
+   */
+  error: TError | Error | null;
   /** Back to idle. A call in flight still settles its own promise but no longer changes isSending or error. */
   reset: () => void;
 }
@@ -18,7 +21,7 @@ export interface UseSendDataReturn {
 export function useSendData(): UseSendDataReturn {
   const { store } = useStore();
   const { variables } = useWidget();
-  const { run, isPending: isSending, error, reset } = useLatestCall<TError>();
+  const { run, isPending: isSending, error, reset } = useLatestCall<TError | Error>();
 
   const sendData = useCallback(
     (records: TDataRecordInput | TDataRecordInput[]) =>

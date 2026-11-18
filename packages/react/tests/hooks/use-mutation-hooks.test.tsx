@@ -114,6 +114,23 @@ describe("mutation hooks", () => {
       expect(result.current.error).toBeNull();
       expect(result.current.isSending).toBe(false);
     });
+
+    it("stores the Error when postMessage cannot copy the request", async () => {
+      const { result } = renderHook(() => useSendData(), { wrapper });
+      const cloneError = new DOMException("() => {} could not be cloned.", "DataCloneError");
+      postMessageSpy.mockImplementationOnce(() => {
+        throw cloneError;
+      });
+
+      await act(async () => {
+        await result.current.sendData({ variable: "temp", value: 42 }).catch(() => {});
+      });
+
+      // What postMessage threw, not a dashboard reply: it has a message and no status.
+      expect(result.current.error).toBe(cloneError);
+      expect(result.current.error).not.toHaveProperty("status");
+      expect(result.current.isSending).toBe(false);
+    });
   });
 
   describe("useEditData", () => {
