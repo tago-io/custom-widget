@@ -58,7 +58,13 @@ With Vite, [`vite-plugin-singlefile`](https://github.com/richardtallent/vite-plu
 
 **Or paste it.** Copy the contents of `dist/custom-dashboard.min.js` into a `<script>` tag. No build step, and the page keeps working regardless of what any CDN does. This is what the examples in `examples/` do.
 
-If your shell's Content-Security-Policy permits an external script, a CDN works too — pin an exact version, because your uploaded HTML is stored server-side and reloaded months later, and a moving URL silently changes what it runs.
+If your shell's Content-Security-Policy permits an external script, a CDN works too. The package's `unpkg` and `jsdelivr` fields point at the minified script build, so the bare package URL serves it:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@tago-io/custom-dashboard@x.y.z"></script>
+```
+
+Replace `x.y.z` with an exact version. Your uploaded HTML is stored server-side and reloaded months later, and a moving URL silently changes what it runs.
 
 ## API
 
