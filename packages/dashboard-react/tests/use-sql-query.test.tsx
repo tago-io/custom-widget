@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { useLayoutEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useSqlQuery } from "../src/hooks/use-sql-query.js";
@@ -151,7 +152,63 @@ describe("useSqlQuery", () => {
   });
 });
 
+/**
+ * Records what every commit showed. `result.current` only holds the last render, so a state that
+ * is committed and replaced within one act() would never be seen through it.
+ */
+function useRecordedSqlQuery(queryID: string | null, commits: string[]) {
+  const query = useSqlQuery(queryID);
+  useLayoutEffect(() => {
+    const rows = query.data === null ? "null" : query.data.rows.map((row) => String(row.name)).join(",");
+    commits.push(`loading=${query.isLoading}:${rows}`);
+  });
+  return query;
+}
+
 describe("query identity changes", () => {
+  it("is loading from the very commit that goes from no query to one", async () => {
+    const harness = createHarness();
+    const commits: string[] = [];
+    const { result, rerender } = renderHook(({ id }: { id: string | null }) => useRecordedSqlQuery(id, commits), {
+      wrapper: harness.wrapper,
+      initialProps: { id: null as string | null },
+    });
+    expect(commits).toEqual(["loading=false:null"]);
+    commits.length = 0;
+
+    rerender({ id: VALID_ID });
+    await waitFor(() => expect(harness.requests()).toHaveLength(1));
+    harness.respondOk(RUN_RESULT);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // An idle, empty commit here is what a shell renders as "No rows" for a frame.
+    expect(commits[0]).toBe("loading=true:null");
+    expect(commits.slice(0, -1).every((commit) => commit === "loading=true:null")).toBe(true);
+    expect(commits.at(-1)).toBe("loading=false:device-a");
+  });
+
+  it("is loading from the very commit that switches to another query", async () => {
+    const harness = createHarness();
+    const commits: string[] = [];
+    const { result, rerender } = renderHook(({ id }: { id: string }) => useRecordedSqlQuery(id, commits), {
+      wrapper: harness.wrapper,
+      initialProps: { id: VALID_ID },
+    });
+    await waitFor(() => expect(harness.requests()).toHaveLength(1));
+    harness.respondOk({ columns: ["name"], rows: [{ name: "first" }], meta: {} });
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    commits.length = 0;
+
+    rerender({ id: OTHER_ID });
+    await waitFor(() => expect(harness.requests()).toHaveLength(2));
+    harness.respondOk({ columns: ["name"], rows: [{ name: "second" }], meta: {} });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(commits[0]).toBe("loading=true:null");
+    expect(commits.slice(0, -1).every((commit) => commit === "loading=true:null")).toBe(true);
+    expect(commits.at(-1)).toBe("loading=false:second");
+  });
+
   it("drops the previous query's rows instead of showing them under the new id", async () => {
     const harness = createHarness();
     const { result, rerender } = renderHook(({ id }: { id: string }) => useSqlQuery(id), {

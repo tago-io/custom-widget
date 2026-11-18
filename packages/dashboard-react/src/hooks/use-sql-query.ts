@@ -13,8 +13,9 @@ import { useDashboardClient } from "./use-dashboard-client.js";
 export type TUseSqlQueryReturn<TRow extends TSqlRow = TSqlRow> = {
   /**
    * Kept across a refetch of the same query, so the table does not blink on every refresh.
-   * Cleared as soon as the query identity changes, because rows from the previous query
-   * rendered under the new one's identity is worse than an empty table.
+   * Null from the very render that changes the query identity, with `isLoading` already true,
+   * because rows from the previous query rendered under the new one's identity is worse than an
+   * empty table, and an idle empty table would read as "no rows" for a moment.
    */
   data: TSqlRunResult<TRow> | null;
   isLoading: boolean;
@@ -22,6 +23,18 @@ export type TUseSqlQueryReturn<TRow extends TSqlRow = TSqlRow> = {
   /** Never throws — the outcome lands in `error`. */
   refetch: () => Promise<void>;
 };
+
+/** State is tagged with the query it describes, so a render for another query never shows it. */
+type TQueryState<TRow extends TSqlRow> = {
+  identity: string;
+  data: TSqlRunResult<TRow> | null;
+  error: TagoDashboardError | null;
+  isLoading: boolean;
+};
+
+function freshState<TRow extends TSqlRow>(identity: string, queryID: string | null | undefined): TQueryState<TRow> {
+  return { identity, data: null, error: null, isLoading: Boolean(queryID) };
+}
 
 /**
  * Run a saved TagoSQL query. Pass `null` to stay idle.
@@ -35,43 +48,38 @@ export function useSqlQuery<TRow extends TSqlRow = TSqlRow>(
   options?: { timeoutMs?: number }
 ): TUseSqlQueryReturn<TRow> {
   const client = useDashboardClient();
-  const [data, setData] = useState<TSqlRunResult<TRow> | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(queryID));
-  const [error, setError] = useState<TagoDashboardError | null>(null);
-
   const paramsKey = serializeQueryParams(params);
-  const paramsRef = useRef(params);
-  paramsRef.current = params;
+  const identity = `${queryID ?? ""}|${paramsKey}`;
   const timeoutMs = options?.timeoutMs;
+
+  const [state, setState] = useState<TQueryState<TRow>>(() => freshState(identity, queryID));
   const runID = useRef(0);
 
-  // Drop a result the moment it stops describing what the caller is asking for. Retention is
-  // for a refetch of the same query; carrying it across an identity change let a failed switch
-  // render the previous query's rows under the new query's name.
-  const identity = `${queryID ?? ""}|${paramsKey}`;
-  const shownFor = useRef(identity);
-  if (shownFor.current !== identity) {
-    shownFor.current = identity;
-    if (data !== null) {
-      setData(null);
-    }
-    if (error !== null) {
-      setError(null);
-    }
-  }
+  // refetch keys off paramsKey, not the array, so it reads the array from here. Written in an
+  // effect, never during render, and declared before the effect that runs the query, which
+  // therefore always sees the params of the same commit.
+  const paramsRef = useRef(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  });
 
   const refetch = useCallback(async () => {
     const current = (runID.current += 1);
 
+    // Both updates hand back the previous state when nothing would change, so a mount does not
+    // cost a second render that shows the same thing.
     if (!queryID) {
-      setData(null);
-      setIsLoading(false);
-      setError(null);
+      setState((previous) => (previous.identity === identity ? previous : freshState(identity, queryID)));
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    setState((previous) => {
+      if (previous.identity === identity && previous.isLoading && previous.error === null) {
+        return previous;
+      }
+      // Retention is for a refetch of the same query only.
+      return { identity, data: previous.identity === identity ? previous.data : null, error: null, isLoading: true };
+    });
 
     try {
       const result = await client.sql.run<TRow>(
@@ -83,26 +91,28 @@ export function useSqlQuery<TRow extends TSqlRow = TSqlRow>(
       if (current !== runID.current) {
         return;
       }
-      setData(result);
+      setState({ identity, data: result, error: null, isLoading: false });
     } catch (cause) {
       if (current !== runID.current) {
         return;
       }
-      setError(toDashboardError(cause));
-    } finally {
-      if (current === runID.current) {
-        setIsLoading(false);
-      }
+      setState((previous) => ({
+        identity,
+        data: previous.identity === identity ? previous.data : null,
+        error: toDashboardError(cause),
+        isLoading: false,
+      }));
     }
-    // paramsKey is deliberately a dependency the callback never reads. It stands in for
-    // `params`, whose array identity changes on every render while its contents do not —
-    // depending on the array itself would refire the query forever.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, queryID, paramsKey, timeoutMs]);
+  }, [client, queryID, identity, timeoutMs]);
 
   useEffect(() => {
     void refetch();
   }, [refetch]);
 
-  return { data, isLoading, error, refetch };
+  // Until the effect above starts the new run, the state still describes the previous query.
+  // Reading it as a fresh, loading state for the new one means no commit ever shows the old rows
+  // or an idle empty result, and nothing has to be reset during render.
+  const shown = state.identity === identity ? state : freshState<TRow>(identity, queryID);
+
+  return { data: shown.data, isLoading: shown.isLoading, error: shown.error, refetch };
 }
