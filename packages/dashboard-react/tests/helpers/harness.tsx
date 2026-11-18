@@ -1,6 +1,6 @@
 import { DashboardClient } from "@tago-io/custom-dashboard";
 import type { ReactNode } from "react";
-import { vi } from "vite-plus/test";
+import { onTestFinished, vi } from "vite-plus/test";
 
 import { DashboardProvider } from "../../src/provider/dashboard-provider.js";
 
@@ -19,9 +19,8 @@ type TPostMessageSpy = {
   mock: { calls: [unknown, string?][] };
 };
 
-type TCreateHarness = {
-  client: DashboardClient;
-  wrapper: ({ children }: { children: ReactNode }) => ReactNode;
+type THostStub = {
+  hostWindow: Window;
   postMessage: TPostMessageSpy;
   requests: () => Record<string, unknown>[];
   readyCount: () => number;
@@ -31,10 +30,15 @@ type TCreateHarness = {
   respondError: (code: string, message: string, id?: string) => void;
 };
 
-export function createHarness(): TCreateHarness {
+type TCreateHarness = THostStub & {
+  client: DashboardClient;
+  wrapper: ({ children }: { children: ReactNode }) => ReactNode;
+};
+
+/** A stand-in host with no client attached, for tests where the provider creates its own. */
+export function createHostStub(): THostStub {
   const postMessage = vi.fn() as unknown as TPostMessageSpy;
   const hostWindow = { postMessage } as unknown as Window;
-  const client = new DashboardClient({ targetWindow: hostWindow });
 
   const requests = () =>
     postMessage.mock.calls
@@ -61,11 +65,24 @@ export function createHarness(): TCreateHarness {
     fromHost({ type: "dashboard:response", id, ok: false, error: { code, message } });
   };
 
+  return { hostWindow, postMessage, requests, readyCount, lastRequestID, fromHost, respondOk, respondError };
+}
+
+/**
+ * A started client handed to the provider. A client passed in stays the caller's to start and
+ * stop, so the harness does both, exactly as a shell sharing one with non-React code would.
+ */
+export function createHarness(): TCreateHarness {
+  const host = createHostStub();
+  const client = new DashboardClient({ targetWindow: host.hostWindow });
+  client.start();
+  onTestFinished(() => client.stop());
+
   const wrapper = ({ children }: { children: ReactNode }) => (
     <DashboardProvider client={client}>{children}</DashboardProvider>
   );
 
-  return { client, wrapper, postMessage, requests, readyCount, lastRequestID, fromHost, respondOk, respondError };
+  return { ...host, client, wrapper };
 }
 
 export const RUN_RESULT = {
