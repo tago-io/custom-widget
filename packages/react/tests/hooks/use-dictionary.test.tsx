@@ -80,4 +80,33 @@ describe("useDictionary", () => {
 
     expect(result.current.tSync("hello")).toBe("hello");
   });
+
+  describe("under StrictMode", () => {
+    // reactStrictMode renders StrictMode above the wrapper. React replays effects only for a newly mounted
+    // tree that starts at or inside StrictMode, so a wrapper that renders StrictMode itself would skip it.
+    const strictOptions = { wrapper: wrapperWithDict, reactStrictMode: true };
+
+    it("finishes loading", () => {
+      const { result } = renderHook(() => useDictionary({ language: "pt" }), strictOptions);
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.dictionary).toBeInstanceOf(MockDictionary);
+    });
+
+    it("loads the dictionary when the language arrives with the user information", () => {
+      const { result } = renderHook(() => useDictionary(), strictOptions);
+
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: { userInformation: { token: "tok", language: "fr", runURL: null } },
+          })
+        );
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.dictionary).toBeInstanceOf(MockDictionary);
+      expect((result.current.dictionary as MockDictionary).language).toBe("fr");
+    });
+  });
 });

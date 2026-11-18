@@ -16,6 +16,7 @@ Each file is a self-contained React component you can copy into your project.
 | [navigation.tsx](./navigation.tsx)             | Open a dashboard or web page, or close a widget modal  |
 | [run-analysis.tsx](./run-analysis.tsx)         | Run the widget's Analysis and show the data it writes  |
 | [format-data.tsx](./format-data.tsx)           | Format the latest readings in the viewer's language    |
+| [call-endpoint.tsx](./call-endpoint.tsx)       | Save a setpoint through an Analysis Endpoint           |
 
 ## How to use these
 

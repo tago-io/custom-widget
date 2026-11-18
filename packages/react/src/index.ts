@@ -1,5 +1,6 @@
 export * from "@tago-io/custom-widget-core";
 export { useBlueprintDevices } from "./hooks/use-blueprint-devices.js";
+export { useCallEndpoint } from "./hooks/use-call-endpoint.js";
 export { useDeleteData } from "./hooks/use-delete-data.js";
 export { useDictionary } from "./hooks/use-dictionary.js";
 export { useEditData } from "./hooks/use-edit-data.js";

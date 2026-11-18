@@ -1,50 +1,30 @@
 import type { TData, TError, TResourceEditInput } from "@tago-io/custom-widget-core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
+import { useLatestCall } from "./use-latest-call.js";
 import { useStore } from "./use-store-selector.js";
 
 export interface UseEditResourceDataReturn {
   editResourceData: (records: TResourceEditInput | TResourceEditInput[]) => Promise<TData>;
+  /** True while the latest call waits for its answer. */
   isEditing: boolean;
-  error: TError | null;
+  /**
+   * The latest call's rejection: the dashboard's failure reply, or an Error when the request could not be posted
+   * or the provider unmounted before the answer.
+   */
+  error: TError | Error | null;
+  /** Back to idle. A call in flight still settles its own promise but no longer changes isEditing or error. */
   reset: () => void;
 }
 
 export function useEditResourceData(): UseEditResourceDataReturn {
   const { store } = useStore();
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<TError | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const { run, isPending: isEditing, error, reset } = useLatestCall<TError | Error>();
 
   const editResourceData = useCallback(
-    async (records: TResourceEditInput | TResourceEditInput[]) => {
-      setIsEditing(true);
-      setError(null);
-      try {
-        const result = await store.editResourceData(records);
-        if (mountedRef.current) setIsEditing(false);
-        return result;
-      } catch (err) {
-        if (mountedRef.current) {
-          setError(err as TError);
-          setIsEditing(false);
-        }
-        throw err;
-      }
-    },
-    [store]
+    (records: TResourceEditInput | TResourceEditInput[]) => run(() => store.editResourceData(records)),
+    [run, store]
   );
-
-  const reset = useCallback(() => {
-    setIsEditing(false);
-    setError(null);
-  }, []);
 
   return { editResourceData, isEditing, error, reset };
 }

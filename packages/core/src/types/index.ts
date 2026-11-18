@@ -6,7 +6,8 @@ export type TMethod =
   | "open-link"
   | "close-modal"
   | "run-analysis"
-  | "refresh-resources";
+  | "refresh-resources"
+  | "call-endpoint";
 
 /** GeoJSON Point location format. */
 export type TLocationGeoJSON = {
@@ -261,6 +262,66 @@ export type TResourceEntityEdit = {
 /** Input for editResourceData. The platform only accepts columns listed in the resource's `editable`. */
 export type TResourceEditInput = TResourceDeviceEdit | TResourceUserEdit | TResourceEntityEdit;
 
+/** HTTP methods an Endpoint call accepts. */
+export type TEndpointMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/** A query value. The dashboard sends every value as a string. */
+export type TEndpointQueryValue = string | number | boolean;
+
+/** The request the dashboard sends to the Endpoint for callEndpoint. */
+export type TEndpointCallOptions = {
+  /** Defaults to "GET". */
+  method?: TEndpointMethod;
+  /** Below the Endpoint root, such as "/setpoint". Defaults to "/". The dashboard refuses `.` and `..` segments. */
+  path?: string;
+  /** An array repeats its key. */
+  query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[]>;
+  /**
+   * Send a JSON value; a string is sent as text/plain, so the Analysis gets `scope` as nil and reads
+   * `context.request.body`. Not allowed with GET. Any other value is encoded with JSON's rules, so toJSON()
+   * applies, and a value JSON cannot encode, such as a BigInt, rejects with `bad_request`.
+   */
+  body?: unknown;
+};
+
+/**
+ * The Endpoint's answer. Every HTTP status resolves with it, 4xx and 5xx included, except a redirect: the dashboard
+ * refuses to follow one, so a 3xx rejects with `api_error`.
+ */
+export type TEndpointCallResult<TBody = unknown> = {
+  status: number;
+  /** The response headers the browser can read, with lowercase names. */
+  headers: Record<string, string>;
+  /** Parsed when the response is JSON, else the response text. */
+  body: TBody;
+};
+
+/**
+ * Why callEndpoint rejected:
+ * - `bad_request`: the ID is not a 24-character ID, `options` holds a value JSON or a message cannot carry, or the
+ *   dashboard refused the request. The Endpoint did not run.
+ * - `api_error`: the dashboard could not complete the call, as with a refused redirect or a network failure,
+ *   or its reply was malformed. The Endpoint may have run: a redirect is the Analysis's own answer.
+ * - `not_ready`: the widget settings have not arrived yet. Nothing was sent.
+ * - `unsupported`: the dashboard does not support Endpoint calls from custom widgets. Nothing was sent.
+ * - `aborted`: the widget stopped before the answer arrived, or before the call was made.
+ *
+ * A code from a newer dashboard passes through unchanged.
+ */
+export type TEndpointCallErrorCode =
+  | "bad_request"
+  | "api_error"
+  | "not_ready"
+  | "unsupported"
+  | "aborted"
+  | (string & {});
+
+/** callEndpoint rejects with this plain object, and only when the call did not complete. */
+export type TEndpointCallError = {
+  code: TEndpointCallErrorCode;
+  message: string;
+};
+
 export type TEventData = {
   realtime?: TRealtimeData[];
   widget?: TWidget;
@@ -270,6 +331,15 @@ export type TEventData = {
   userInformation?: TUserInformation;
   blueprintDevices?: TBlueprintDevicesSyncData;
   result?: TDataRecord[] | TResultData[];
+  /**
+   * Request operations the dashboard answers that older dashboards do not, today only "call-endpoint",
+   * sent with the widget settings.
+   */
+  capabilities?: string[];
+  /** Why the operation failed, on a failure reply that carries a code. */
+  code?: string;
+  /** The operation a reply answers. A string, since scanner replies carry "qrcode" or "barcode". */
+  method?: string;
 };
 
 export type TMessage = {
@@ -280,6 +350,8 @@ export type TMessage = {
   url?: string;
   method?: TMethod;
   scope?: unknown;
+  /** The request of an operation that takes one, such as call-endpoint. */
+  payload?: unknown;
 };
 
 export type WidgetState = {
@@ -289,6 +361,13 @@ export type WidgetState = {
   blueprintDevices: TBlueprintDevicesSyncData | null;
   errors: TError[];
   isReady: boolean;
+  /**
+   * Request operations the dashboard answers that older dashboards do not, today only "call-endpoint",
+   * sent with the widget settings. null until the dashboard's first message; empty when the dashboard sends
+   * no list. On a dashboard without "call-endpoint", callEndpoint rejects with unsupported and sends nothing,
+   * so check the list to hide a control the dashboard cannot serve.
+   */
+  capabilities: string[] | null;
   realtimeEventCount: number;
   lastRealtimeAt: number | null;
 };

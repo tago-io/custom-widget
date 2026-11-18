@@ -1,54 +1,36 @@
 import { type TData, type TDataRecordInput, type TError, autoFillRecords } from "@tago-io/custom-widget-core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
+import { useLatestCall } from "./use-latest-call.js";
 import { useStore } from "./use-store-selector.js";
 import { useWidget } from "./use-widget.js";
 
 export interface UseSendDataReturn {
   sendData: (records: TDataRecordInput | TDataRecordInput[]) => Promise<TData>;
+  /** True while the latest call waits for its answer. */
   isSending: boolean;
-  error: TError | null;
+  /**
+   * The latest call's rejection: the dashboard's failure reply, or an Error when the request could not be posted
+   * or the provider unmounted before the answer.
+   */
+  error: TError | Error | null;
+  /** Back to idle. A call in flight still settles its own promise but no longer changes isSending or error. */
   reset: () => void;
 }
 
 export function useSendData(): UseSendDataReturn {
   const { store } = useStore();
   const { variables } = useWidget();
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<TError | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const { run, isPending: isSending, error, reset } = useLatestCall<TError | Error>();
 
   const sendData = useCallback(
-    async (records: TDataRecordInput | TDataRecordInput[]) => {
-      setIsSending(true);
-      setError(null);
-      try {
+    (records: TDataRecordInput | TDataRecordInput[]) =>
+      run(() => {
         const vars = Array.isArray(records) ? records : [records];
-        const filled = autoFillRecords(vars, variables);
-        const result = await store.sendData(filled);
-        if (mountedRef.current) setIsSending(false);
-        return result;
-      } catch (err) {
-        if (mountedRef.current) {
-          setError(err as TError);
-          setIsSending(false);
-        }
-        throw err;
-      }
-    },
-    [store, variables]
+        return store.sendData(autoFillRecords(vars, variables));
+      }),
+    [run, store, variables]
   );
-
-  const reset = useCallback(() => {
-    setIsSending(false);
-    setError(null);
-  }, []);
 
   return { sendData, isSending, error, reset };
 }
