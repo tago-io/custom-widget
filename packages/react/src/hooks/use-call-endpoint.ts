@@ -1,6 +1,7 @@
 import type { TEndpointCallError, TEndpointCallOptions, TEndpointCallResult } from "@tago-io/custom-widget-core";
-import { useCallback, useRef, useState } from "react";
+import { useCallback } from "react";
 
+import { useLatestCall } from "./use-latest-call.js";
 import { useStore } from "./use-store-selector.js";
 
 export interface UseCallEndpointReturn {
@@ -18,38 +19,13 @@ export interface UseCallEndpointReturn {
 
 export function useCallEndpoint(): UseCallEndpointReturn {
   const { store } = useStore();
-  const [isCalling, setIsCalling] = useState(false);
-  const [error, setError] = useState<TEndpointCallError | null>(null);
-  // Numbers the calls so isCalling and error follow only the latest one, and so reset() can detach a call
-  // in flight: that call still settles its own promise but no longer writes state.
-  const latestCall = useRef(0);
+  const { run, isPending: isCalling, error, reset } = useLatestCall<TEndpointCallError>();
 
   const callEndpoint = useCallback(
-    async <TBody = unknown>(endpointID: string, options?: TEndpointCallOptions) => {
-      latestCall.current += 1;
-      const call = latestCall.current;
-      setIsCalling(true);
-      setError(null);
-      try {
-        const result = await store.callEndpoint<TBody>(endpointID, options);
-        if (call === latestCall.current) setIsCalling(false);
-        return result;
-      } catch (err) {
-        if (call === latestCall.current) {
-          setError(err as TEndpointCallError);
-          setIsCalling(false);
-        }
-        throw err;
-      }
-    },
-    [store]
+    <TBody = unknown>(endpointID: string, options?: TEndpointCallOptions) =>
+      run(() => store.callEndpoint<TBody>(endpointID, options)),
+    [run, store]
   );
-
-  const reset = useCallback(() => {
-    latestCall.current += 1;
-    setIsCalling(false);
-    setError(null);
-  }, []);
 
   return { callEndpoint, isCalling, error, reset };
 }

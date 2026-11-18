@@ -102,7 +102,7 @@ const temperatures = records.filter((record) => record.variable === "temperature
 | `useEditResourceData()` | `{ editResourceData, isEditing, error, reset }` |
 | `useCallEndpoint()`     | `{ callEndpoint, isCalling, error, reset }`     |
 
-Each function returns a Promise that settles when the dashboard answers. The busy flag is `true` while a call waits for that answer, `error` holds the last rejection, and `reset()` clears both without cancelling the call.
+Each function returns a Promise that settles when the dashboard answers. The busy flag and `error` follow the latest call: the flag is `true` while that call waits for its answer, and `error` holds its rejection. An earlier call still settles its own promise but no longer changes them. `reset()` clears both and detaches the call in flight the same way, without cancelling it, so a reply that comes after a timeout leaves the hook idle.
 
 What each function takes:
 

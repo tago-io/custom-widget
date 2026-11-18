@@ -14,18 +14,38 @@ function wrapper({ children }: { children: ReactNode }) {
   return <TagoIOProvider>{children}</TagoIOProvider>;
 }
 
+function respond(key: unknown, status: boolean) {
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: { status, key, result: [], ...(status ? {} : { message: "failed" }) },
+    })
+  );
+}
+
 function respondToLastMessage(status: boolean) {
   const calls = postMessageSpy.mock.calls;
   const lastCall = calls[calls.length - 1];
   const key = (lastCall[0] as Record<string, unknown>).key;
   if (key) {
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: { status, key, result: [], ...(status ? {} : { message: "failed" }) },
-      })
-    );
+    respond(key, status);
   }
 }
+
+/** Keys of the last `count` requests posted, oldest first. */
+function lastRequestKeys(count: number): unknown[] {
+  return (postMessageSpy.mock.calls as unknown[][])
+    .map((call) => (call[0] as Record<string, unknown>).key)
+    .filter((key) => key !== undefined)
+    .slice(-count);
+}
+
+const storedRecord = {
+  id: "rec-1",
+  device: "dev-1",
+  variable: "temp",
+  value: 42,
+  time: "2024-01-01T00:00:00Z",
+};
 
 describe("mutation hooks", () => {
   beforeEach(() => {
@@ -164,6 +184,114 @@ describe("mutation hooks", () => {
       });
 
       expect(result.current.isEditing).toBe(false);
+    });
+  });
+
+  // Each hook as { call, isBusy, error, reset }, so the same cases run against all four.
+  describe.each([
+    {
+      name: "useSendData",
+      useMutation: () => {
+        const { sendData, isSending, error, reset } = useSendData();
+        return { call: () => sendData({ variable: "temp", value: 42 }), isBusy: isSending, error, reset };
+      },
+    },
+    {
+      name: "useEditData",
+      useMutation: () => {
+        const { editData, isEditing, error, reset } = useEditData();
+        return { call: () => editData({ variable: "temp", value: 42 }), isBusy: isEditing, error, reset };
+      },
+    },
+    {
+      name: "useDeleteData",
+      useMutation: () => {
+        const { deleteData, isDeleting, error, reset } = useDeleteData();
+        return { call: () => deleteData(storedRecord), isBusy: isDeleting, error, reset };
+      },
+    },
+    {
+      name: "useEditResourceData",
+      useMutation: () => {
+        const { editResourceData, isEditing, error, reset } = useEditResourceData();
+        return { call: () => editResourceData({ device: "dev-1", name: "Renamed" }), isBusy: isEditing, error, reset };
+      },
+    },
+  ])("$name follows the latest call", ({ useMutation }) => {
+    it("stays busy until the second of two overlapping calls settles", async () => {
+      const { result } = renderHook(() => useMutation(), { wrapper });
+
+      let first!: Promise<unknown>;
+      let second!: Promise<unknown>;
+      act(() => {
+        first = result.current.call();
+        second = result.current.call();
+      });
+      const [firstKey, secondKey] = lastRequestKeys(2);
+
+      await act(async () => {
+        respond(firstKey, true);
+        await first;
+      });
+      expect(result.current.isBusy).toBe(true);
+
+      await act(async () => {
+        respond(secondKey, true);
+        await second;
+      });
+      expect(result.current.isBusy).toBe(false);
+    });
+
+    it("keeps a stale failure of the first call out of error", async () => {
+      const { result } = renderHook(() => useMutation(), { wrapper });
+
+      let firstOutcome!: Promise<unknown>;
+      let second!: Promise<unknown>;
+      act(() => {
+        firstOutcome = result.current.call().catch((error: unknown) => error);
+        second = result.current.call();
+      });
+      const [firstKey, secondKey] = lastRequestKeys(2);
+
+      await act(async () => {
+        respond(firstKey, false);
+        await firstOutcome;
+      });
+      // The first call still rejects its own promise.
+      await expect(firstOutcome).resolves.toMatchObject({ status: false, message: "failed" });
+      expect(result.current.error).toBeNull();
+      expect(result.current.isBusy).toBe(true);
+
+      await act(async () => {
+        respond(secondKey, true);
+        await second;
+      });
+      expect(result.current.error).toBeNull();
+      expect(result.current.isBusy).toBe(false);
+    });
+
+    it("reset clears the state and detaches the call in flight", async () => {
+      const { result } = renderHook(() => useMutation(), { wrapper });
+
+      let outcome!: Promise<unknown>;
+      act(() => {
+        outcome = result.current.call().catch((error: unknown) => error);
+      });
+      const [key] = lastRequestKeys(1);
+      expect(result.current.isBusy).toBe(true);
+
+      act(() => {
+        result.current.reset();
+      });
+      expect(result.current.isBusy).toBe(false);
+
+      await act(async () => {
+        respond(key, false);
+        await outcome;
+      });
+      await expect(outcome).resolves.toMatchObject({ status: false, message: "failed" });
+      expect(result.current.error).toBeNull();
+      expect(result.current.isBusy).toBe(false);
     });
   });
 

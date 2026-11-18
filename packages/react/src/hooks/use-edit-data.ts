@@ -1,47 +1,33 @@
 import { type TData, type TDataRecordInput, type TError, autoFillRecords } from "@tago-io/custom-widget-core";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
+import { useLatestCall } from "./use-latest-call.js";
 import { useStore } from "./use-store-selector.js";
 import { useWidget } from "./use-widget.js";
 
 export interface UseEditDataReturn {
   editData: (records: TDataRecordInput | TDataRecordInput[]) => Promise<TData>;
+  /** True while the latest call waits for its answer. */
   isEditing: boolean;
+  /** The latest call's rejection. */
   error: TError | null;
+  /** Back to idle. A call in flight still settles its own promise but no longer changes isEditing or error. */
   reset: () => void;
 }
 
 export function useEditData(): UseEditDataReturn {
   const { store } = useStore();
   const { variables } = useWidget();
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<TError | null>(null);
+  const { run, isPending: isEditing, error, reset } = useLatestCall<TError>();
 
   const editData = useCallback(
-    async (records: TDataRecordInput | TDataRecordInput[]) => {
-      setIsEditing(true);
-      setError(null);
-      // No mounted guard: a reply that lands while StrictMode replays effects or an <Activity> hides this
-      // component must still clear the flag, and React 18 and later ignore an update after unmount.
-      try {
+    (records: TDataRecordInput | TDataRecordInput[]) =>
+      run(() => {
         const vars = Array.isArray(records) ? records : [records];
-        const filled = autoFillRecords(vars, variables);
-        const result = await store.editData(filled);
-        setIsEditing(false);
-        return result;
-      } catch (err) {
-        setError(err as TError);
-        setIsEditing(false);
-        throw err;
-      }
-    },
-    [store, variables]
+        return store.editData(autoFillRecords(vars, variables));
+      }),
+    [run, store, variables]
   );
-
-  const reset = useCallback(() => {
-    setIsEditing(false);
-    setError(null);
-  }, []);
 
   return { editData, isEditing, error, reset };
 }
