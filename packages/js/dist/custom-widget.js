@@ -274,7 +274,11 @@
         if (data.widget) {
           partial.widget = data.widget;
           partial.isReady = true;
-          partial.capabilities = Array.isArray(data.capabilities) ? data.capabilities : [];
+          if (Array.isArray(data.capabilities)) {
+            partial.capabilities = data.capabilities;
+          } else if (this.state.capabilities === null) {
+            partial.capabilities = [];
+          }
         }
         if (data.status === false && data.method !== "call-endpoint") {
           const error = data;

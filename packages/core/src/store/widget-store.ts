@@ -123,8 +123,13 @@ export class WidgetStore {
     if (data.widget) {
       partial.widget = data.widget;
       partial.isReady = true;
-      // The list comes with the widget settings. A dashboard that predates it sends none: empty, not unknown.
-      partial.capabilities = Array.isArray(data.capabilities) ? data.capabilities : [];
+      // The list comes with the widget settings. A later message without it keeps the list already known, and a
+      // dashboard that predates the list never sends one, so its first message settles it as empty, not unknown.
+      if (Array.isArray(data.capabilities)) {
+        partial.capabilities = data.capabilities;
+      } else if (this.state.capabilities === null) {
+        partial.capabilities = [];
+      }
     }
 
     // A call-endpoint failure already rejects that call's promise, so it stays out of `errors`.

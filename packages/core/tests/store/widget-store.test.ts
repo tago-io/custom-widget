@@ -131,8 +131,28 @@ describe("WidgetStore", () => {
       expect(store.getSnapshot().capabilities).toEqual(["call-endpoint"]);
     });
 
-    it("settles capabilities as empty when the host sends none", () => {
+    it("settles capabilities as empty when the first widget message has none", () => {
       window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget } }));
+
+      expect(store.getSnapshot().capabilities).toEqual([]);
+    });
+
+    it("keeps the capabilities when a later widget message has none", () => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { widget: mockWidget, capabilities: ["call-endpoint"] } })
+      );
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: { ...mockWidget, label: "Renamed" } } }));
+
+      const state = store.getSnapshot();
+      expect(state.widget?.label).toBe("Renamed");
+      expect(state.capabilities).toEqual(["call-endpoint"]);
+    });
+
+    it("replaces the capabilities when a later widget message sends a list, even an empty one", () => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { widget: mockWidget, capabilities: ["call-endpoint"] } })
+      );
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget, capabilities: [] } }));
 
       expect(store.getSnapshot().capabilities).toEqual([]);
     });
