@@ -7,8 +7,8 @@ import {
 } from "@tago-io/custom-dashboard";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { toDashboardError } from "../utils.js";
 import { useDashboardClient } from "./use-dashboard-client.js";
-import { toDashboardError } from "./use-sql-queries.js";
 
 export type TUseSqlQueryReturn<TRow extends TSqlRow = TSqlRow> = {
   /**

@@ -1,6 +1,7 @@
-import { isDashboardError, TagoDashboardError, type TSqlQuerySummary } from "@tago-io/custom-dashboard";
+import type { TagoDashboardError, TSqlQuerySummary } from "@tago-io/custom-dashboard";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { toDashboardError } from "../utils.js";
 import { useDashboardClient } from "./use-dashboard-client.js";
 
 export type TUseSqlQueriesReturn = {
@@ -10,13 +11,6 @@ export type TUseSqlQueriesReturn = {
   /** Never throws — the outcome lands in `error`. */
   refetch: () => Promise<void>;
 };
-
-export function toDashboardError(cause: unknown): TagoDashboardError {
-  if (isDashboardError(cause)) {
-    return cause;
-  }
-  return new TagoDashboardError("internal", cause instanceof Error ? cause.message : String(cause), { cause });
-}
 
 export function useSqlQueries(): TUseSqlQueriesReturn {
   const client = useDashboardClient();
