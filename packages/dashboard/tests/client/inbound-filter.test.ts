@@ -120,9 +120,13 @@ describe("the jsdom source trap", () => {
     expect(constructed.origin).toBe("");
   });
 
-  it("still accepts a message whose source is null", () => {
+  it("still settles a response whose source is null, since the request id is the match", async () => {
     ctx = setupClient();
-    dispatch({ type: "dashboard:theme", theme: "dark" }, { source: null });
-    expect(ctx.client.theme.get()).toBe("dark");
+    const promise = ctx.client.sql.list();
+    dispatch(
+      { type: "dashboard:response", id: ctx.lastRequestID(), ok: true, result: { queries: [] } },
+      { source: null }
+    );
+    await expect(promise).resolves.toEqual([]);
   });
 });

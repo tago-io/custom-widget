@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { dispatch, setupClient } from "../helpers/host.js";
+import { DashboardClient } from "../../src/client/dashboard-client.js";
+import { createHostWindow, dispatch, setupClient } from "../helpers/host.js";
 
 let ctx: ReturnType<typeof setupClient> | undefined;
 
@@ -109,13 +110,17 @@ describe("style", () => {
   });
 
   it("still isolates them once a real message has landed", () => {
-    const first = setupClient();
-    const second = setupClient();
+    // Two clients talking to the same host, so one event from it reaches both.
+    const { hostWindow } = createHostWindow();
+    const first = { client: new DashboardClient({ targetWindow: hostWindow }) };
+    const second = { client: new DashboardClient({ targetWindow: hostWindow }) };
+    first.client.start();
+    second.client.start();
 
     try {
       // One event, dispatched once on window, delivered to both clients' listeners carrying the
       // very same `data` object. Adopting the payload instead of copying it aliased the two.
-      dispatch({ type: "dashboard:style", style: { paddingBottom: 96 } });
+      dispatch({ type: "dashboard:style", style: { paddingBottom: 96 } }, { source: hostWindow });
 
       expect(first.client.style.get()).toEqual({ paddingBottom: 96 });
       expect(second.client.style.get()).toEqual({ paddingBottom: 96 });
@@ -126,6 +131,47 @@ describe("style", () => {
     } finally {
       first.client.stop();
       second.client.stop();
+    }
+  });
+});
+
+describe("sender", () => {
+  // Theme and style change what the viewer sees, so only the host window may set them, the same
+  // rule params follow. Anything else posting to this window is a child frame or an extension.
+  it.each([
+    ["the shell's own window", () => window],
+    ["a child frame", () => ({}) as Window],
+    ["no source at all", () => null],
+  ])("ignores theme and style posted by %s", (_label, source) => {
+    ctx = setupClient();
+    const themeListener = vi.fn();
+    const styleListener = vi.fn();
+    ctx.client.theme.subscribe(themeListener);
+    ctx.client.style.subscribe(styleListener);
+
+    dispatch({ type: "dashboard:theme", theme: "dark" }, { source: source() });
+    dispatch({ type: "dashboard:style", style: { paddingBottom: 96 } }, { source: source() });
+
+    expect(themeListener).not.toHaveBeenCalled();
+    expect(styleListener).not.toHaveBeenCalled();
+    expect(ctx.client.theme.get()).toBe("light");
+    expect(ctx.client.style.get()).toEqual({});
+  });
+
+  it("ignores theme and style when opened standalone, where the target is the page itself", () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    // jsdom has no parent frame, so the default target is this very window.
+    const client = new DashboardClient();
+    client.start();
+
+    try {
+      expect(client.isEmbedded).toBe(false);
+      dispatch({ type: "dashboard:theme", theme: "dark" }, { source: window });
+      dispatch({ type: "dashboard:style", style: { paddingBottom: 96 } }, { source: window });
+      expect(client.theme.get()).toBe("light");
+      expect(client.style.get()).toEqual({});
+    } finally {
+      client.stop();
     }
   });
 });

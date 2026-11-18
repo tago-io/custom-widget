@@ -236,19 +236,19 @@ export class DashboardClient {
       }
     }
 
-    if (message.kind === "theme") {
-      this.setTheme(message.theme);
-      return;
-    }
-    if (message.kind === "style") {
-      this.setStyle(message.style);
-      return;
-    }
-    if (message.kind === "params") {
-      // Only the host window may re-scope the shell. Params decide which data the queries fetch,
-      // so a child frame or an extension posting to this window must not be able to change them.
-      // Opened standalone, the target is this very window, so nothing qualifies.
-      if (this.isEmbedded && event.source === this.targetWindow) {
+    if (message.kind !== "response") {
+      // Only the host window may push state into the shell. Params decide which data the queries
+      // fetch, and theme and style decide what the viewer sees, so a child frame or an extension
+      // posting to this window must not be able to change any of them. Opened standalone, the
+      // target is this very window, so nothing qualifies and the theme stays on the URL's.
+      if (!this.isEmbedded || event.source !== this.targetWindow) {
+        return;
+      }
+      if (message.kind === "theme") {
+        this.setTheme(message.theme);
+      } else if (message.kind === "style") {
+        this.setStyle(message.style);
+      } else {
         this.setParams(message.params);
       }
       return;
