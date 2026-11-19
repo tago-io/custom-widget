@@ -218,3 +218,141 @@ describe("mergeStrategy with resource blocks", () => {
     expect((resource!.result![0] as { id: string }).id).toBe("dev2");
   });
 });
+
+/**
+ * Typing both fixtures as Required<TDataRecord> is what keeps the coverage honest: a field
+ * added to the type fails typecheck until it is listed here, and the it.each below then
+ * demands the compare notice it.
+ */
+const fullRecord: Required<TDataRecord> = {
+  id: "1",
+  variable: "dock_state",
+  value: "dock-42",
+  group: "group-a",
+  device: "device-a",
+  unit: "C",
+  location: { type: "Point", coordinates: [-46.63, -23.55] },
+  metadata: { color: "green", label: "free" },
+  origin: "legacy-a",
+  bucket: "bucket-a",
+  time: "2024-01-01T00:00:00Z",
+  created_at: "2024-01-01T00:00:01Z",
+};
+
+const editedRecord: Required<TDataRecord> = {
+  id: "2",
+  variable: "dock_state_v2",
+  value: "dock-43",
+  group: "group-b",
+  device: "device-b",
+  unit: "F",
+  location: { type: "Point", coordinates: [-46.64, -23.56] },
+  metadata: { color: "red", label: "occupied" },
+  origin: "legacy-b",
+  bucket: "bucket-b",
+  time: "2024-01-02T00:00:00Z",
+  created_at: "2024-01-02T00:00:01Z",
+};
+
+/** Fresh objects on every call, the way a structured-cloned realtime message arrives. */
+const tick = (overrides: Partial<TDataRecord> = {}): TRealtimeData[] => [
+  block(["dock_state"], "d1", [structuredClone({ ...fullRecord, ...overrides })]),
+];
+
+const firstRecord = (data: TRealtimeData[]): TDataRecord => (data[0].result as TDataRecord[])[0];
+
+describe("mergeStrategy record comparison", () => {
+  it("detects a metadata-only edit, which is what editDeviceData produces", () => {
+    // A dock changing state edits metadata and nothing else: same record id, same value
+    // (the dock id), untouched time. Comparing only the four scalars called this identical,
+    // kept the stale object, and the painted output never changed.
+    const existing = tick({ metadata: { color: "green", label: "free" } });
+    const merged = mergeStrategy(existing, tick({ metadata: { color: "red", label: "occupied" } }));
+
+    expect(merged).not.toBe(existing);
+    expect(firstRecord(merged).metadata).toEqual({ color: "red", label: "occupied" });
+  });
+
+  it("detects a nested metadata edit, since metadata is an open-ended type", () => {
+    const existing = tick({ metadata: { file: { url: "a.png", md5: "1", path: "/a" } } });
+    const merged = mergeStrategy(existing, tick({ metadata: { file: { url: "b.png", md5: "2", path: "/b" } } }));
+
+    expect(merged).not.toBe(existing);
+    expect(firstRecord(merged).metadata?.file?.url).toBe("b.png");
+  });
+
+  it("detects an edit inside a metadata array", () => {
+    const existing = tick({ metadata: { sentValues: [{ label: "on", value: 1 }] } });
+    const merged = mergeStrategy(existing, tick({ metadata: { sentValues: [{ label: "on", value: 2 }] } }));
+
+    expect(merged).not.toBe(existing);
+  });
+
+  it("detects a location-only change, so a map pin can move", () => {
+    const existing = tick();
+    const moved: TDataRecord["location"] = { type: "Point", coordinates: [-46.64, -23.56] };
+    const merged = mergeStrategy(existing, tick({ location: moved }));
+
+    expect(merged).not.toBe(existing);
+    expect(firstRecord(merged).location).toEqual(moved);
+  });
+
+  it.each(Object.keys(fullRecord) as Array<keyof TDataRecord>)("detects an edit to %s", (field) => {
+    const existing = tick();
+    const merged = mergeStrategy(existing, tick({ [field]: editedRecord[field] }));
+
+    expect(merged).not.toBe(existing);
+  });
+
+  it("keeps the existing reference when an identical tick arrives", () => {
+    // The guard against the opposite bug. Every tick is a fresh clone, so a compare that
+    // looked at references would report a change forever and re-render on every message.
+    const existing = tick();
+    const original = firstRecord(existing);
+    const merged = mergeStrategy(existing, tick());
+
+    expect(merged).toBe(existing);
+    expect(firstRecord(merged)).toBe(original);
+  });
+
+  it("keeps the existing reference when metadata keys arrive in a different order", () => {
+    // Key order is not meaning, which is why this cannot be implemented with JSON.stringify.
+    const existing = tick({ metadata: { color: "green", unit: "C", label: "free" } });
+    const merged = mergeStrategy(existing, tick({ metadata: { label: "free", color: "green", unit: "C" } }));
+
+    expect(merged).toBe(existing);
+  });
+
+  it("keeps the existing reference when a metadata key arrives as an explicit undefined", () => {
+    // The parent emits `old_value: undefined` for an empty cell, and JSON has no undefined,
+    // so an absent key and an undefined one describe the same record.
+    const existing = tick({ metadata: { label: "free" } });
+    const merged = mergeStrategy(existing, tick({ metadata: { label: "free", old_value: undefined } }));
+
+    expect(merged).toBe(existing);
+  });
+
+  it("keeps the existing reference for a lean record with no metadata and no location", () => {
+    const lean = (): TRealtimeData[] => [block(["temp"], "d1", [record("1", "temp", 20)])];
+    const existing = lean();
+
+    expect(mergeStrategy(existing, lean())).toBe(existing);
+  });
+
+  it("still detects the plain value edit the old compare already handled", () => {
+    const existing = tick({ value: 20 });
+    const merged = mergeStrategy(existing, tick({ value: 25 }));
+
+    expect(merged).not.toBe(existing);
+    expect(firstRecord(merged).value).toBe(25);
+  });
+
+  it("counts a shape change as a change, since the record no longer describes the same thing", () => {
+    const absent = tick({ metadata: undefined });
+    expect(mergeStrategy(absent, tick({ metadata: undefined }))).toBe(absent);
+    expect(mergeStrategy(absent, tick({ metadata: {} }))).not.toBe(absent);
+
+    const tagged = tick({ metadata: { tags: ["a", "b"] } });
+    expect(mergeStrategy(tagged, tick({ metadata: { tags: ["b", "a"] } }))).not.toBe(tagged);
+  });
+});
