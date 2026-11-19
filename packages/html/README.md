@@ -61,10 +61,10 @@ With Vite, [`vite-plugin-singlefile`](https://github.com/richardtallent/vite-plu
 If your shell's Content-Security-Policy permits an external script, a CDN works too. The package's `unpkg` and `jsdelivr` fields point at the minified script build, so the bare package URL serves it:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@tago-io/custom-html@x.y.z"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tago-io/custom-html@2.3.0"></script>
 ```
 
-Replace `x.y.z` with an exact version. Your uploaded HTML is stored server-side and reloaded months later, and a moving URL silently changes what it runs.
+Pin an exact version as above. Your uploaded HTML is stored server-side and reloaded months later, and a moving URL silently changes what it runs.
 
 ## API
 
