@@ -9,7 +9,7 @@
     { "path": "./packages/js" },
     { "path": "./packages/core" },
     { "path": "./packages/react" },
-    { "path": "./packages/dashboard" },
-    { "path": "./packages/dashboard-react" }
+    { "path": "./packages/html" },
+    { "path": "./packages/html-react" }
   ]
 }
