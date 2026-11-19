@@ -1,7 +1,6 @@
 {
   "name": "@tago-io/custom-html",
   "version": "0.0.0",
-  "private": true,
   "description": "TagoIO toolkit to build your own Custom HTML pages",
   "keywords": [
     "custom-dashboard",
