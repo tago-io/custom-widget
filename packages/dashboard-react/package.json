@@ -1,7 +1,6 @@
 {
   "name": "@tago-io/custom-dashboard-react",
-  "version": "0.0.0",
-  "private": true,
+  "version": "2.3.0",
   "description": "React SDK for TagoIO Custom Dashboards",
   "keywords": [
     "custom-dashboard",
