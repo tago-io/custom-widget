@@ -1,6 +1,6 @@
-# TagoIO Custom HTML SDK
+# TagoIO Custom Dashboard SDK
 
-Build TagoIO Custom HTML pages: you upload one HTML file, TagoIO renders it as the whole dashboard canvas, and this SDK is how that page talks to the host.
+Build TagoIO Custom Dashboards: you upload one HTML file, TagoIO renders it as the whole dashboard canvas, and this SDK is how that page talks to the host.
 
 The host speaks a small request/response `postMessage` protocol. Without an SDK you generate correlation ids, match responses to requests, and handle nine error codes by hand, and because the host drops responses in several situations without answering, a naive promise wrapper hangs forever. This package owns that plumbing and nothing else.
 
@@ -21,7 +21,7 @@ console.log(result.columns, result.rows);
 
 All of it runs **as the person viewing the dashboard**, using their session. A user who can edit a dashboard but has little data access, plus a viewer who has a lot, is a privilege escalation path. The only client-side guard on a query id is a format check — that is a path-traversal guard, not an authorization check. Authorization is the API's alone.
 
-The shell is also served from the API origin with `allow-same-origin`, so every Custom HTML page in an account shares that origin's storage.
+The shell is also served from the API origin with `allow-same-origin`, so every custom dashboard in an account shares that origin's storage.
 
 Treat uploading a shell the way you treat deploying code: review it, and permission it accordingly.
 

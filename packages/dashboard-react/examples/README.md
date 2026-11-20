@@ -1,6 +1,6 @@
 # React SDK Examples
 
-Simple examples showing how to use `@tago-io/custom-dashboard-react` in your Custom HTML pages.
+Simple examples showing how to use `@tago-io/custom-dashboard-react` in your custom dashboards.
 
 Each file is a self-contained React component you can copy into your project.
 
@@ -25,7 +25,7 @@ Every example follows the same pattern:
 
 ## Building for upload
 
-A Custom HTML page is **one** uploaded HTML file, so your build has to inline everything — this is the difference from a custom widget, which is hosted as a folder of assets. With Vite, [`vite-plugin-singlefile`](https://github.com/richardtallent/vite-plugin-singlefile) turns `npm run build` into a single `dist/index.html` you can upload as-is:
+A custom dashboard is **one** uploaded HTML file, so your build has to inline everything — this is the difference from a custom widget, which is hosted as a folder of assets. With Vite, [`vite-plugin-singlefile`](https://github.com/richardtallent/vite-plugin-singlefile) turns `npm run build` into a single `dist/index.html` you can upload as-is:
 
 ```ts
 import react from "@vitejs/plugin-react";

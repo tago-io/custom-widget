@@ -385,7 +385,7 @@ export class DashboardClient {
       return Promise.reject(
         new TagoDashboardError(
           "no_host",
-          "No dashboard host detected. This page must run as a TagoIO Custom HTML page.",
+          "No dashboard host detected — this page must run inside a TagoIO Custom Dashboard.",
           { op }
         )
       );

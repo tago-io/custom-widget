@@ -1,6 +1,6 @@
 # Examples
 
-Each example loads the SDK with `<script src="../dist/custom-dashboard.min.js">`, which works when you open it locally. A Custom HTML page is uploaded as **one** HTML document, so before uploading, inline that script:
+Each example loads the SDK with `<script src="../dist/custom-dashboard.min.js">`, which works when you open it locally. A custom dashboard is uploaded as **one** HTML document, so before uploading, inline that script:
 
 ```bash
 pnpm build            # from packages/dashboard
