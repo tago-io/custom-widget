@@ -1,5 +1,12 @@
 # @tago-io/custom-widget-react
 
+## 2.3.0
+
+### Patch Changes
+
+- Updated dependencies [feac263]
+  - @tago-io/custom-widget-core@2.3.0
+
 ## 2.2.0
 
 ### Minor Changes
