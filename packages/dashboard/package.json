@@ -2,9 +2,10 @@
   "name": "@tago-io/custom-dashboard",
   "version": "0.0.0",
   "private": true,
-  "description": "TagoIO Toolkit to build your own Custom Dashboards",
+  "description": "TagoIO toolkit to build your own Custom HTML pages",
   "keywords": [
     "custom-dashboard",
+    "custom-html",
     "dashboard",
     "iot",
     "sql",

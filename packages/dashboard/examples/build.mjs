@@ -1,7 +1,7 @@
 /**
  * Turn each example into one uploadable file by inlining the built SDK.
  *
- * A custom dashboard is a single HTML document, so the script tag has to become script text.
+ * A Custom HTML page is a single HTML document, so the script tag has to become script text.
  * Run `pnpm build` in this package first, then `node examples/build.mjs`.
  */
 

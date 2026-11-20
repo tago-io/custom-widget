@@ -1,4 +1,4 @@
-# TagoIO Custom Dashboard SDK — React
+# TagoIO Custom HTML SDK for React
 
 React bindings for [`@tago-io/custom-dashboard`](../dashboard). A provider, three hooks, and nothing else.
 
@@ -10,7 +10,7 @@ React bindings for [`@tago-io/custom-dashboard`](../dashboard). A provider, thre
 npm install @tago-io/custom-dashboard-react react react-dom
 ```
 
-A custom dashboard is one uploaded HTML file, so build to a single file — with Vite, [`vite-plugin-singlefile`](https://github.com/richardtallent/vite-plugin-singlefile) does it. The snippets in [`examples/`](./examples) show the hooks in use; wire them into your own Vite project and point `base` at `"./"`.
+A Custom HTML page is one uploaded HTML file, so build to a single file — with Vite, [`vite-plugin-singlefile`](https://github.com/richardtallent/vite-plugin-singlefile) does it. The snippets in [`examples/`](./examples) show the hooks in use; wire them into your own Vite project and point `base` at `"./"`.
 
 ## Quick start
 
