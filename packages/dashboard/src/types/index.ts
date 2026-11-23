@@ -84,8 +84,9 @@ export type TEndpointRequest = {
   /** Below the Endpoint root, such as `"/setpoint"`. Defaults to `"/"`. The host refuses `.` and `..` segments. */
   path?: string;
   /**
-   * An array repeats its key. A key whose value is `undefined` is left out; any other value that is not a string, a
-   * finite number or a boolean rejects with `bad_request` naming its key, before anything is posted.
+   * A plain object; an array repeats its key. A key whose value is `undefined` is left out; any other value that is
+   * not a string, a finite number or a boolean rejects with `bad_request` naming its key, before anything is posted.
+   * So does a `URLSearchParams` or a `Map`, which would go out empty: pass `Object.fromEntries(params)`.
    */
   query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[]>;
   /**
@@ -93,7 +94,8 @@ export type TEndpointRequest = {
    * value is sent as JSON, encoded here with JSON's rules: `toJSON()` applies, as for a `Date` inside an object. These
    * reject with `bad_request` before anything is posted:
    * - a value JSON cannot encode, such as a `BigInt` or a cycle;
-   * - a value JSON would write as `{}`, such as a `Map`, a `FormData`, a `Blob` or a class instance without `toJSON()`;
+   * - a value JSON would write as `{}`, such as a `Map`, a `FormData`, a `Blob` or a class instance that keeps its data
+   *   in private fields (a class instance with fields is sent as its fields);
    * - a value whose JSON is a bare string, such as a top-level `Date`, which the host would send as text;
    * - any body with `GET`, the default method.
    */
@@ -107,8 +109,11 @@ export type TEndpointRequest = {
  */
 export type TEndpointCallResult<TBody = unknown> = {
   status: number;
-  /** The response headers the browser can read, with lowercase names. */
-  headers: Record<string, string>;
+  /**
+   * The response headers the browser can read, with lowercase names. A header the response does not carry is absent.
+   * No prototype, like `params`: check one with `"etag" in headers` or `Object.hasOwn`, not `headers.hasOwnProperty`.
+   */
+  headers: Partial<Record<string, string>>;
   /** Parsed when the response is JSON, else the response text. `TBody` is an assertion, never validated. */
   body: TBody;
 };

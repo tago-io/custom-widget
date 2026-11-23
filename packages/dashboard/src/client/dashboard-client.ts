@@ -9,8 +9,10 @@ import {
   readResponseResult,
 } from "../protocol/messages.js";
 import {
+  describeValue,
   encodeEndpointBody,
   encodeEndpointQuery,
+  isPlainObject,
   isValidAnalysisID,
   isValidQueryId,
   serializeQueryParams,
@@ -35,6 +37,9 @@ import { createRequestIdFactory } from "./generate-id.js";
 import { PendingPool } from "./pending-pool.js";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+
+/** The longest delay `setTimeout` honors; above it, browsers fire the timer after about 1 ms. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
 
 /** The one op that changes something. A failure after it was posted leaves the outcome unknown. */
 const ENDPOINT_CALL_OP = "endpoint.call";
@@ -222,8 +227,8 @@ export class DashboardClient {
     }
     this.parked.clear();
 
-    // Every drained request was posted, so it keeps its id, and its answer, if one still comes, is logged as late
-    // rather than dropped as noise: after a stop() that aborted a save, that answer is the only trace of the outcome.
+    // Every drained request was posted, so it keeps its id. If start() runs again and the answer still arrives, it is
+    // logged as late rather than dropped as noise, which for an aborted save is a trace that the call did run.
     for (const [requestID, entry] of this.pending.drain()) {
       if (entry.timer) {
         clearTimeout(entry.timer);
@@ -446,18 +451,22 @@ export class DashboardClient {
         return;
       }
 
+      // `0`, `Infinity` and `NaN` mean no backstop; a finite value past what setTimeout honors waits that long instead.
       const timer =
-        timeoutMs > 0
-          ? setTimeout(() => {
-              const expired = this.pending.take(requestID);
-              if (!expired) {
-                return;
-              }
-              this.pending.markExpired(requestID);
-              expired.reject(
-                new TagoDashboardError("no_response", noResponseMessage(op, timeoutMs), { op, requestID })
-              );
-            }, timeoutMs)
+        Number.isFinite(timeoutMs) && timeoutMs > 0
+          ? setTimeout(
+              () => {
+                const expired = this.pending.take(requestID);
+                if (!expired) {
+                  return;
+                }
+                this.pending.markExpired(requestID);
+                expired.reject(
+                  new TagoDashboardError("no_response", noResponseMessage(op, timeoutMs), { op, requestID })
+                );
+              },
+              Math.min(timeoutMs, MAX_TIMER_MS)
+            )
           : null;
 
       const added = this.pending.add(requestID, {
@@ -551,7 +560,7 @@ export class DashboardClient {
     if (!isValidQueryId(queryID)) {
       throw new TagoDashboardError(
         "bad_request",
-        `Invalid query id ${JSON.stringify(queryID)} — expected 24 alphanumeric characters.`,
+        `Invalid query id ${describeValue(queryID)} — expected 24 alphanumeric characters.`,
         { op: "sql.run" }
       );
     }
@@ -581,12 +590,20 @@ export class DashboardClient {
     if (!isValidAnalysisID(analysisID)) {
       throw new TagoDashboardError(
         "bad_request",
-        `Invalid Analysis ID ${JSON.stringify(analysisID)}: expected the 24 alphanumeric characters in the Endpoint URL.`,
+        `Invalid Analysis ID ${describeValue(analysisID)}: expected the 24 alphanumeric characters in the Endpoint URL.`,
         { op: ENDPOINT_CALL_OP }
       );
     }
 
     const payload: Record<string, unknown> = { endpoint_id: analysisID };
+    // A string here is usually a path passed where the request goes, and would run `GET /` instead.
+    if (request !== undefined && !isPlainObject(request)) {
+      throw new TagoDashboardError(
+        "bad_request",
+        `The request must be an object such as { method, path, query, body }, not ${describeValue(request)}.`,
+        { op: ENDPOINT_CALL_OP }
+      );
+    }
     const { method, path, query, body } = request ?? {};
     if (method !== undefined) {
       payload.method = method;
@@ -626,8 +643,12 @@ export class DashboardClient {
 function noResponseMessage(op: string, timeoutMs: number): string {
   const unanswered = `The dashboard did not answer ${op} within ${timeoutMs}ms. It may have been reloaded or navigated away.`;
   if (op === ENDPOINT_CALL_OP) {
-    // An Endpoint answers 504 after its own 30 seconds, so only a lost reply gets here, and the call may have run.
-    return `${unanswered} The call was sent and may have run, so check its effect before calling again.`;
+    // With the default backstop an Endpoint answers 504 first, after its own 30 seconds, so a lost reply is the usual
+    // cause. A timeoutMs under 30 seconds can cut off a slow Endpoint too. Either way the call may have run.
+    return (
+      `${unanswered} The call was sent and may have run, so check its effect before calling again. ` +
+      "If the Endpoint can take longer than that, raise timeoutMs."
+    );
   }
   return (
     `${unanswered} This is a transport backstop, not a query limit: a query that runs too long comes back as ` +

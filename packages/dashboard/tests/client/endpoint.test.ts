@@ -411,10 +411,13 @@ describe("endpoint.call request checks", () => {
     ["a URLSearchParams", () => new URLSearchParams("setpoint=22")],
     ["a Blob", () => new Blob(["22"])],
     [
-      "a class instance",
+      "a class instance that keeps its data in private fields",
       () =>
-        new (class Point {
-          x = 1;
+        new (class Temperature {
+          #celsius = 22;
+          get celsius() {
+            return this.#celsius;
+          }
         })(),
     ],
     ["a Map inside an object", () => ({ values: new Map([["a", 1]]) })],
@@ -428,15 +431,20 @@ describe("endpoint.call request checks", () => {
     expect(ctx.requests()).toHaveLength(0);
   });
 
-  it("sends plain objects, arrays, prototype-free objects and toJSON results", () => {
+  it("sends plain objects, arrays, prototype-free objects, toJSON results and class instances with fields", () => {
     ctx = setupClient();
     const bare = Object.assign(Object.create(null) as Record<string, unknown>, { a: 1 });
+    class Setpoint {
+      constructor(readonly value: number) {}
+    }
     const bodies = [
       { a: [1, { b: "c" }] },
       [1, 2],
       bare,
       { at: new Date("2026-11-23T12:00:00.000Z") },
       { toJSON: () => ({ v: 1 }) },
+      new Setpoint(22),
+      {},
     ];
 
     for (const body of bodies) {
@@ -449,7 +457,51 @@ describe("endpoint.call request checks", () => {
       { a: 1 },
       { at: "2026-11-23T12:00:00.000Z" },
       { v: 1 },
+      { value: 22 },
+      {},
     ]);
+  });
+
+  it.each([
+    ["a URLSearchParams", () => new URLSearchParams("device=abc")],
+    ["a Map", () => new Map([["device", "abc"]])],
+    ["a Date", () => new Date("2026-11-23T12:00:00.000Z")],
+    ["an array", () => ["device", "abc"]],
+  ])("refuses %s as the query, which would go out empty, before posting", async (_label, make) => {
+    ctx = setupClient();
+
+    await expect(
+      ctx.client.endpoint.call(ANALYSIS_ID, { query: make() as unknown as Record<string, string> })
+    ).rejects.toMatchObject({ code: "bad_request", op: "endpoint.call" });
+    expect(ctx.requests()).toHaveLength(0);
+  });
+
+  it.each([
+    ["a string", "/setpoint"],
+    ["a number", 22],
+    ["null", null],
+    ["an array", [{ method: "POST" }]],
+  ])("refuses %s as the request, which would run GET / instead, before posting", async (_label, request) => {
+    ctx = setupClient();
+
+    await expect(ctx.client.endpoint.call(ANALYSIS_ID, request as never)).rejects.toMatchObject({
+      code: "bad_request",
+      op: "endpoint.call",
+    });
+    expect(ctx.requests()).toHaveLength(0);
+  });
+
+  it("refuses an Analysis ID it cannot print, such as a click event, as bad_request", async () => {
+    ctx = setupClient();
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    await expect(ctx.client.endpoint.call(circular as never)).rejects.toMatchObject({
+      code: "bad_request",
+      op: "endpoint.call",
+    });
+    await expect(ctx.client.endpoint.call(10n as never)).rejects.toMatchObject({ code: "bad_request" });
+    await expect(ctx.client.sql.run(circular as never)).rejects.toMatchObject({ code: "bad_request", op: "sql.run" });
   });
 
   it.each([undefined, "GET", "get"])(
