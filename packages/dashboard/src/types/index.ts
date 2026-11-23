@@ -66,6 +66,48 @@ export type TSqlRunResult<TRow extends TSqlRow = TSqlRow> = {
   };
 };
 
+/** One entry of the `endpoint.list` result: an Analysis whose Endpoint the viewer may call. */
+export type TEndpointSummary = { id: string; name: string };
+
+export type TEndpointMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/** The host sends every query value as a string. */
+export type TEndpointQueryValue = string | number | boolean;
+
+/**
+ * What `endpoint.call` sends to the Endpoint. The host adds the viewer's session token and sets the content type from
+ * the body; a shell cannot add a header of its own.
+ */
+export type TEndpointRequest = {
+  /** Defaults to `"GET"` on the host. */
+  method?: TEndpointMethod;
+  /** Below the Endpoint root, such as `"/setpoint"`. Defaults to `"/"`. The host refuses `.` and `..` segments. */
+  path?: string;
+  /** An array repeats its key. */
+  query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[]>;
+  /**
+   * A string is sent as is, as text, so the Analysis reads `context.request.body` and gets `scope` as nil. Any other
+   * value is sent as JSON, encoded here with JSON's rules: `toJSON()` applies, as for a `Date` inside an object, and a
+   * value JSON cannot encode, such as a `BigInt` or a cycle, rejects with `bad_request` before anything is posted. So
+   * does a value whose JSON is a bare string, such as a top-level `Date`, which the host would send as text: put it in
+   * an object. The host refuses a body with `GET`.
+   */
+  body?: unknown;
+};
+
+/**
+ * The Endpoint's answer. Every HTTP status resolves with it, 4xx and 5xx included, so a form can read the field
+ * errors of a 422. The host refuses to follow a redirect, so a redirect status such as 302 comes back as an
+ * `api_error` rejection instead.
+ */
+export type TEndpointCallResult<TBody = unknown> = {
+  status: number;
+  /** The response headers the browser can read, with lowercase names. */
+  headers: Record<string, string>;
+  /** Parsed when the response is JSON, else the response text. `TBody` is an assertion, never validated. */
+  body: TBody;
+};
+
 export type TReadableStore<TValue> = {
   get: () => TValue;
   /** Does not fire on subscribe; read `get()` first. Shaped for `useSyncExternalStore`. */
@@ -79,8 +121,8 @@ export type TDashboardClientOptions = {
   autoStart?: boolean;
   /**
    * Transport backstop, not a query deadline — TagoSQL enforces its own execution timeout and
-   * answers with an error, so this only catches a host that never replies at all. Default 60000.
-   * `0` disables it.
+   * answers with an error, and an Endpoint answers 504 after its own 30 seconds, so this only
+   * catches a host that never replies at all. Default 60000. `0` disables it.
    */
   timeoutMs?: number;
   /** Inbound origin allowlist. Default: accept any origin. See the README before setting this. */

@@ -1,18 +1,23 @@
 import { TagoDashboardError } from "../errors.js";
 import { getInitialTheme } from "../page/location.js";
 import {
+  normalizeEndpointCallResult,
+  normalizeEndpointListResult,
   normalizeSqlListResult,
   normalizeSqlRunResult,
   readInboundMessage,
   readResponseResult,
 } from "../protocol/messages.js";
-import { isValidQueryId, serializeQueryParams } from "../protocol/params.js";
+import { encodeEndpointBody, isValidAnalysisID, isValidQueryId, serializeQueryParams } from "../protocol/params.js";
 import type {
   TCallOptions,
   TDashboardClientOptions,
   TDashboardParams,
   TDashboardStyle,
   TDashboardTheme,
+  TEndpointCallResult,
+  TEndpointRequest,
+  TEndpointSummary,
   TOutboundMessage,
   TQueryParam,
   TReadableStore,
@@ -24,6 +29,9 @@ import { createRequestIdFactory } from "./generate-id.js";
 import { PendingPool } from "./pending-pool.js";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+
+/** The one op that changes something. A failure after it was posted leaves the outcome unknown. */
+const ENDPOINT_CALL_OP = "endpoint.call";
 
 /**
  * The host attaches its listener in an effect, so under React StrictMode it briefly detaches.
@@ -58,6 +66,14 @@ export class DashboardClient {
       params?: TQueryParam[],
       options?: TCallOptions
     ) => Promise<TSqlRunResult<TRow>>;
+  };
+  readonly endpoint: {
+    list: (options?: TCallOptions) => Promise<TEndpointSummary[]>;
+    call: <TBody = unknown>(
+      analysisID: string,
+      request?: TEndpointRequest,
+      options?: TCallOptions
+    ) => Promise<TEndpointCallResult<TBody>>;
   };
 
   private readonly options: TDashboardClientOptions;
@@ -129,6 +145,11 @@ export class DashboardClient {
       run: (queryID, params, callOptions) => this.runQuery(queryID, params, callOptions),
     };
 
+    this.endpoint = {
+      list: (callOptions) => this.listEndpoints(callOptions),
+      call: (analysisID, request, callOptions) => this.callEndpoint(analysisID, request, callOptions),
+    };
+
     if (options.autoStart) {
       this.start();
     }
@@ -162,7 +183,9 @@ export class DashboardClient {
 
     if (!this.isEmbedded && !this.warnedNoHost) {
       this.warnedNoHost = true;
-      console.info("[TagoIO Dashboard] No dashboard host detected — running standalone. sql.* calls will fail fast.");
+      console.info(
+        "[TagoIO Dashboard] No dashboard host detected — running standalone. sql.* and endpoint.* calls will fail fast."
+      );
     }
 
     this.postReady();
@@ -197,7 +220,11 @@ export class DashboardClient {
       if (entry.timer) {
         clearTimeout(entry.timer);
       }
-      entry.reject(new TagoDashboardError("aborted", "The dashboard client was stopped.", { op: entry.op }));
+      const message =
+        entry.op === ENDPOINT_CALL_OP
+          ? "The dashboard client was stopped before the Endpoint answered. The call was sent and may have run."
+          : "The dashboard client was stopped.";
+      entry.reject(new TagoDashboardError("aborted", message, { op: entry.op }));
     }
   }
 
@@ -357,7 +384,7 @@ export class DashboardClient {
     options: TCallOptions | undefined,
     coalesceKey: string
   ): Promise<{ result: unknown; requestID: string }> {
-    const timeoutMs = options?.timeoutMs ?? this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs = this.resolveTimeout(options);
     const key = `${op}|${coalesceKey}|${timeoutMs}`;
 
     const existing = this.inFlight.get(key);
@@ -378,6 +405,10 @@ export class DashboardClient {
     );
     this.inFlight.set(key, promise);
     return promise;
+  }
+
+  private resolveTimeout(options: TCallOptions | undefined): number {
+    return options?.timeoutMs ?? this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   private dispatch(op: string, payload: unknown, timeoutMs: number): Promise<{ result: unknown; requestID: string }> {
@@ -413,13 +444,7 @@ export class DashboardClient {
               }
               this.pending.markExpired(requestID);
               expired.reject(
-                new TagoDashboardError(
-                  "no_response",
-                  `The dashboard did not answer ${op} within ${timeoutMs}ms. It may have been reloaded or navigated away. ` +
-                    "This is a transport backstop, not a query limit: a query that runs too long comes back as `timeout` instead. " +
-                    "If the dashboard is simply slow, raise timeoutMs.",
-                  { op, requestID }
-                )
+                new TagoDashboardError("no_response", noResponseMessage(op, timeoutMs), { op, requestID })
               );
             }, timeoutMs)
           : null;
@@ -527,6 +552,68 @@ export class DashboardClient {
     const { result, requestID } = await this.send("sql.run", payload, options, coalesceKey);
     return normalizeSqlRunResult<TRow>(result, { op: "sql.run", requestID });
   }
+
+  private async listEndpoints(options?: TCallOptions): Promise<TEndpointSummary[]> {
+    const { result, requestID } = await this.send("endpoint.list", undefined, options, "");
+    return normalizeEndpointListResult(result, { op: "endpoint.list", requestID });
+  }
+
+  /**
+   * Never coalesced, unlike every read: two identical POSTs are two saves, and sharing one request would drop the
+   * second. Never retried either, for the same reason.
+   */
+  private async callEndpoint<TBody = unknown>(
+    analysisID: string,
+    request?: TEndpointRequest,
+    options?: TCallOptions
+  ): Promise<TEndpointCallResult<TBody>> {
+    if (!isValidAnalysisID(analysisID)) {
+      throw new TagoDashboardError(
+        "bad_request",
+        `Invalid Analysis ID ${JSON.stringify(analysisID)}: expected the 24 alphanumeric characters in the Endpoint URL.`,
+        { op: ENDPOINT_CALL_OP }
+      );
+    }
+
+    const payload: Record<string, unknown> = { endpoint_id: analysisID };
+    const { method, path, query, body } = request ?? {};
+    if (method !== undefined) {
+      payload.method = method;
+    }
+    if (path !== undefined) {
+      payload.path = path;
+    }
+    if (query !== undefined) {
+      payload.query = query;
+    }
+    try {
+      const encoded = encodeEndpointBody(body);
+      if (encoded !== undefined) {
+        payload.body = encoded;
+      }
+    } catch (error) {
+      throw new TagoDashboardError(
+        "bad_request",
+        `The request body cannot be sent: ${error instanceof Error ? error.message : String(error)}`,
+        { op: ENDPOINT_CALL_OP, cause: error }
+      );
+    }
+
+    const { result, requestID } = await this.dispatch(ENDPOINT_CALL_OP, payload, this.resolveTimeout(options));
+    return normalizeEndpointCallResult<TBody>(result, { op: ENDPOINT_CALL_OP, requestID });
+  }
+}
+
+function noResponseMessage(op: string, timeoutMs: number): string {
+  const unanswered = `The dashboard did not answer ${op} within ${timeoutMs}ms. It may have been reloaded or navigated away.`;
+  if (op === ENDPOINT_CALL_OP) {
+    // An Endpoint answers 504 after its own 30 seconds, so only a lost reply gets here, and the call may have run.
+    return `${unanswered} The call was sent and may have run, so check its effect before calling again.`;
+  }
+  return (
+    `${unanswered} This is a transport backstop, not a query limit: a query that runs too long comes back as ` +
+    "`timeout` instead. If the dashboard is simply slow, raise timeoutMs."
+  );
 }
 
 export function createDashboardClient(options?: TDashboardClientOptions): DashboardClient {

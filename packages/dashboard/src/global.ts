@@ -20,6 +20,7 @@ const TagoDashboard = {
   style: client.style,
   params: client.params,
   sql: client.sql,
+  endpoint: client.endpoint,
   start: () => client.start(),
   stop: () => client.stop(),
 

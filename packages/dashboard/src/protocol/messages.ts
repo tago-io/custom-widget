@@ -4,6 +4,8 @@ import type {
   TDashboardParams,
   TDashboardStyle,
   TDashboardTheme,
+  TEndpointCallResult,
+  TEndpointSummary,
   TSqlQuerySummary,
   TSqlRow,
   TSqlRunResult,
@@ -152,4 +154,43 @@ export function normalizeSqlListResult(raw: unknown, meta: ErrorMeta): TSqlQuery
     }
   }
   return summaries;
+}
+
+/** Same reading as `sql.list`: an entry without an id is dropped, and a nameless one is named after its id. */
+export function normalizeEndpointListResult(raw: unknown, meta: ErrorMeta): TEndpointSummary[] {
+  if (!isRecord(raw)) {
+    throw new TagoDashboardError("api_error", "The dashboard sent a malformed endpoint.list result.", meta);
+  }
+  if (!Array.isArray(raw.endpoints)) {
+    return [];
+  }
+
+  const summaries: TEndpointSummary[] = [];
+  for (const entry of raw.endpoints) {
+    if (isRecord(entry) && typeof entry.id === "string") {
+      summaries.push({ id: entry.id, name: typeof entry.name === "string" ? entry.name : entry.id });
+    }
+  }
+  return summaries;
+}
+
+/**
+ * The status and headers are checked, since a caller branches on the first and reads the second. The body is the
+ * Analysis's own answer and passes through untouched.
+ */
+export function normalizeEndpointCallResult<TBody = unknown>(
+  raw: unknown,
+  meta: ErrorMeta
+): TEndpointCallResult<TBody> {
+  if (!isRecord(raw) || typeof raw.status !== "number" || !Number.isInteger(raw.status) || !isRecord(raw.headers)) {
+    throw new TagoDashboardError("api_error", "The dashboard sent a malformed endpoint.call result.", meta);
+  }
+
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(raw.headers)) {
+    if (typeof value === "string") {
+      headers[name] = value;
+    }
+  }
+  return { status: raw.status, headers, body: raw.body as TBody };
 }
