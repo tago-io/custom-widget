@@ -48,8 +48,9 @@ export class PendingPool {
     return this.expired.has(id);
   }
 
-  drain(): TPendingEntry[] {
-    const all = [...this.entries.values()];
+  /** With their ids, since each one was posted: the caller reports a sent request by its id. */
+  drain(): Array<[id: string, entry: TPendingEntry]> {
+    const all = [...this.entries.entries()];
     this.entries.clear();
     return all;
   }

@@ -186,7 +186,9 @@ export function normalizeEndpointCallResult<TBody = unknown>(
     throw new TagoDashboardError("api_error", "The dashboard sent a malformed endpoint.call result.", meta);
   }
 
-  const headers: Record<string, string> = {};
+  // No prototype, like the params map: a header the response does not carry reads `undefined`, never an inherited
+  // method, and a header named `__proto__` is a header.
+  const headers = Object.create(null) as Record<string, string>;
   for (const [name, value] of Object.entries(raw.headers)) {
     if (typeof value === "string") {
       headers[name] = value;

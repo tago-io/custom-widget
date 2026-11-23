@@ -344,17 +344,32 @@ describe("endpoint.call when it cannot complete", () => {
     await expect(promise).resolves.toMatchObject({ status: 200 });
   });
 
-  it("rejects with aborted, saying the call may have run, when the client stops after sending it", async () => {
+  it("rejects with aborted and the request id, saying the call may have run, when the client stops after sending it", async () => {
     ctx = setupClient();
     const promise = ctx.client.endpoint.call(ANALYSIS_ID, { method: "POST" });
     expect(ctx.requests()).toHaveLength(1);
+    const requestID = ctx.lastRequestID();
 
     ctx.client.stop();
     await expect(promise).rejects.toMatchObject({
       code: "aborted",
       op: "endpoint.call",
+      requestID,
       message: expect.stringMatching(/may have run/),
     });
+  });
+
+  it("logs a late answer to a call the client stopped, instead of dropping it silently", async () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => undefined);
+    ctx = setupClient();
+    void ctx.client.endpoint.call(ANALYSIS_ID, { method: "POST" }).catch(() => undefined);
+    const requestID = ctx.lastRequestID() as string;
+
+    ctx.client.stop();
+    ctx.client.start();
+    ctx.respondOk({ status: 200, headers: {}, body: "" }, requestID);
+
+    expect(debug).toHaveBeenCalledWith(expect.stringContaining(requestID));
   });
 
   it("aborts a call made while the client is not running without sending it or claiming it ran", async () => {
@@ -365,6 +380,7 @@ describe("endpoint.call when it cannot complete", () => {
     const rejection = await promise.catch((error: unknown) => error);
 
     expect(rejection).toMatchObject({ code: "aborted", op: "endpoint.call" });
+    expect((rejection as { requestID?: string }).requestID).toBeUndefined();
     expect((rejection as Error).message).not.toMatch(/may have run/);
     expect(ctx.requests()).toHaveLength(0);
   });
@@ -377,5 +393,132 @@ describe("endpoint.call when it cannot complete", () => {
     await expect(client.endpoint.call(ANALYSIS_ID)).rejects.toMatchObject({ code: "no_host", op: "endpoint.call" });
     await expect(client.endpoint.list()).rejects.toMatchObject({ code: "no_host", op: "endpoint.list" });
     client.stop();
+  });
+});
+
+describe("endpoint.call request checks", () => {
+  it.each([
+    [
+      "a FormData",
+      () => {
+        const form = new FormData();
+        form.append("setpoint", "22");
+        return form;
+      },
+    ],
+    ["a Map", () => new Map([["setpoint", "22"]])],
+    ["a Set", () => new Set(["22"])],
+    ["a URLSearchParams", () => new URLSearchParams("setpoint=22")],
+    ["a Blob", () => new Blob(["22"])],
+    [
+      "a class instance",
+      () =>
+        new (class Point {
+          x = 1;
+        })(),
+    ],
+    ["a Map inside an object", () => ({ values: new Map([["a", 1]]) })],
+  ])("refuses %s as the body, which JSON would turn into {}, before posting", async (_label, make) => {
+    ctx = setupClient();
+
+    await expect(ctx.client.endpoint.call(ANALYSIS_ID, { method: "POST", body: make() })).rejects.toMatchObject({
+      code: "bad_request",
+      op: "endpoint.call",
+    });
+    expect(ctx.requests()).toHaveLength(0);
+  });
+
+  it("sends plain objects, arrays, prototype-free objects and toJSON results", () => {
+    ctx = setupClient();
+    const bare = Object.assign(Object.create(null) as Record<string, unknown>, { a: 1 });
+    const bodies = [
+      { a: [1, { b: "c" }] },
+      [1, 2],
+      bare,
+      { at: new Date("2026-11-23T12:00:00.000Z") },
+      { toJSON: () => ({ v: 1 }) },
+    ];
+
+    for (const body of bodies) {
+      void ctx.client.endpoint.call(ANALYSIS_ID, { method: "POST", body }).catch(() => undefined);
+    }
+
+    expect(ctx.requests().map((request) => (request.payload as { body: unknown }).body)).toEqual([
+      { a: [1, { b: "c" }] },
+      [1, 2],
+      { a: 1 },
+      { at: "2026-11-23T12:00:00.000Z" },
+      { v: 1 },
+    ]);
+  });
+
+  it.each([undefined, "GET", "get"])(
+    "refuses a body with method %s, since the host refuses a body with GET, before posting",
+    async (method) => {
+      ctx = setupClient();
+
+      await expect(
+        ctx.client.endpoint.call(ANALYSIS_ID, { method: method as "GET" | undefined, body: { setpoint: "22" } })
+      ).rejects.toMatchObject({ code: "bad_request", op: "endpoint.call", message: expect.stringMatching(/GET/) });
+      expect(ctx.requests()).toHaveLength(0);
+    }
+  );
+
+  it("drops a query key whose value is undefined, the way JSON drops one from a body", () => {
+    ctx = setupClient();
+    void ctx.client.endpoint
+      .call(ANALYSIS_ID, { query: { device: undefined as unknown as string, room: "4" } })
+      .catch(() => undefined);
+
+    expect(ctx.requests()[0].payload).toEqual({ endpoint_id: ANALYSIS_ID, query: { room: "4" } });
+  });
+
+  it.each([
+    ["null", null],
+    ["a Date", new Date("2026-11-23T12:00:00.000Z")],
+    ["an object", { id: "a" }],
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["an array holding an object", [{ id: "a" }]],
+    ["an array holding undefined", [undefined]],
+  ])("refuses %s as a query value, naming its key, before posting", async (_label, value) => {
+    ctx = setupClient();
+
+    await expect(
+      ctx.client.endpoint.call(ANALYSIS_ID, { query: { device: value as unknown as string } })
+    ).rejects.toMatchObject({ code: "bad_request", op: "endpoint.call", message: expect.stringContaining('"device"') });
+    expect(ctx.requests()).toHaveLength(0);
+  });
+
+  it("fixes the query when the call is made, even when the call waits for start()", async () => {
+    ctx = setupClient();
+    ctx.client.stop();
+    const query = { room: "4", tags: ["a"] };
+
+    const promise = ctx.client.endpoint.call(ANALYSIS_ID, { query });
+    ctx.client.start();
+    query.room = "5";
+    query.tags.push("b");
+    for (let tick = 0; tick < 5 && ctx.requests().length === 0; tick += 1) {
+      await Promise.resolve();
+    }
+
+    expect(ctx.requests()[0].payload).toEqual({ endpoint_id: ANALYSIS_ID, query: { room: "4", tags: ["a"] } });
+    ctx.respondOk({ status: 200, headers: {}, body: "" });
+    await promise;
+  });
+});
+
+describe("endpoint.call headers", () => {
+  it("hands out headers without a prototype, keeping a header named after an Object property", async () => {
+    ctx = setupClient();
+    const promise = ctx.client.endpoint.call(ANALYSIS_ID);
+
+    ctx.respondOk({ status: 200, headers: JSON.parse('{"__proto__":"x","content-type":"text/plain"}'), body: "" });
+    const { headers } = await promise;
+
+    expect("constructor" in headers).toBe(false);
+    expect(Object.keys(headers).sort()).toEqual(["__proto__", "content-type"]);
+    expect(headers.__proto__).toBe("x");
   });
 });

@@ -8,7 +8,13 @@ import {
   readInboundMessage,
   readResponseResult,
 } from "../protocol/messages.js";
-import { encodeEndpointBody, isValidAnalysisID, isValidQueryId, serializeQueryParams } from "../protocol/params.js";
+import {
+  encodeEndpointBody,
+  encodeEndpointQuery,
+  isValidAnalysisID,
+  isValidQueryId,
+  serializeQueryParams,
+} from "../protocol/params.js";
 import type {
   TCallOptions,
   TDashboardClientOptions,
@@ -216,15 +222,18 @@ export class DashboardClient {
     }
     this.parked.clear();
 
-    for (const entry of this.pending.drain()) {
+    // Every drained request was posted, so it keeps its id, and its answer, if one still comes, is logged as late
+    // rather than dropped as noise: after a stop() that aborted a save, that answer is the only trace of the outcome.
+    for (const [requestID, entry] of this.pending.drain()) {
       if (entry.timer) {
         clearTimeout(entry.timer);
       }
+      this.pending.markExpired(requestID);
       const message =
         entry.op === ENDPOINT_CALL_OP
           ? "The dashboard client was stopped before the Endpoint answered. The call was sent and may have run."
           : "The dashboard client was stopped.";
-      entry.reject(new TagoDashboardError("aborted", message, { op: entry.op }));
+      entry.reject(new TagoDashboardError("aborted", message, { op: entry.op, requestID }));
     }
   }
 
@@ -301,10 +310,12 @@ export class DashboardClient {
     const entry = this.pending.take(id);
     if (!entry) {
       if (this.pending.wasExpired(id)) {
-        // This one we can name: the request timed out and the answer turned up anyway. Worth
-        // saying so, because the alternative reading is "my query silently did nothing".
+        // This one we can name: the request timed out or was aborted, and the answer turned up anyway.
+        // Worth saying so, because the alternative reading is "my query silently did nothing".
         // `debug` rather than `warn`, since it is diagnostic and browsers hide it by default.
-        console.debug(`[TagoIO Dashboard] Ignoring a late response for ${id}, which already timed out.`);
+        console.debug(
+          `[TagoIO Dashboard] Ignoring a late response for ${id}, which already timed out or was aborted by stop().`
+        );
         return;
       }
       // Duplicated, addressed to another client in this document, or forged. All noise.
@@ -583,10 +594,18 @@ export class DashboardClient {
     if (path !== undefined) {
       payload.path = path;
     }
-    if (query !== undefined) {
-      payload.query = query;
+    // The host refuses this too, but with a message that does not say why, and forgetting `method` is the usual cause.
+    if (body !== undefined && (typeof method !== "string" || method.toUpperCase() === "GET")) {
+      throw new TagoDashboardError(
+        "bad_request",
+        'A request body is not allowed with GET, the default method. Set method, for example to "POST".',
+        { op: ENDPOINT_CALL_OP }
+      );
     }
     try {
+      if (query !== undefined) {
+        payload.query = encodeEndpointQuery(query);
+      }
       const encoded = encodeEndpointBody(body);
       if (encoded !== undefined) {
         payload.body = encoded;
@@ -594,7 +613,7 @@ export class DashboardClient {
     } catch (error) {
       throw new TagoDashboardError(
         "bad_request",
-        `The request body cannot be sent: ${error instanceof Error ? error.message : String(error)}`,
+        `The request cannot be sent: ${error instanceof Error ? error.message : String(error)}`,
         { op: ENDPOINT_CALL_OP, cause: error }
       );
     }
