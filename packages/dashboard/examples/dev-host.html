@@ -59,6 +59,10 @@
           { id: "bbbbbbbbbbbbbbbbbbbbbbbb", name: "readings (mock)" },
         ];
 
+        // One Endpoint that answers like the docs.tago.io recipe "Validate a Custom Dashboard form".
+        var ENDPOINTS = [{ id: "cccccccccccccccccccccccc", name: "Save setpoint (mock)" }];
+        var METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+
         var shell = document.getElementById("shell");
         var themeSelect = document.getElementById("theme");
         var srcInput = document.getElementById("src");
@@ -112,6 +116,46 @@
           };
         }
 
+        function endpointAnswer(status, body) {
+          return { status: status, headers: { "content-type": "application/json" }, body: body };
+        }
+
+        // The recipe's Analysis: POST /setpoint saves a number from 5 to 30 and answers 422 for anything else.
+        function mockEndpointCall(payload) {
+          var known = ENDPOINTS.some(function (endpoint) {
+            return endpoint.id === payload.endpoint_id;
+          });
+          // An Endpoint the viewer may not call answers 404, as an HTTP status, not as a bridge error.
+          if (!known) return endpointAnswer(404, { message: "Endpoint can't be found", status: false });
+
+          var method = (payload.method || "GET").toUpperCase();
+          var path = "/" + (payload.path || "").replace(/^\/+/, "");
+          if (method !== "POST" || path !== "/setpoint") return endpointAnswer(404, { error: "Not found." });
+
+          var raw = payload.body && typeof payload.body === "object" ? payload.body.setpoint : undefined;
+          var setpoint = typeof raw === "number" || typeof raw === "string" ? Number(raw) : NaN;
+          if (raw === "" || !(setpoint >= 5 && setpoint <= 30)) {
+            return endpointAnswer(422, { errors: { setpoint: "Enter a number from 5 to 30." } });
+          }
+          return endpointAnswer(200, { ok: true, setpoint: setpoint });
+        }
+
+        // The checks the real host runs before calling, each refused as a bridge error.
+        function isValidEndpointCall(payload) {
+          if (!payload || typeof payload.endpoint_id !== "string" || !/^[a-z0-9]{24}$/i.test(payload.endpoint_id)) {
+            return false;
+          }
+          if (payload.method !== undefined && typeof payload.method !== "string") return false;
+          if (payload.path !== undefined && typeof payload.path !== "string") return false;
+          var method = (payload.method || "GET").toUpperCase();
+          if (METHODS.indexOf(method) === -1) return false;
+          if (method === "GET" && payload.body !== undefined) return false;
+          var segments = (payload.path || "").split("/");
+          return !segments.some(function (segment) {
+            return segment === "." || segment === "..";
+          });
+        }
+
         window.addEventListener("message", function (event) {
           var data = event.data;
           if (!data || typeof data !== "object") return;
@@ -155,6 +199,25 @@
                     id: data.id,
                     ok: false,
                     error: { code: "not_found", message: "SQL query can't be found" },
+                  }
+            );
+            return;
+          }
+
+          if (data.op === "endpoint.list") {
+            reply({ type: "dashboard:response", id: data.id, ok: true, result: { endpoints: ENDPOINTS } });
+            return;
+          }
+
+          if (data.op === "endpoint.call") {
+            reply(
+              isValidEndpointCall(data.payload)
+                ? { type: "dashboard:response", id: data.id, ok: true, result: mockEndpointCall(data.payload) }
+                : {
+                    type: "dashboard:response",
+                    id: data.id,
+                    ok: false,
+                    error: { code: "bad_request", message: "Invalid endpoint.call payload" },
                   }
             );
             return;

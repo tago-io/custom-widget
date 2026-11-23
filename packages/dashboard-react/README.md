@@ -1,6 +1,6 @@
 # TagoIO Custom Dashboard SDK — React
 
-React bindings for [`@tago-io/custom-dashboard`](../dashboard). A provider, three hooks, and nothing else.
+React bindings for [`@tago-io/custom-dashboard`](../dashboard). A provider, the hooks below, and nothing else.
 
 > **Read [the security model](../dashboard/README.md#read-this-first-the-security-model) in the core package first.** Uploading dashboard HTML is code-deployment-grade, and every viewer runs it under their own session.
 
@@ -55,18 +55,71 @@ createRoot(document.getElementById("root")).render(
 
 ## Hooks
 
-| Hook                                      | Returns                                                          |
-| ----------------------------------------- | ---------------------------------------------------------------- |
-| `useSqlQueries()`                         | `{ queries, isLoading, error, refetch }`                         |
-| `useSqlQuery(queryID, params?, options?)` | `{ data, isLoading, error, refetch }` — pass `null` to stay idle |
-| `useDashboardTheme()`                     | `"dark" \| "light"`                                              |
-| `useDashboardStyle()`                     | the host's style object                                          |
-| `useDashboardParams()`                    | the parent page's querystring, read-only, string values          |
-| `useDashboardClient()`                    | the underlying client, for imperative calls                      |
+| Hook                                      | Returns                                                               |
+| ----------------------------------------- | --------------------------------------------------------------------- |
+| `useSqlQueries()`                         | `{ queries, isLoading, error, refetch }`                              |
+| `useSqlQuery(queryID, params?, options?)` | `{ data, isLoading, error, refetch }` — pass `null` to stay idle      |
+| `useCallEndpoint()`                       | `{ callEndpoint, isCalling, error, reset }`, for an Analysis Endpoint |
+| `useDashboardTheme()`                     | `"dark" \| "light"`                                                   |
+| `useDashboardStyle()`                     | the host's style object                                               |
+| `useDashboardParams()`                    | the parent page's querystring, read-only, string values               |
+| `useDashboardClient()`                    | the underlying client, for imperative calls                           |
 
 `params` is the wire shape, `[{ key: "$1", value: "30" }]`. A fresh array literal on every render is fine — the hook keys off the serialized contents, not the array's identity.
 
 `data` is kept across a refetch, so a refreshing table does not blink. `refetch` never throws; the outcome lands in `error`.
+
+## Calling an Analysis Endpoint
+
+`useCallEndpoint()` saves a form through an Analysis Endpoint, the way the core client's [`endpoint.call`](../dashboard/README.md#calling-an-analysis-endpoint) does, and tracks the call for you:
+
+```tsx
+import { type TagoDashboardError, useCallEndpoint } from "@tago-io/custom-dashboard-react";
+
+type TSetpointAnswer = { setpoint?: number; error?: string; errors?: { setpoint?: string } };
+
+function SetpointForm() {
+  const { callEndpoint, isCalling } = useCallEndpoint();
+  const [setpoint, setSetpoint] = useState("22");
+  const [feedback, setFeedback] = useState("");
+
+  async function save() {
+    const answer = await callEndpoint<TSetpointAnswer | null>(ANALYSIS_ID, {
+      method: "POST",
+      path: "/setpoint",
+      body: { setpoint },
+    }).catch((error: TagoDashboardError) => {
+      // The call did not complete. The Analysis may still have run.
+      setFeedback(`Not completed: ${error.message}`);
+      return null;
+    });
+    if (!answer) return;
+
+    // Every HTTP status resolves, so check it before reading the body, and read the body defensively.
+    if (answer.status === 422) setFeedback(answer.body?.errors?.setpoint ?? "Invalid setpoint.");
+    else if (answer.status >= 400) setFeedback(answer.body?.error ?? `Request failed (${answer.status}).`);
+    else setFeedback(`Saved: ${answer.body?.setpoint} C`);
+  }
+
+  return (
+    <>
+      <input value={setpoint} onChange={(event) => setSetpoint(event.target.value)} />
+      <button type="button" onClick={() => void save()} disabled={isCalling}>
+        Save setpoint
+      </button>
+      <p role="status">{feedback}</p>
+    </>
+  );
+}
+```
+
+- **A 4xx or 5xx answer resolves**, so a form can read the field errors of a `422`. `callEndpoint` rejects only when the call did not complete, with the same `TagoDashboardError` it puts in `error`.
+- **`isCalling` and `error` follow the latest call.** An earlier call still settles its own promise, but never overwrites them. `reset()` returns to idle and detaches the call in flight the same way.
+- **Every call is sent.** Two identical calls are two requests, and the hook never retries one: a call can write data, so a retry could save twice.
+- **A hidden `<Activity>` does not lose the answer.** One that lands while the component is hidden still clears `isCalling`. When the `<Activity>` also holds the `<DashboardProvider>`, hiding it stops the client and the call rejects with `aborted`; the request was already sent, so the Analysis may have run.
+- **A button, not `<form onSubmit>`.** The dashboard frame blocks native form submission, so a submit event never fires.
+
+The whole form is in [`examples/setpoint-form.tsx`](./examples/setpoint-form.tsx). To list the Endpoints the viewer may call, for example to hide a form they cannot use, call `useDashboardClient().endpoint.list()`.
 
 ## Theme
 

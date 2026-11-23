@@ -17,9 +17,11 @@ console.log(result.columns, result.rows);
 
 - enumerate **every saved TagoSQL query in the profile**, with names (`sql.list`),
 - execute **any of them** with arbitrary parameters (`sql.run`),
+- list **every Analysis Endpoint the viewer may call** (`endpoint.list`),
+- call **any of them** with any method, path, query, and body (`endpoint.call`), which runs that Analysis's code and can write data,
 - and `fetch()` any external origin.
 
-All of it runs **as the person viewing the dashboard**, using their session. A user who can edit a dashboard but has little data access, plus a viewer who has a lot, is a privilege escalation path. The only client-side guard on a query id is a format check — that is a path-traversal guard, not an authorization check. Authorization is the API's alone.
+All of it runs **as the person viewing the dashboard**, using their session. A user who can edit a dashboard but has little data access, plus a viewer who has a lot, is a privilege escalation path. The only client-side guard on a query id or an Analysis ID is a format check. That is a path-traversal guard, not an authorization check. Authorization is the API's alone.
 
 The shell is also served from the API origin with `allow-same-origin`, so every custom dashboard in an account shares that origin's storage.
 
@@ -30,13 +32,14 @@ Treat uploading a shell the way you treat deploying code: review it, and permiss
 So future changes have something to point at:
 
 - **Never** write `localStorage`, `sessionStorage`, or cookies. No result cache, no persisted theme, no telemetry.
-- **Never** add a generic passthrough op, or wrap a new host op, without a separate security review. This SDK wraps only the two `sql.*` ops below, but the host bridge answers others too, such as `endpoint.list` and `endpoint.call` for Analysis Endpoints. A shell can post those without this SDK, so judge what a shell can reach by the host's ops, not by this package.
+- **Never** add a generic passthrough op, or wrap a new host op, without a separate security review. This SDK wraps the two `sql.*` ops and the two `endpoint.*` ops below, each after its own review, but the host bridge answers others too, such as `stream.open` and `stream.close`. A shell can post those without this SDK, so judge what a shell can reach by the host's ops, not by this package.
+- **Never** retry an `endpoint.call`, or share one request between two calls. A call can write data, so a retry could save twice and a shared request would drop a save.
 - **Never** add breadth helpers — no `runAll`, no `prefetchAll`, no find-query-by-name, no sub-second polling helper.
 - **Never** handle tokens. The SDK never sees one, and the iframe URL carries none.
 
 ### What you must never do
 
-`error.message` is API text forwarded verbatim, and column names, row keys, and query names all come from the database or from whoever wrote the query. Link parameters (`params`) come from whoever wrote the link. **Never** put any of it through `innerHTML`, `eval`, or `new Function`. Render with text nodes. Every example here does.
+`error.message` is API text forwarded verbatim, and column names, row keys, and query names all come from the database or from whoever wrote the query. Link parameters (`params`) come from whoever wrote the link. An Endpoint's `body` and `headers` come from whoever wrote the Analysis. **Never** put any of it through `innerHTML`, `eval`, or `new Function`. Render with text nodes. Every example here does.
 
 A link parameter rendered as HTML is reflected XSS: anyone can send a viewer `?device=<img src=x onerror=...>`, and that script runs with the viewer's session on the shell's origin.
 
@@ -97,6 +100,60 @@ The SDK does not reshape or convert it. Values are strings because [the API says
 ```
 
 `TRow` is a type-level assertion for your own convenience. Nothing validates row contents at runtime.
+
+### Calling an Analysis Endpoint
+
+```ts
+endpoint.list(options?): Promise<Array<{ id: string; name: string }>>
+endpoint.call<TBody>(analysisID: string, request?: TEndpointRequest, options?): Promise<TEndpointCallResult<TBody>>
+```
+
+A Luau Analysis with its Endpoint turned on answers HTTP requests, and these ops reach it with the viewer's session, the way `sql.run` runs a query. `analysisID` is the Analysis's ID, the 24 characters at the end of its Endpoint URL. `endpoint.list` returns the Endpoints the viewer may call. In TagoRUN that is only the ones granted to the Run user.
+
+The request is an HTTP request without headers:
+
+```ts
+{
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; // default "GET"
+  path?: string; // below the Endpoint root, such as "/setpoint"; default "/"
+  query?: Record<string, string | number | boolean | Array<string | number | boolean>>; // an array repeats its key
+  body?: unknown; // a string is sent as text, anything else as JSON; not allowed with GET
+}
+```
+
+The host adds the viewer's session token and sets the content type from the body. A shell cannot add a header of its own, such as a token or `Authorization`. A body that is not a string is encoded with JSON's rules before it is posted: `toJSON()` applies, as for a `Date` inside an object, and a value JSON cannot encode, such as a `BigInt` or a cycle, rejects with `bad_request` without a round trip. So does a value whose JSON is a bare string, such as a top-level `Date`, since the host would send it as text; put it in an object. A string body reaches the Analysis as `context.request.body`, with `scope` as nil.
+
+**Every HTTP answer resolves**, 4xx and 5xx included, as `{ status, headers, body }`. That is what lets a form show the field errors of a `422`. Check `status` before reading `body`, which is parsed when the response is JSON and text otherwise:
+
+```js
+const answer = await TagoDashboard.endpoint.call(ANALYSIS_ID, {
+  method: "POST",
+  path: "/setpoint",
+  body: { setpoint: input.value },
+});
+
+// The body is whatever the Analysis answered, or the platform's own error, so read it defensively.
+if (answer.status === 422) {
+  feedback.textContent = answer.body?.errors?.setpoint ?? "Invalid setpoint.";
+} else if (answer.status >= 400) {
+  feedback.textContent = answer.body?.error ?? `Request failed (${answer.status}).`;
+} else {
+  feedback.textContent = `Saved: ${answer.body?.setpoint} C`;
+}
+```
+
+The call **rejects only when it did not complete**: the host refused the request (`bad_request`), could not make it, as with a redirect it refuses to follow or a network failure (`api_error`), or never answered (`no_response`, `aborted`). After `api_error`, `no_response`, or `aborted`, the Analysis may have run, so the outcome is unknown. Read the state back before calling again. The SDK never retries a call for you.
+
+**Calls are never shared.** Identical reads in flight share one request, but two identical calls are two requests, since each one may be a save.
+
+A viewer without access gets an answer, not a rejection. In TagoRUN a Run user needs **Call Endpoint** on the Analysis in Access Management. Without it, the Endpoint is missing from `endpoint.list` and a call answers `404`. To hide a form the viewer cannot use, check the list first:
+
+```js
+const endpoints = await TagoDashboard.endpoint.list();
+saveButton.disabled = !endpoints.some((endpoint) => endpoint.id === ANALYSIS_ID);
+```
+
+[`examples/setpoint-form.html`](./examples/setpoint-form.html) is the whole form, built on the docs.tago.io recipe [Validate a Custom Dashboard form](https://docs.tago.io/docs/tagoio/analysis/endpoints/recipes/validate-dashboard-form). The Endpoint's own limits on body size, execution time, and calls per minute are in [Using Endpoints](https://docs.tago.io/docs/tagoio/analysis/endpoints/using-endpoints). A call past one of them resolves with the status the Endpoint answers, such as `413`, `429`, or `504`.
 
 ### Theme
 
@@ -174,23 +231,25 @@ A call made while the client is not running, before the first `start()` or after
 
 Every failure throws a `TagoDashboardError` with a `code`. The `Raised by` column is not decoration: two codes come from either side, and knowing which side you are looking at changes what you do about it.
 
-| Code           | Raised by | Meaning                                                                                                                  |
-| -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `not_found`    | Host      | The saved query does not exist                                                                                           |
-| `forbidden`    | Host      | The viewer cannot access that query's resource                                                                           |
-| `bad_params`   | Host      | **See below. This one is not what it sounds like**                                                                       |
-| `plan_limit`   | Host      | The profile's plan does not allow this execution                                                                         |
-| `timeout`      | Host      | The query ran past its execution deadline, server side                                                                   |
-| `rate_limited` | Host      | Too many executions. Back off and retry                                                                                  |
-| `unknown_op`   | Host      | This SDK is newer than the dashboard host                                                                                |
-| `api_error`    | Both      | Host: the query failed to execute. SDK: the reply was malformed                                                          |
-| `bad_request`  | Both      | SDK: the query id failed its local format check, and nothing was sent. Host: some other part of the payload was rejected |
-| `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts)                                                                |
-| `no_host`      | SDK       | The page is not running inside a dashboard                                                                               |
-| `aborted`      | SDK       | `stop()` was called while the request was in flight, or the client was not running when the call was made                |
-| `internal`     | SDK       | The SDK could not issue the request                                                                                      |
+| Code           | Raised by | Meaning                                                                                                                                                                  |
+| -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `not_found`    | Host      | The saved query does not exist                                                                                                                                           |
+| `forbidden`    | Host      | The viewer cannot access that query's resource                                                                                                                           |
+| `bad_params`   | Host      | **See below. This one is not what it sounds like**                                                                                                                       |
+| `plan_limit`   | Host      | The profile's plan does not allow this execution                                                                                                                         |
+| `timeout`      | Host      | The query ran past its execution deadline, server side                                                                                                                   |
+| `rate_limited` | Host      | Too many executions. Back off and retry                                                                                                                                  |
+| `unknown_op`   | Host      | This SDK is newer than the dashboard host                                                                                                                                |
+| `api_error`    | Both      | Host: the query failed to execute, or an Endpoint call could not complete. SDK: the reply was malformed                                                                  |
+| `bad_request`  | Both      | SDK: the query id or Analysis ID failed its local format check, or an Endpoint body is not JSON, and nothing was sent. Host: some other part of the payload was rejected |
+| `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts)                                                                                                                |
+| `no_host`      | SDK       | The page is not running inside a dashboard                                                                                                                               |
+| `aborted`      | SDK       | `stop()` was called while the request was in flight, or the client was not running when the call was made                                                                |
+| `internal`     | SDK       | The SDK could not issue the request                                                                                                                                      |
 
-In practice `bad_request` reaches you from the SDK, not the host: the query id is checked before anything is posted, so an invalid one costs no round trip. And an `api_error` whose message mentions a malformed reply is the SDK telling you the host answered with something it could not read, which is a different problem from a query that failed.
+In practice `bad_request` reaches you from the SDK, not the host: the query id and the Analysis ID are checked before anything is posted, so an invalid one costs no round trip. And an `api_error` whose message mentions a malformed reply is the SDK telling you the host answered with something it could not read, which is a different problem from a query that failed.
+
+An Endpoint's HTTP errors are not in this table: `endpoint.call` resolves them with their status. It rejects only with `bad_request`, `api_error`, `unknown_op`, and the SDK's own codes, and after `api_error`, `no_response`, or `aborted` the Analysis may have run. See [Calling an Analysis Endpoint](#calling-an-analysis-endpoint).
 
 **`timeout` and `no_response` are different failures, and the remedy is opposite.** A `timeout` is the server saying the query ran too long, so narrow it. A `no_response` is the dashboard never answering, so only the SDK's own backstop bounded the wait. Branch on the wrong one and you tell someone to fix a query that was fine.
 
@@ -218,9 +277,11 @@ So each request carries a generous backstop (60s, configurable per client or per
 
 A `no_response` cancels nothing: the query keeps running server-side. If its answer turns up afterwards the SDK ignores it, and logs one `console.debug` naming the request, so a late reply is distinguishable from a query that quietly did nothing.
 
+`endpoint.call` keeps the same backstop. An Endpoint answers `504` once its script runs past 30 seconds, so inside the default 60 seconds a call comes back unless the host lost the answer. For a call, `no_response` means the outcome is unknown, not that the save failed: the Analysis may have run, so read the state back before calling again. Without the backstop, a lost answer would leave the form waiting until the page reloads. To wait that long anyway, pass `{ timeoutMs: 0 }` to the call.
+
 ## Local development
 
-Opened directly, the page has no host, so `sql.*` fails fast with `no_host` and one console note. `examples/dev-host.html` frames your shell and answers the protocol with canned rows, so you can build without uploading.
+Opened directly, the page has no host, so `sql.*` and `endpoint.*` fail fast with `no_host` and one console note. `examples/dev-host.html` frames your shell and answers the protocol with canned rows and one mock Endpoint, `cccccccccccccccccccccccc`, which answers `POST /setpoint` like the recipe's Analysis, so you can build without uploading.
 
 ## License
 

@@ -4,12 +4,13 @@ Simple examples showing how to use `@tago-io/custom-dashboard-react` in your cus
 
 Each file is a self-contained React component you can copy into your project.
 
-| Example                                | What it shows                                                         |
-| -------------------------------------- | --------------------------------------------------------------------- |
-| [run-query.tsx](./run-query.tsx)       | List the saved TagoSQL queries, pick one, run it, render the result   |
-| [query-params.tsx](./query-params.tsx) | Positional `$1` parameters, and letting stored defaults fill the rest |
-| [theme.tsx](./theme.tsx)               | Following the host's theme, including a correct first paint           |
-| [link-params.tsx](./link-params.tsx)   | Scope a query to the `?device=` on the link, following URL changes    |
+| Example                                  | What it shows                                                                                            |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [run-query.tsx](./run-query.tsx)         | List the saved TagoSQL queries, pick one, run it, render the result                                      |
+| [query-params.tsx](./query-params.tsx)   | Positional `$1` parameters, and letting stored defaults fill the rest                                    |
+| [theme.tsx](./theme.tsx)                 | Following the host's theme, including a correct first paint                                              |
+| [link-params.tsx](./link-params.tsx)     | Scope a query to the `?device=` on the link, following URL changes                                       |
+| [setpoint-form.tsx](./setpoint-form.tsx) | Save a form through an Analysis Endpoint with `useCallEndpoint()` and show the field errors of its `422` |
 
 ## How to use these
 
@@ -20,7 +21,7 @@ Each file is a self-contained React component you can copy into your project.
 Every example follows the same pattern:
 
 - Wrap your app in `<DashboardProvider>` (once, at the top level)
-- Use hooks like `useSqlQueries()`, `useSqlQuery()`, `useDashboardTheme()`, `useDashboardParams()` inside your components
+- Use hooks like `useSqlQueries()`, `useSqlQuery()`, `useCallEndpoint()`, `useDashboardTheme()`, `useDashboardParams()` inside your components
 - Render server text — `error.message`, column names, row values — as text, never as HTML
 
 ## Building for upload
