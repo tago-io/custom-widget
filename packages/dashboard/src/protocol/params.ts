@@ -12,24 +12,28 @@ export function isValidAnalysisID(value: unknown): value is string {
   return isValidQueryId(value);
 }
 
-function describe(value: object): string {
-  const name = (value as { constructor?: { name?: unknown } }).constructor?.name;
-  return typeof name === "string" && name.length > 0 ? name : "object";
+function constructorName(value: object): string {
+  return (value as { constructor?: { name?: string } }).constructor?.name || "object";
+}
+
+/** An array, or an object literal (prototype-free ones included). */
+function isPlainData(value: object): boolean {
+  if (Array.isArray(value)) {
+    return true;
+  }
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return prototype === Object.prototype || prototype === null;
 }
 
 /**
  * JSON writes a `Map`, a `FormData`, a `Blob` or a class instance as `{}`, so the Analysis would get an empty body and
- * no error. Only plain objects and arrays pass; `toJSON()` has already run when this sees a value, so a `Date` inside
- * an object arrives here as its string.
+ * no error. A replacer sees each value after `toJSON()` ran, so a `Date` inside an object arrives here as its string.
  */
 function refuseNonPlainData(_key: string, value: unknown): unknown {
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    const prototype = Object.getPrototypeOf(value) as unknown;
-    if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError(
-        `The body holds a ${describe(value)}, which JSON writes as {}. Convert it to a plain object.`
-      );
-    }
+  if (typeof value === "object" && value !== null && !isPlainData(value)) {
+    throw new TypeError(
+      `The body holds a ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
+    );
   }
   return value;
 }
@@ -60,10 +64,9 @@ export function encodeEndpointBody(body: unknown): unknown {
   return encoded;
 }
 
-function isQueryScalar(value: unknown): value is TEndpointQueryValue {
-  return (
-    typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))
-  );
+/** `Number.isFinite` never coerces, so it also refuses `NaN`, `Infinity` and anything that is not a number. */
+function isQueryValue(value: unknown): value is TEndpointQueryValue {
+  return typeof value === "string" || typeof value === "boolean" || Number.isFinite(value);
 }
 
 /**
@@ -85,9 +88,9 @@ export function encodeEndpointQuery(
     if (value === undefined) {
       continue;
     }
-    if (isQueryScalar(value)) {
+    if (isQueryValue(value)) {
       encoded[key] = value;
-    } else if (Array.isArray(value) && value.every(isQueryScalar)) {
+    } else if (Array.isArray(value) && value.every(isQueryValue)) {
       encoded[key] = [...value];
     } else {
       throw new TypeError(
