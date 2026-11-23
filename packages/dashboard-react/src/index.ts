@@ -1,3 +1,5 @@
+export { useCallEndpoint } from "./hooks/use-call-endpoint.js";
+export type { TUseCallEndpointReturn } from "./hooks/use-call-endpoint.js";
 export { useDashboardClient } from "./hooks/use-dashboard-client.js";
 export { useDashboardParams } from "./hooks/use-dashboard-params.js";
 export { useSqlQueries } from "./hooks/use-sql-queries.js";
