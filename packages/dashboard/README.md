@@ -153,7 +153,7 @@ if (status === 422) {
 }
 ```
 
-The call **rejects only when it did not complete**: the host refused the request (`bad_request`), could not make it, as with a redirect it refuses to follow or a network failure (`api_error`), or never answered (`no_response`, `aborted`). After `api_error`, `no_response`, or `aborted`, the Analysis may have run, so the outcome is unknown. Read the state back before calling again. The SDK never retries a call for you.
+The call **rejects only when it did not complete**: the host refused the request (`bad_request`), could not make it, as with a redirect it refuses to follow or a network failure (`api_error`), or never answered (`no_response`, `aborted`). After `api_error` or `no_response`, the Analysis may have run, so the outcome is unknown; read the state back before calling again. The same goes for an `aborted` that carries a `requestID`. An `aborted` without one was never sent. The SDK never retries a call for you.
 
 **Calls are never shared.** Identical reads in flight share one request, but two identical calls are two requests, since each one may be a save.
 
@@ -260,7 +260,7 @@ Every failure throws a `TagoDashboardError` with a `code`. The `Raised by` colum
 
 In practice `bad_request` reaches you from the SDK, not the host: the query id and the Analysis ID are checked before anything is posted, so an invalid one costs no round trip. And an `api_error` whose message mentions a malformed reply is the SDK telling you the host answered with something it could not read, which is a different problem from a query that failed.
 
-An Endpoint's HTTP errors are not in this table: `endpoint.call` resolves them with their status. It rejects only with `bad_request`, `api_error`, `unknown_op`, and the SDK's own codes, and after `api_error`, `no_response`, or `aborted` the Analysis may have run. See [Calling an Analysis Endpoint](#calling-an-analysis-endpoint).
+An Endpoint's HTTP errors are not in this table: `endpoint.call` resolves them with their status. It rejects only with `bad_request`, `api_error`, `unknown_op`, and the SDK's own codes, and after `api_error`, `no_response`, or an `aborted` with a `requestID`, the Analysis may have run. See [Calling an Analysis Endpoint](#calling-an-analysis-endpoint).
 
 **`timeout` and `no_response` are different failures, and the remedy is opposite.** A `timeout` is the server saying the query ran too long, so narrow it. A `no_response` is the dashboard never answering, so only the SDK's own backstop bounded the wait. Branch on the wrong one and you tell someone to fix a query that was fine.
 

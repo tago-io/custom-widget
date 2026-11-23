@@ -145,7 +145,7 @@
           var path = "/" + String(call.path || "").replace(/^\/+/, "");
           if (method !== "POST" || path !== "/setpoint") return endpointAnswer(404, { error: "Not found." });
 
-          // A missing or empty value reads as 0 here, which is out of range, as Luau's tonumber makes it nil there.
+          // A missing, empty or non-numeric value is out of range here (NaN or 0), as Luau's tonumber makes it nil there.
           var setpoint = Number(call.body?.setpoint);
           if (!(setpoint >= 5 && setpoint <= 30)) {
             return endpointAnswer(422, { errors: { setpoint: "Enter a number from 5 to 30." } });
