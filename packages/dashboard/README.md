@@ -134,20 +134,20 @@ The SDK checks the request before posting it, and rejects with `bad_request`, wi
 **Every HTTP answer resolves**, 4xx and 5xx included, as `{ status, headers, body }`. That is what lets a form show the field errors of a `422`. Check `status` before reading `body`, which is parsed when the response is JSON and text otherwise:
 
 ```js
-const answer = await TagoDashboard.endpoint.call(ANALYSIS_ID, {
+const setpoint = input.value;
+const { status, body } = await TagoDashboard.endpoint.call(ANALYSIS_ID, {
   method: "POST",
   path: "/setpoint",
-  body: { setpoint: input.value },
+  body: { setpoint },
 });
 
-// The body is whatever the Analysis answered, or the platform's own error, so read it defensively.
-if (answer.status === 422) {
-  feedback.textContent = answer.body?.errors?.setpoint ?? "Invalid setpoint.";
-} else if (answer.status >= 400) {
-  feedback.textContent = answer.body?.error ?? `Request failed (${answer.status}).`;
+// The platform answers some errors itself, so every field of the body is optional.
+if (status === 422) {
+  feedback.textContent = body?.errors?.setpoint ?? "Invalid setpoint.";
+} else if (status >= 400) {
+  feedback.textContent = body?.error ?? `Request failed (${status}).`;
 } else {
-  const saved = answer.body?.setpoint;
-  feedback.textContent = typeof saved === "number" ? `Saved: ${saved} C` : "Saved.";
+  feedback.textContent = `Saved: ${body?.setpoint ?? setpoint} C`;
 }
 ```
 

@@ -120,57 +120,37 @@
           return { status: status, headers: { "content-type": "application/json" }, body: body };
         }
 
+        // The real host refuses these before it calls anything, as a bridge error rather than an HTTP status.
+        function isRefusedByHost(call) {
+          var method = String(call.method || "GET").toUpperCase();
+          var segments = String(call.path || "").split("/");
+          return (
+            !/^[a-z0-9]{24}$/i.test(call.endpoint_id) ||
+            METHODS.indexOf(method) === -1 ||
+            (method === "GET" && call.body !== undefined) ||
+            segments.indexOf(".") !== -1 ||
+            segments.indexOf("..") !== -1
+          );
+        }
+
         // The recipe's Analysis: POST /setpoint saves a number from 5 to 30 and answers 422 for anything else.
-        function mockEndpointCall(payload) {
+        function answerAsRecipe(call) {
           var known = ENDPOINTS.some(function (endpoint) {
-            return endpoint.id === payload.endpoint_id;
+            return endpoint.id === call.endpoint_id;
           });
           // An Endpoint the viewer may not call answers 404, as an HTTP status, not as a bridge error.
           if (!known) return endpointAnswer(404, { message: "Endpoint can't be found", status: false });
 
-          var method = (payload.method || "GET").toUpperCase();
-          var path = "/" + (payload.path || "").replace(/^\/+/, "");
+          var method = String(call.method || "GET").toUpperCase();
+          var path = "/" + String(call.path || "").replace(/^\/+/, "");
           if (method !== "POST" || path !== "/setpoint") return endpointAnswer(404, { error: "Not found." });
 
-          var raw = payload.body && typeof payload.body === "object" ? payload.body.setpoint : undefined;
-          var setpoint = typeof raw === "number" || typeof raw === "string" ? Number(raw) : NaN;
-          if (raw === "" || !(setpoint >= 5 && setpoint <= 30)) {
+          // A missing or empty value reads as 0 here, which is out of range, as Luau's tonumber makes it nil there.
+          var setpoint = Number(call.body?.setpoint);
+          if (!(setpoint >= 5 && setpoint <= 30)) {
             return endpointAnswer(422, { errors: { setpoint: "Enter a number from 5 to 30." } });
           }
           return endpointAnswer(200, { ok: true, setpoint: setpoint });
-        }
-
-        function isQueryScalar(value) {
-          return (
-            typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && isFinite(value))
-          );
-        }
-
-        // A record of strings, finite numbers and booleans, or arrays of them, as the real host's schema accepts.
-        function isValidQuery(query) {
-          if (query === undefined) return true;
-          if (!query || typeof query !== "object" || Array.isArray(query)) return false;
-          return Object.keys(query).every(function (key) {
-            var value = query[key];
-            return isQueryScalar(value) || (Array.isArray(value) && value.every(isQueryScalar));
-          });
-        }
-
-        // The checks the real host runs before calling, each refused as a bridge error.
-        function isValidEndpointCall(payload) {
-          if (!payload || typeof payload.endpoint_id !== "string" || !/^[a-z0-9]{24}$/i.test(payload.endpoint_id)) {
-            return false;
-          }
-          if (payload.method !== undefined && typeof payload.method !== "string") return false;
-          if (payload.path !== undefined && typeof payload.path !== "string") return false;
-          if (!isValidQuery(payload.query)) return false;
-          var method = (payload.method || "GET").toUpperCase();
-          if (METHODS.indexOf(method) === -1) return false;
-          if (method === "GET" && payload.body !== undefined) return false;
-          var segments = (payload.path || "").split("/");
-          return !segments.some(function (segment) {
-            return segment === "." || segment === "..";
-          });
         }
 
         window.addEventListener("message", function (event) {
@@ -227,15 +207,16 @@
           }
 
           if (data.op === "endpoint.call") {
+            var call = data.payload ?? {};
             reply(
-              isValidEndpointCall(data.payload)
-                ? { type: "dashboard:response", id: data.id, ok: true, result: mockEndpointCall(data.payload) }
-                : {
+              isRefusedByHost(call)
+                ? {
                     type: "dashboard:response",
                     id: data.id,
                     ok: false,
                     error: { code: "bad_request", message: "Invalid endpoint.call payload" },
                   }
+                : { type: "dashboard:response", id: data.id, ok: true, result: answerAsRecipe(call) }
             );
             return;
           }

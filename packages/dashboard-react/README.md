@@ -80,7 +80,8 @@ import { useState } from "react";
 // The ID of the Analysis, the 24 characters at the end of its Endpoint URL.
 const ANALYSIS_ID = "YOUR_ANALYSIS_ID";
 
-type TSetpointAnswer = { setpoint?: number; error?: string; errors?: { setpoint?: string } };
+// The platform answers some errors itself, so every field of the body is optional.
+type TSetpointAnswer = { setpoint?: number; error?: string; errors?: { setpoint?: string } } | null;
 
 function SetpointForm() {
   const { callEndpoint, isCalling } = useCallEndpoint();
@@ -88,21 +89,24 @@ function SetpointForm() {
   const [feedback, setFeedback] = useState("");
 
   async function save() {
-    const answer = await callEndpoint<TSetpointAnswer | null>(ANALYSIS_ID, {
-      method: "POST",
-      path: "/setpoint",
-      body: { setpoint },
-    }).catch((error: TagoDashboardError) => {
+    try {
+      const { status, body } = await callEndpoint<TSetpointAnswer>(ANALYSIS_ID, {
+        method: "POST",
+        path: "/setpoint",
+        body: { setpoint },
+      });
+      // Every HTTP status resolves, so branch on it before reading the body.
+      if (status === 422) {
+        setFeedback(body?.errors?.setpoint ?? "Invalid setpoint.");
+      } else if (status >= 400) {
+        setFeedback(body?.error ?? `Request failed (${status}).`);
+      } else {
+        setFeedback(`Saved: ${body?.setpoint ?? setpoint} C`);
+      }
+    } catch (error) {
       // The call did not complete. The Analysis may still have run.
-      setFeedback(`Not completed: ${error.message}`);
-      return null;
-    });
-    if (!answer) return;
-
-    // Every HTTP status resolves, so check it before reading the body, and read the body defensively.
-    if (answer.status === 422) setFeedback(answer.body?.errors?.setpoint ?? "Invalid setpoint.");
-    else if (answer.status >= 400) setFeedback(answer.body?.error ?? `Request failed (${answer.status}).`);
-    else setFeedback(typeof answer.body?.setpoint === "number" ? `Saved: ${answer.body.setpoint} C` : "Saved.");
+      setFeedback(`Not completed: ${(error as TagoDashboardError).message}`);
+    }
   }
 
   return (

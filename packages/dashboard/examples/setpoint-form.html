@@ -70,80 +70,71 @@
     <!--
       The Analysis is the one from the docs.tago.io recipe "Validate a Custom Dashboard form":
       https://docs.tago.io/docs/tagoio/analysis/endpoints/recipes/validate-dashboard-form
-      It answers POST /setpoint with 200 and { ok, setpoint } when the value is from 5 to 30, and with
-      422 and { errors: { setpoint } } otherwise. A Run user needs Call Endpoint on that Analysis.
+      It answers POST /setpoint with 200 and { ok, setpoint } when the value is from 5 to 30, with 422 and
+      { errors: { setpoint } } otherwise, and with another 4xx and { error } when the caller cannot save.
+      A Run user needs Call Endpoint on that Analysis.
+
+      There is no <form>: the dashboard frame blocks native form submission, so the button and Enter save instead.
     -->
     <h1>Room temperature</h1>
-    <form id="settings" novalidate>
-      <label>Setpoint (5 to 30 C)<input name="setpoint" value="22" aria-describedby="feedback" /></label>
-      <!-- type="button": the dashboard frame blocks native form submission, so a submit event never fires. -->
-      <button id="save" type="button">Save setpoint</button>
-    </form>
+    <label>Setpoint (5 to 30 C)<input id="setpoint" value="22" aria-describedby="feedback" /></label>
+    <button id="save" type="button">Save setpoint</button>
     <p id="feedback" role="status"></p>
 
     <script src="../dist/custom-dashboard.min.js"></script>
     <script>
       // The ID of the Analysis, the 24 characters at the end of its Endpoint URL.
-      var ANALYSIS_ID = "YOUR_ANALYSIS_ID";
+      const ANALYSIS_ID = "YOUR_ANALYSIS_ID";
 
-      var form = document.getElementById("settings");
-      var save = document.getElementById("save");
-      var feedback = document.getElementById("feedback");
+      const input = document.getElementById("setpoint");
+      const saveButton = document.getElementById("save");
+      const feedback = document.getElementById("feedback");
 
       // Server text goes through textContent, never innerHTML.
-      function show(text, kind) {
+      function showFeedback(kind, text) {
         feedback.dataset.kind = kind;
         feedback.textContent = text;
       }
 
-      // The body is whatever the Analysis answered, or the platform's own error, so read it defensively.
-      function readBody(answer) {
-        return answer.body && typeof answer.body === "object" ? answer.body : {};
+      // Every HTTP status resolves, so branch on it before reading the body.
+      function showAnswer({ status, body }, setpoint) {
+        if (status === 422) {
+          showFeedback("error", body?.errors?.setpoint ?? "Invalid setpoint.");
+        } else if (status >= 400) {
+          showFeedback("error", body?.error ?? `Request failed (${status}).`);
+        } else {
+          showFeedback("ok", `Saved: ${body?.setpoint ?? setpoint} C`);
+        }
       }
 
-      save.addEventListener("click", function () {
-        save.disabled = true;
-        show("Saving...", "pending");
+      async function save() {
+        if (saveButton.disabled) return;
+        const setpoint = input.value;
+        saveButton.disabled = true;
+        showFeedback("pending", "Saving...");
 
-        TagoDashboard.endpoint
-          .call(ANALYSIS_ID, {
+        try {
+          const answer = await TagoDashboard.endpoint.call(ANALYSIS_ID, {
             method: "POST",
             path: "/setpoint",
-            body: { setpoint: form.elements.setpoint.value },
-          })
-          .then(
-            function (answer) {
-              // Every HTTP status resolves, so check it before reading the body.
-              var body = readBody(answer);
-              if (answer.status === 422) {
-                show((body.errors && body.errors.setpoint) || "Invalid setpoint.", "error");
-              } else if (answer.status >= 400) {
-                show(body.error || "Request failed (" + answer.status + ").", "error");
-              } else {
-                show(typeof body.setpoint === "number" ? "Saved: " + body.setpoint + " C" : "Saved.", "ok");
-              }
-            },
-            function (error) {
-              // The call did not complete. After no_response, aborted or api_error the Analysis may still have
-              // run, so do not retry on your own: read the value back, or let the user decide.
-              show("Not completed (" + error.code + "): " + error.message, "error");
-            }
-          )
-          .finally(function () {
-            save.disabled = false;
+            body: { setpoint },
           });
-      });
-
-      // Enter would submit the form natively, which the dashboard frame blocks and a plain page turns into a reload.
-      // Save instead.
-      form.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          if (!save.disabled) save.click();
+          showAnswer(answer, setpoint);
+        } catch (error) {
+          // The call did not complete. After no_response, aborted or api_error the Analysis may still have run,
+          // so do not retry on your own: read the value back, or let the user decide.
+          showFeedback("error", `Not completed (${error.code}): ${error.message}`);
+        } finally {
+          saveButton.disabled = false;
         }
+      }
+
+      saveButton.addEventListener("click", save);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") save();
       });
 
-      TagoDashboard.theme.subscribe(function () {
+      TagoDashboard.theme.subscribe(() => {
         document.documentElement.dataset.theme = TagoDashboard.theme.get();
       });
     </script>
