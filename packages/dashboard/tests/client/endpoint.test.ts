@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DashboardClient } from "../../src/client/dashboard-client.js";
+import type { TDashboardParams } from "../../src/types/index.js";
 import { setupClient } from "../helpers/host.js";
 
 const ANALYSIS_ID = "6a1f0c2b9e8d7f6a5b4c3d2e";
@@ -247,7 +248,6 @@ describe("endpoint.call answers", () => {
     ["a result that is not an object", "nope"],
     ["a result without a status", { headers: {}, body: "" }],
     ["a status that is not a number", { status: "200", headers: {}, body: "" }],
-    ["headers that are not an object", { status: 200, headers: "x", body: "" }],
   ])("rejects %s as api_error", async (_label, result) => {
     ctx = setupClient();
     const promise = ctx.client.endpoint.call(ANALYSIS_ID);
@@ -255,6 +255,22 @@ describe("endpoint.call answers", () => {
     ctx.respondOk(result);
     await expect(promise).rejects.toMatchObject({ code: "api_error", op: "endpoint.call" });
   });
+
+  it.each([
+    ["no headers", { status: 200, body: { ok: true } }],
+    ["headers that are not an object", { status: 200, headers: "x", body: { ok: true } }],
+  ])(
+    "resolves an answer with %s as having none, since the status alone says the call completed",
+    async (_l, result) => {
+      ctx = setupClient();
+      const promise = ctx.client.endpoint.call(ANALYSIS_ID, { method: "POST" });
+
+      ctx.respondOk(result);
+      const answer = await promise;
+      expect(answer).toMatchObject({ status: 200, body: { ok: true } });
+      expect(Object.keys(answer.headers)).toEqual([]);
+    }
+  );
 
   it.each(["bad_request", "api_error", "unknown_op", "a_code_from_a_newer_host"])(
     "rejects a %s reply from the host with that code and the request id",
@@ -516,10 +532,12 @@ describe("endpoint.call request checks", () => {
     }
   );
 
-  it("drops a query key whose value is undefined, the way JSON drops one from a body", () => {
+  it("drops a query key whose value is undefined, so a link param the link lacks can go straight in", () => {
     ctx = setupClient();
+    // Typed as `params.get()` returns it: a key the link does not carry is undefined. It must compile with no cast.
+    const params: TDashboardParams = { room: "4" };
     void ctx.client.endpoint
-      .call(ANALYSIS_ID, { query: { device: undefined as unknown as string, room: "4" } })
+      .call(ANALYSIS_ID, { query: { device: params.device, room: params.room } })
       .catch(() => undefined);
 
     expect(ctx.requests()[0].payload).toEqual({ endpoint_id: ANALYSIS_ID, query: { room: "4" } });

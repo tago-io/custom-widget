@@ -105,6 +105,15 @@ describe("transport backstop", () => {
     }
   );
 
+  it("still honors a numeric string from a plain-JS shell, rather than turning the backstop off", async () => {
+    ctx = setupClient();
+    const promise = ctx.client.sql.list({ timeoutMs: "1000" as unknown as number });
+    const assertion = expect(promise).rejects.toMatchObject({ code: "no_response" });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await assertion;
+  });
+
   it("tells an endpoint.call that timed out to raise timeoutMs, and that it may have run", async () => {
     ctx = setupClient({ timeoutMs: 1_000 });
     const promise = ctx.client.endpoint.call("6a1f0c2b9e8d7f6a5b4c3d2e", { method: "POST" });

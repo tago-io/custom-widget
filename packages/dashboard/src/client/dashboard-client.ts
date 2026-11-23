@@ -451,9 +451,11 @@ export class DashboardClient {
         return;
       }
 
-      // `0`, `Infinity` and `NaN` mean no backstop; a finite value past what setTimeout honors waits that long instead.
+      // `0`, `Infinity` and anything that is not a number mean no backstop. `Number()` keeps a numeric string from a
+      // plain-JS shell working, and a delay past what setTimeout honors is capped to that limit, about 24.8 days.
+      const delay = Number(timeoutMs);
       const timer =
-        Number.isFinite(timeoutMs) && timeoutMs > 0
+        Number.isFinite(delay) && delay > 0
           ? setTimeout(
               () => {
                 const expired = this.pending.take(requestID);
@@ -465,7 +467,7 @@ export class DashboardClient {
                   new TagoDashboardError("no_response", noResponseMessage(op, timeoutMs), { op, requestID })
                 );
               },
-              Math.min(timeoutMs, MAX_TIMER_MS)
+              Math.min(delay, MAX_TIMER_MS)
             )
           : null;
 

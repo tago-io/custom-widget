@@ -88,7 +88,7 @@ export type TEndpointRequest = {
    * not a string, a finite number or a boolean rejects with `bad_request` naming its key, before anything is posted.
    * So does a `URLSearchParams` or a `Map`, which would go out empty: pass `Object.fromEntries(params)`.
    */
-  query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[]>;
+  query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[] | undefined>;
   /**
    * A string is sent as is, as text, so the Analysis reads `context.request.body` and gets `scope` as nil. Any other
    * value is sent as JSON, encoded here with JSON's rules: `toJSON()` applies, as for a `Date` inside an object. These
