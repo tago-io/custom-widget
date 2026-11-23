@@ -140,6 +140,22 @@
           return endpointAnswer(200, { ok: true, setpoint: setpoint });
         }
 
+        function isQueryScalar(value) {
+          return (
+            typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && isFinite(value))
+          );
+        }
+
+        // A record of strings, finite numbers and booleans, or arrays of them, as the real host's schema accepts.
+        function isValidQuery(query) {
+          if (query === undefined) return true;
+          if (!query || typeof query !== "object" || Array.isArray(query)) return false;
+          return Object.keys(query).every(function (key) {
+            var value = query[key];
+            return isQueryScalar(value) || (Array.isArray(value) && value.every(isQueryScalar));
+          });
+        }
+
         // The checks the real host runs before calling, each refused as a bridge error.
         function isValidEndpointCall(payload) {
           if (!payload || typeof payload.endpoint_id !== "string" || !/^[a-z0-9]{24}$/i.test(payload.endpoint_id)) {
@@ -147,6 +163,7 @@
           }
           if (payload.method !== undefined && typeof payload.method !== "string") return false;
           if (payload.path !== undefined && typeof payload.path !== "string") return false;
+          if (!isValidQuery(payload.query)) return false;
           var method = (payload.method || "GET").toUpperCase();
           if (METHODS.indexOf(method) === -1) return false;
           if (method === "GET" && payload.body !== undefined) return false;

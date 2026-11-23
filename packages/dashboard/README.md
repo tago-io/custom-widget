@@ -121,7 +121,15 @@ The request is an HTTP request without headers:
 }
 ```
 
-The host adds the viewer's session token and sets the content type from the body. A shell cannot add a header of its own, such as a token or `Authorization`. A body that is not a string is encoded with JSON's rules before it is posted: `toJSON()` applies, as for a `Date` inside an object, and a value JSON cannot encode, such as a `BigInt` or a cycle, rejects with `bad_request` without a round trip. So does a value whose JSON is a bare string, such as a top-level `Date`, since the host would send it as text; put it in an object. A string body reaches the Analysis as `context.request.body`, with `scope` as nil.
+The host adds the viewer's session token and sets the content type from the body. A shell cannot add a header of its own, such as a token or `Authorization`. A string body reaches the Analysis as `context.request.body`, with `scope` as nil. Any other body is encoded with JSON's rules before it is posted, so `toJSON()` applies, as for a `Date` inside an object.
+
+The SDK checks the request before posting it, and rejects with `bad_request`, without a round trip, when it would fail or arrive wrong:
+
+- **A body with `GET`**, the default method. The host refuses it; set `method`, usually to `"POST"`.
+- **A body JSON cannot encode**, such as a `BigInt` or a cycle.
+- **A body JSON would write as `{}`**, such as a `Map`, a `FormData`, a `Blob` or a class instance without `toJSON()`. Convert it to a plain object first, for example with `Object.fromEntries(formData)`.
+- **A body whose JSON is a bare string**, such as a top-level `Date`, which the host would send as text. Put it in an object.
+- **A query value that is not a string, a finite number or a boolean**, or an array of them. The message names the key. A key whose value is `undefined` is left out instead, the way JSON leaves one out of a body.
 
 **Every HTTP answer resolves**, 4xx and 5xx included, as `{ status, headers, body }`. That is what lets a form show the field errors of a `422`. Check `status` before reading `body`, which is parsed when the response is JSON and text otherwise:
 
@@ -138,7 +146,8 @@ if (answer.status === 422) {
 } else if (answer.status >= 400) {
   feedback.textContent = answer.body?.error ?? `Request failed (${answer.status}).`;
 } else {
-  feedback.textContent = `Saved: ${answer.body?.setpoint} C`;
+  const saved = answer.body?.setpoint;
+  feedback.textContent = typeof saved === "number" ? `Saved: ${saved} C` : "Saved.";
 }
 ```
 
@@ -231,21 +240,21 @@ A call made while the client is not running, before the first `start()` or after
 
 Every failure throws a `TagoDashboardError` with a `code`. The `Raised by` column is not decoration: two codes come from either side, and knowing which side you are looking at changes what you do about it.
 
-| Code           | Raised by | Meaning                                                                                                                                                                  |
-| -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `not_found`    | Host      | The saved query does not exist                                                                                                                                           |
-| `forbidden`    | Host      | The viewer cannot access that query's resource                                                                                                                           |
-| `bad_params`   | Host      | **See below. This one is not what it sounds like**                                                                                                                       |
-| `plan_limit`   | Host      | The profile's plan does not allow this execution                                                                                                                         |
-| `timeout`      | Host      | The query ran past its execution deadline, server side                                                                                                                   |
-| `rate_limited` | Host      | Too many executions. Back off and retry                                                                                                                                  |
-| `unknown_op`   | Host      | This SDK is newer than the dashboard host                                                                                                                                |
-| `api_error`    | Both      | Host: the query failed to execute, or an Endpoint call could not complete. SDK: the reply was malformed                                                                  |
-| `bad_request`  | Both      | SDK: the query id or Analysis ID failed its local format check, or an Endpoint body is not JSON, and nothing was sent. Host: some other part of the payload was rejected |
-| `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts)                                                                                                                |
-| `no_host`      | SDK       | The page is not running inside a dashboard                                                                                                                               |
-| `aborted`      | SDK       | `stop()` was called while the request was in flight, or the client was not running when the call was made                                                                |
-| `internal`     | SDK       | The SDK could not issue the request                                                                                                                                      |
+| Code           | Raised by | Meaning                                                                                                                                                                                                                                                   |
+| -------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `not_found`    | Host      | The saved query does not exist                                                                                                                                                                                                                            |
+| `forbidden`    | Host      | The viewer cannot access that query's resource                                                                                                                                                                                                            |
+| `bad_params`   | Host      | **See below. This one is not what it sounds like**                                                                                                                                                                                                        |
+| `plan_limit`   | Host      | The profile's plan does not allow this execution                                                                                                                                                                                                          |
+| `timeout`      | Host      | The query ran past its execution deadline, server side                                                                                                                                                                                                    |
+| `rate_limited` | Host      | Too many executions. Back off and retry                                                                                                                                                                                                                   |
+| `unknown_op`   | Host      | This SDK is newer than the dashboard host                                                                                                                                                                                                                 |
+| `api_error`    | Both      | Host: the query failed to execute, or an Endpoint call could not complete. SDK: the reply was malformed                                                                                                                                                   |
+| `bad_request`  | Both      | SDK: the query id or Analysis ID failed its local format check, or the Endpoint request failed a local check (see [Calling an Analysis Endpoint](#calling-an-analysis-endpoint)), and nothing was sent. Host: some other part of the payload was rejected |
+| `no_response`  | SDK       | The host never answered at all. See [Timeouts](#timeouts)                                                                                                                                                                                                 |
+| `no_host`      | SDK       | The page is not running inside a dashboard                                                                                                                                                                                                                |
+| `aborted`      | SDK       | `stop()` was called while the request was in flight, or the client was not running when the call was made                                                                                                                                                 |
+| `internal`     | SDK       | The SDK could not issue the request                                                                                                                                                                                                                       |
 
 In practice `bad_request` reaches you from the SDK, not the host: the query id and the Analysis ID are checked before anything is posted, so an invalid one costs no round trip. And an `api_error` whose message mentions a malformed reply is the SDK telling you the host answered with something it could not read, which is a different problem from a query that failed.
 
@@ -277,7 +286,7 @@ So each request carries a generous backstop (60s, configurable per client or per
 
 A `no_response` cancels nothing: the query keeps running server-side. If its answer turns up afterwards the SDK ignores it, and logs one `console.debug` naming the request, so a late reply is distinguishable from a query that quietly did nothing.
 
-`endpoint.call` keeps the same backstop. An Endpoint answers `504` once its script runs past 30 seconds, so inside the default 60 seconds a call comes back unless the host lost the answer. For a call, `no_response` means the outcome is unknown, not that the save failed: the Analysis may have run, so read the state back before calling again. Without the backstop, a lost answer would leave the form waiting until the page reloads. To wait that long anyway, pass `{ timeoutMs: 0 }` to the call.
+`endpoint.call` keeps the same backstop. An Endpoint answers `504` once its script runs past 30 seconds, so inside the default 60 seconds a call comes back unless the host lost the answer. For a call, `no_response` means the outcome is unknown, not that the save failed: the Analysis may have run, so read the state back before calling again. Without the backstop, a lost answer would leave the form waiting until the page reloads. To wait that long anyway, pass `{ timeoutMs: 0 }` to the call. A client-level `timeoutMs` bounds calls too, so a client tuned below 30 seconds for SQL reports `no_response` for an Endpoint that is still running: pass a longer `timeoutMs` to `endpoint.call` in that case.
 
 ## Local development
 

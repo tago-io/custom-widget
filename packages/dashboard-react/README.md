@@ -75,6 +75,10 @@ createRoot(document.getElementById("root")).render(
 
 ```tsx
 import { type TagoDashboardError, useCallEndpoint } from "@tago-io/custom-dashboard-react";
+import { useState } from "react";
+
+// The ID of the Analysis, the 24 characters at the end of its Endpoint URL.
+const ANALYSIS_ID = "YOUR_ANALYSIS_ID";
 
 type TSetpointAnswer = { setpoint?: number; error?: string; errors?: { setpoint?: string } };
 
@@ -98,7 +102,7 @@ function SetpointForm() {
     // Every HTTP status resolves, so check it before reading the body, and read the body defensively.
     if (answer.status === 422) setFeedback(answer.body?.errors?.setpoint ?? "Invalid setpoint.");
     else if (answer.status >= 400) setFeedback(answer.body?.error ?? `Request failed (${answer.status}).`);
-    else setFeedback(`Saved: ${answer.body?.setpoint} C`);
+    else setFeedback(typeof answer.body?.setpoint === "number" ? `Saved: ${answer.body.setpoint} C` : "Saved.");
   }
 
   return (

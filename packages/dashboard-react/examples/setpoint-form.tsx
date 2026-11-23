@@ -61,7 +61,8 @@ function SetpointForm() {
     } else if (answer.status >= 400) {
       setFeedback({ kind: "error", text: answer.body?.error ?? `Request failed (${answer.status}).` });
     } else {
-      setFeedback({ kind: "ok", text: `Saved: ${answer.body?.setpoint} C` });
+      const saved = answer.body?.setpoint;
+      setFeedback({ kind: "ok", text: typeof saved === "number" ? `Saved: ${saved} C` : "Saved." });
     }
   }
 
@@ -74,6 +75,11 @@ function SetpointForm() {
         <input
           value={setpoint}
           onChange={(event) => setSetpoint(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !isCalling) {
+              void save();
+            }
+          }}
           aria-describedby="feedback"
           style={{ width: "6ch", marginLeft: 8, padding: 10, font: "inherit" }}
         />
