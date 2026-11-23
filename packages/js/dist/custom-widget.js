@@ -250,22 +250,22 @@
   function constructorName(value) {
     return value.constructor?.name || "object";
   }
-  function isPlainData(value) {
-    if (Array.isArray(value)) return true;
+  function isPlainObject(value) {
     const prototype = Object.getPrototypeOf(value);
     return prototype === Object.prototype || prototype === null;
   }
-  function refuseNonPlainData(_key, value) {
-    if (isObject(value) && !isPlainData(value)) {
+  function refuseValuesJsonEmpties(_key, value) {
+    const emptied = isObject(value) && !Array.isArray(value) && !isPlainObject(value) && Object.keys(value).length === 0;
+    if (emptied) {
       throw new TypeError(
-        `The body holds a ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
+        `The body holds a value of type ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
       );
     }
     return value;
   }
   function encodeEndpointBody(body) {
     if (body === void 0 || typeof body === "string") return body;
-    const json = JSON.stringify(body, refuseNonPlainData);
+    const json = JSON.stringify(body, refuseValuesJsonEmpties);
     if (json === void 0) throw new TypeError(`A ${typeof body} is not a JSON value.`);
     const encoded = JSON.parse(json);
     if (typeof encoded === "string") {

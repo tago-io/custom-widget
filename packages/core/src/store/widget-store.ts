@@ -70,21 +70,23 @@ function constructorName(value: object): string {
   return (value as { constructor?: { name?: string } }).constructor?.name || "object";
 }
 
-/** An array, or an object literal (prototype-free ones included). */
-function isPlainData(value: object): boolean {
-  if (Array.isArray(value)) return true;
+/** An object literal, prototype-free ones included. Not an array, a Map, a Date or a class instance. */
+function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value) as unknown;
   return prototype === Object.prototype || prototype === null;
 }
 
 /**
- * JSON writes a FormData, a Map, a Blob or a class instance as {}, so the Analysis would get an empty body and no
- * error. A replacer sees each value after toJSON() ran, so a Date inside an object arrives here as its string.
+ * JSON writes a FormData, a Map, a Blob, or a class instance that keeps its data in private fields, as {}, so the
+ * Analysis would get an empty body and no error. That is any object other than a plain object or an array with no
+ * enumerable fields of its own. A replacer sees each value after toJSON() ran, so a Date inside an object arrives here
+ * as its string, and a class instance with fields is written as its fields.
  */
-function refuseNonPlainData(_key: string, value: unknown): unknown {
-  if (isObject(value) && !isPlainData(value)) {
+function refuseValuesJsonEmpties(_key: string, value: unknown): unknown {
+  const emptied = isObject(value) && !Array.isArray(value) && !isPlainObject(value) && Object.keys(value).length === 0;
+  if (emptied) {
     throw new TypeError(
-      `The body holds a ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
+      `The body holds a value of type ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
     );
   }
   return value;
@@ -93,13 +95,13 @@ function refuseNonPlainData(_key: string, value: unknown): unknown {
 /**
  * The dashboard sends a body that is not a string as JSON, so it takes JSON's rules here: toJSON() applies, as for a
  * Date inside an object, and a value JSON cannot encode, such as a BigInt or a cycle, is refused before anything is
- * posted. So are two values that JSON would send wrong: one it writes as {} (see refuseNonPlainData), and one whose
+ * posted. So are two values that JSON would send wrong: one it writes as {} (see refuseValuesJsonEmpties), and one whose
  * JSON is a bare string, such as a top-level Date. Decoded, that is a string again, which the dashboard sends as text,
  * so the Analysis would get `scope` nil.
  */
 function encodeEndpointBody(body: unknown): unknown {
   if (body === undefined || typeof body === "string") return body;
-  const json = JSON.stringify(body, refuseNonPlainData);
+  const json = JSON.stringify(body, refuseValuesJsonEmpties);
   if (json === undefined) throw new TypeError(`A ${typeof body} is not a JSON value.`);
   const encoded = JSON.parse(json) as unknown;
   if (typeof encoded === "string") {

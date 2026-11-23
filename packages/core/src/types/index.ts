@@ -281,9 +281,9 @@ export type TEndpointCallOptions = {
    * `context.request.body`. Not allowed with GET. Any other value is encoded with JSON's rules, so toJSON()
    * applies, as for a Date inside an object. These reject with `bad_request` before anything is posted:
    * - a value JSON cannot encode, such as a BigInt or a cycle;
-   * - a value JSON would write as {}, such as a FormData, a Map, a Set, a Blob or a class instance without
-   *   toJSON(), even inside an object. Convert it to a plain object first, for example with
-   *   `Object.fromEntries(formData)`;
+   * - a value JSON would write as {}, such as a FormData, a Map, a Set, a Blob or a class instance that keeps its
+   *   data in private fields, even inside an object. Convert it to a plain object first, for example with
+   *   `Object.fromEntries(formData)`. A class instance with fields is sent as its fields;
    * - a value whose JSON is a bare string, such as a top-level Date, which the dashboard would send as text. Put it
    *   in an object.
    */

@@ -544,10 +544,13 @@ describe("WidgetStore", () => {
       { label: "a URLSearchParams", make: () => new URLSearchParams("setpoint=22") },
       { label: "a Blob", make: () => new Blob(["22"]) },
       {
-        label: "a class instance without toJSON",
+        label: "a class instance that keeps its data in private fields",
         make: () =>
-          new (class Setpoint {
-            value = 22;
+          new (class Temperature {
+            #celsius = 22;
+            get celsius() {
+              return this.#celsius;
+            }
           })(),
       },
       { label: "a Map inside a plain object", make: () => ({ values: new Map([["setpoint", 22]]) }) },
@@ -562,9 +565,12 @@ describe("WidgetStore", () => {
       });
     });
 
-    it("sends plain objects, arrays, prototype-free objects, scalars, nested Dates and toJSON objects as before", () => {
+    it("sends plain objects, arrays, prototype-free objects, scalars, nested Dates, toJSON objects and class instances with fields", () => {
       hostReady();
       const prototypeFree = Object.assign(Object.create(null) as Record<string, unknown>, { setpoint: 22 });
+      class Setpoint {
+        constructor(readonly value: number) {}
+      }
       const bodies = [
         { setpoint: [22, { unit: "C" }] },
         [1, 2],
@@ -574,6 +580,8 @@ describe("WidgetStore", () => {
         null,
         { at: new Date("2026-10-20T12:00:00Z") },
         { toJSON: () => ({ setpoint: 22 }) },
+        new Setpoint(22),
+        {},
       ];
 
       for (const body of bodies) {
@@ -594,6 +602,8 @@ describe("WidgetStore", () => {
         null,
         { at: "2026-10-20T12:00:00.000Z" },
         { setpoint: 22 },
+        { value: 22 },
+        {},
       ]);
     });
 
