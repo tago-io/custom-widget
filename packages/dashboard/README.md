@@ -127,9 +127,11 @@ The SDK checks the request before posting it, and rejects with `bad_request`, wi
 
 - **A body with `GET`**, the default method. The host refuses it; set `method`, usually to `"POST"`.
 - **A body JSON cannot encode**, such as a `BigInt` or a cycle.
-- **A body JSON would write as `{}`**, such as a `Map`, a `FormData`, a `Blob` or a class instance without `toJSON()`. Convert it to a plain object first, for example with `Object.fromEntries(formData)`.
+- **A body JSON would write as `{}`**, such as a `Map`, a `FormData`, a `Blob` or a class instance that keeps its data in private fields. Convert it to a plain object first, for example with `Object.fromEntries(formData)`. A class instance with fields is sent as its fields.
 - **A body whose JSON is a bare string**, such as a top-level `Date`, which the host would send as text. Put it in an object.
+- **A query that is not a plain object**, such as a `URLSearchParams` or a `Map`, which would go out empty. Pass `Object.fromEntries(params)` instead.
 - **A query value that is not a string, a finite number or a boolean**, or an array of them. The message names the key. A key whose value is `undefined` is left out instead, the way JSON leaves one out of a body.
+- **A request that is not an object**, such as a path passed in its place, which would run `GET /`.
 
 **Every HTTP answer resolves**, 4xx and 5xx included, as `{ status, headers, body }`. That is what lets a form show the field errors of a `422`. Check `status` before reading `body`, which is parsed when the response is JSON and text otherwise:
 
