@@ -66,15 +66,48 @@ function toEndpointCallError(reason: unknown): TEndpointCallError {
   return endpointCallError("bad_request", `The request could not be posted to the dashboard: ${errorMessage(reason)}`);
 }
 
+function constructorName(value: object): string {
+  return (value as { constructor?: { name?: string } }).constructor?.name || "object";
+}
+
+/** An array, or an object literal (prototype-free ones included). */
+function isPlainData(value: object): boolean {
+  if (Array.isArray(value)) return true;
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * JSON writes a FormData, a Map, a Blob or a class instance as {}, so the Analysis would get an empty body and no
+ * error. A replacer sees each value after toJSON() ran, so a Date inside an object arrives here as its string.
+ */
+function refuseNonPlainData(_key: string, value: unknown): unknown {
+  if (isObject(value) && !isPlainData(value)) {
+    throw new TypeError(
+      `The body holds a ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
+    );
+  }
+  return value;
+}
+
 /**
  * The dashboard sends a body that is not a string as JSON, so it takes JSON's rules here: toJSON() applies, as for a
- * Date, and a value JSON cannot encode, such as a BigInt or a cycle, is refused before anything is posted.
+ * Date inside an object, and a value JSON cannot encode, such as a BigInt or a cycle, is refused before anything is
+ * posted. So are two values that JSON would send wrong: one it writes as {} (see refuseNonPlainData), and one whose
+ * JSON is a bare string, such as a top-level Date. Decoded, that is a string again, which the dashboard sends as text,
+ * so the Analysis would get `scope` nil.
  */
 function encodeEndpointBody(body: unknown): unknown {
   if (body === undefined || typeof body === "string") return body;
-  const json = JSON.stringify(body);
+  const json = JSON.stringify(body, refuseNonPlainData);
   if (json === undefined) throw new TypeError(`A ${typeof body} is not a JSON value.`);
-  return JSON.parse(json) as unknown;
+  const encoded = JSON.parse(json) as unknown;
+  if (typeof encoded === "string") {
+    throw new TypeError(
+      "The body's JSON is a bare string, which the dashboard would send as text. Put the value in an object, or pass a string to send text."
+    );
+  }
+  return encoded;
 }
 
 /** The reply comes from another window, so its shape is checked before the caller gets it. */

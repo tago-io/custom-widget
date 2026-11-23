@@ -513,6 +513,90 @@ describe("WidgetStore", () => {
       expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
     });
 
+    it.each([
+      { label: "a top-level Date", body: new Date("2026-10-20T12:00:00Z") },
+      { label: "an object whose toJSON returns a string", body: { toJSON: () => "22" } },
+    ])(
+      "refuses $label, whose JSON is a bare string the dashboard would send as text, posting nothing",
+      async ({ body }) => {
+        hostReady();
+        const outcome = store.callEndpoint(endpointID, { method: "POST", body }).catch((error: unknown) => error);
+
+        expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+        await expect(outcome).resolves.toEqual({
+          code: "bad_request",
+          message: expect.stringMatching(/bare string.*Put the value in an object/),
+        });
+      }
+    );
+
+    it.each([
+      {
+        label: "a FormData",
+        make: () => {
+          const form = new FormData();
+          form.append("setpoint", "22");
+          return form;
+        },
+      },
+      { label: "a Map", make: () => new Map([["setpoint", 22]]) },
+      { label: "a Set", make: () => new Set([22]) },
+      { label: "a URLSearchParams", make: () => new URLSearchParams("setpoint=22") },
+      { label: "a Blob", make: () => new Blob(["22"]) },
+      {
+        label: "a class instance without toJSON",
+        make: () =>
+          new (class Setpoint {
+            value = 22;
+          })(),
+      },
+      { label: "a Map inside a plain object", make: () => ({ values: new Map([["setpoint", 22]]) }) },
+    ])("refuses $label, which JSON would send as {}, posting nothing", async ({ make }) => {
+      hostReady();
+      const outcome = store.callEndpoint(endpointID, { method: "POST", body: make() }).catch((error: unknown) => error);
+
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+      await expect(outcome).resolves.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("plain object"),
+      });
+    });
+
+    it("sends plain objects, arrays, prototype-free objects, scalars, nested Dates and toJSON objects as before", () => {
+      hostReady();
+      const prototypeFree = Object.assign(Object.create(null) as Record<string, unknown>, { setpoint: 22 });
+      const bodies = [
+        { setpoint: [22, { unit: "C" }] },
+        [1, 2],
+        prototypeFree,
+        22,
+        true,
+        null,
+        { at: new Date("2026-10-20T12:00:00Z") },
+        { toJSON: () => ({ setpoint: 22 }) },
+      ];
+
+      for (const body of bodies) {
+        // No answer comes, so each call settles with aborted when afterEach destroys the store.
+        store.callEndpoint(endpointID, { method: "POST", body }).catch(() => {});
+      }
+
+      const sent = mockPostMessage.mock.calls
+        .map(([message]) => message as Record<string, unknown>)
+        .filter((message) => message.method === "call-endpoint")
+        .map((message) => (message.payload as Record<string, unknown>).body);
+      expect(sent).toEqual([
+        { setpoint: [22, { unit: "C" }] },
+        [1, 2],
+        { setpoint: 22 },
+        22,
+        true,
+        null,
+        { at: "2026-10-20T12:00:00.000Z" },
+        { setpoint: 22 },
+      ]);
+    });
+
     it("maps an options getter that throws to bad_request", async () => {
       hostReady();
       const options = {

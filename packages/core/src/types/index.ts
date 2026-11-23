@@ -279,7 +279,13 @@ export type TEndpointCallOptions = {
   /**
    * Send a JSON value; a string is sent as text/plain, so the Analysis gets `scope` as nil and reads
    * `context.request.body`. Not allowed with GET. Any other value is encoded with JSON's rules, so toJSON()
-   * applies, and a value JSON cannot encode, such as a BigInt, rejects with `bad_request`.
+   * applies, as for a Date inside an object. These reject with `bad_request` before anything is posted:
+   * - a value JSON cannot encode, such as a BigInt or a cycle;
+   * - a value JSON would write as {}, such as a FormData, a Map, a Set, a Blob or a class instance without
+   *   toJSON(), even inside an object. Convert it to a plain object first, for example with
+   *   `Object.fromEntries(formData)`;
+   * - a value whose JSON is a bare string, such as a top-level Date, which the dashboard would send as text. Put it
+   *   in an object.
    */
   body?: unknown;
 };

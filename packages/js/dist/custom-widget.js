@@ -247,11 +247,33 @@
     }
     return endpointCallError("bad_request", `The request could not be posted to the dashboard: ${errorMessage(reason)}`);
   }
+  function constructorName(value) {
+    return value.constructor?.name || "object";
+  }
+  function isPlainData(value) {
+    if (Array.isArray(value)) return true;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+  function refuseNonPlainData(_key, value) {
+    if (isObject(value) && !isPlainData(value)) {
+      throw new TypeError(
+        `The body holds a ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
+      );
+    }
+    return value;
+  }
   function encodeEndpointBody(body) {
     if (body === void 0 || typeof body === "string") return body;
-    const json = JSON.stringify(body);
+    const json = JSON.stringify(body, refuseNonPlainData);
     if (json === void 0) throw new TypeError(`A ${typeof body} is not a JSON value.`);
-    return JSON.parse(json);
+    const encoded = JSON.parse(json);
+    if (typeof encoded === "string") {
+      throw new TypeError(
+        "The body's JSON is a bare string, which the dashboard would send as text. Put the value in an object, or pass a string to send text."
+      );
+    }
+    return encoded;
   }
   function readEndpointResult(reply) {
     const result = isObject(reply) ? reply.result : void 0;
