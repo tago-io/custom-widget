@@ -6,7 +6,7 @@ on:
       - "**"
   pull_request:
     branches:
-      - master
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,6 +34,11 @@ jobs:
 
       - name: Lint & Format
         run: pnpm check
+
+      # `vp check` covers lint and format only, and tsup typechecks src/ on its way to the .d.ts.
+      # Nothing was checking tests/, so a type-level assertion in a test could not fail the build.
+      - name: Typecheck
+        run: pnpm -r check:types
 
       - name: Test
         run: pnpm vp test run

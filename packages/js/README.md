@@ -78,7 +78,7 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 | Function                   | Direction   | Description                                                                                                                  |
 | -------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.ready(options)`    | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget.                                   |
+| `TagoIO.ready()`           | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget.                                   |
 | `TagoIO.onStart(callback)` | You receive | Called when TagoIO starts your widget. Provides configuration, variables, and settings.                                      |
 | `TagoIO.onError(callback)` | You receive | Called when the dashboard reports a failed request ([Error Handling](#error-handling)). Some platform errors never reach it. |
 
@@ -86,23 +86,23 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 > **Note**: These operations only work with data that is within the Custom Widget's configured settings and permissions.
 
-| Function                                  | Direction | Description                                                                                                                              |
-| ----------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.sendData(data, callback)`         | You send  | Send one record or an array to the devices bound to the widget ([Sending Data](#sending-data))                                           |
-| `TagoIO.editData(data, callback)`         | You send  | Change stored records: each needs its `id`, its `variable` and the new `value` ([Editing and deleting data](#editing-and-deleting-data)) |
-| `TagoIO.deleteData(data, callback)`       | You send  | Delete stored records, given as `"<recordId>:<deviceId>"` strings ([Editing and deleting data](#editing-and-deleting-data))              |
-| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resource rows (devices, users, entities)                                                                                   |
-| `TagoIO.refreshResources()`               | You send  | Ask the dashboard to load the widget's resource rows again. No reply: any rows it loads arrive through `onRealtime`                      |
+| Function                                  | Direction | Description                                                                                                                                                   |
+| ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TagoIO.sendData(data, callback)`         | You send  | Send one record or an array to the devices bound to the widget ([Sending Data](#sending-data))                                                                |
+| `TagoIO.editData(data, callback)`         | You send  | Change stored records: each needs its `id`, its `variable`, the new `value` and the record's device ([Editing and deleting data](#editing-and-deleting-data)) |
+| `TagoIO.deleteData(data, callback)`       | You send  | Delete stored records, given as `"<recordId>:<deviceId>"` strings ([Editing and deleting data](#editing-and-deleting-data))                                   |
+| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resource rows (devices, users, entities)                                                                                                        |
+| `TagoIO.refreshResources()`               | You send  | Ask the dashboard to load the widget's resource rows again. No reply: any rows it loads arrive through `onRealtime`                                           |
 
 `sendData`, `editData`, `deleteData` and `editResourceData` return a Promise, or `undefined` when you pass a `callback`, which then receives `(data)` on success and `(null, error)` on failure.
 
 ### Real-time Events
 
-| Function                                  | Direction   | Description                                                                                                                                        |
-| ----------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.onRealtime(callback)`             | You receive | Called with every data and resource block the widget has, each time that set changes ([Working with Real-time Data](#working-with-real-time-data)) |
-| `TagoIO.onSyncUserInformation(callback)`  | You receive | Called after each `ready()` with the viewer's token, language, runURL and preferences                                                              |
-| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Not called: the dashboard does not send blueprint device data ([Blueprint Devices](#blueprint-devices))                                            |
+| Function                                  | Direction   | Description                                                                                                                                            |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TagoIO.onRealtime(callback)`             | You receive | Called with every data and resource block the widget has, each time that set changes ([Working with Real-time Data](#working-with-real-time-data))     |
+| `TagoIO.onSyncUserInformation(callback)`  | You receive | Called after each `ready()` with the viewer's token, language, runURL and preferences                                                                  |
+| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Called when the dashboard sends blueprint device data. Read the selected devices from the widget's variables ([Blueprint Devices](#blueprint-devices)) |
 
 ### Utilities
 
@@ -161,7 +161,7 @@ async function sendSensorData() {
     console.log("Data stored:", reply.result);
   } catch (error) {
     // A refused write rejects with the dashboard's reply, { status: false, message }.
-    console.error("Not stored:", error.message);
+    console.error("Not confirmed:", error.message);
   }
 }
 ```
@@ -176,14 +176,34 @@ Plan for the following:
 
 ## Editing and deleting data
 
-Edit and delete the records `onRealtime` delivers. `editData` takes each record's `id` and `variable` with the new `value`. `deleteData` takes `"<recordId>:<deviceId>"` strings, one or an array, so one call can delete records from several devices.
+Edit and delete the records `onRealtime` delivers. `editData` takes each record's `id` and `variable` with the new `value`, addressed to the record's device. `deleteData` takes `"<recordId>:<deviceId>"` strings, one or an array, so one call can delete records from several devices.
 
 ```javascript
 // withTimeout is the helper from Sending Data.
+let bindings = [];
+// The SDK keeps one onStart handler, so set bindings in yours.
+window.TagoIO.onStart(function (widget) {
+  bindings = widget.display.variables;
+});
+
 async function changeValue(record, value) {
   try {
-    // autoFill adds device and origin from the widget's binding for record.variable.
-    await withTimeout(window.TagoIO.editData({ id: record.id, variable: record.variable, value: value }), 10000);
+    // Address the edit to the device that holds the record (see below).
+    const binding = bindings.find(function (item) {
+      return item.variable === record.variable && item.origin.id === record.device;
+    });
+    if (!binding) {
+      throw new Error("The record's device is not bound to the widget.");
+    }
+    const edit = {
+      id: record.id,
+      variable: record.variable,
+      value: value,
+      device: binding.origin.id,
+      origin: binding.origin.id,
+      bucket: binding.origin.bucket,
+    };
+    await withTimeout(window.TagoIO.editData(edit), 10000);
     console.log("Saved");
   } catch (error) {
     console.error("Not saved:", error.message);
@@ -205,11 +225,7 @@ To choose the device yourself, turn `autoFill` off. `sendData` and `editData` th
 ```javascript
 window.TagoIO.autoFill = false;
 
-let bindings = [];
-window.TagoIO.onStart(function (widget) {
-  bindings = widget.display.variables;
-});
-
+// bindings is set in onStart, as in the example above.
 function sendToDevice(deviceId, value) {
   const binding = bindings.find(function (item) {
     return item.variable === "temperature" && item.origin.id === deviceId;
@@ -228,11 +244,12 @@ function sendToDevice(deviceId, value) {
 
 Plan for the following:
 
-- **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one edit per device. `deleteData` ignores `autoFill`: each string names its device.
+- **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one copy of the edit per device. `deleteData` ignores `autoFill`: each string names its device.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `changeValue` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
 - **With `autoFill` off, every record needs `origin`.** A record without it makes the call throw before any Promise exists, so `.catch()` never sees the error: wrap the call in `try`/`catch`.
 - **A resolved promise means the platform accepted the change.** When the platform refuses an edit or a delete, the dashboard shows an error toast and never replies, so the promise stays pending: race it against a timeout.
 - **`"Failed to delete"` reaches only `onError`.** The dashboard sends it without the request key, so no promise settles for it.
-- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of each new snapshot until realtime shows it, as `edit-delete-data.html` does.
+- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of each new snapshot while realtime still shows the value from before the save, as `edit-delete-data.html` does.
 
 ## Editing Resources
 
@@ -279,7 +296,7 @@ Plan for the following:
 
 - **Nothing runs without a selected Analysis.** The dashboard ignores the call while `widget.analysis_run` is empty, so keep the control disabled until it is set.
 - **No reply comes back.** `runAnalysis` returns nothing, and the widget never learns whether the Analysis ran or failed. To show a result, have the Analysis write to a variable the widget reads, and watch `onRealtime` for the new record.
-- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and a `source` value can also rewrite or drop the item, so leave those keys out.
+- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, with a falsy `value` sent as `""`, so leave those keys out.
 
 ## Calling an Analysis Endpoint
 
@@ -358,7 +375,7 @@ Plan for the following:
 
 ## Blueprint Devices
 
-The dashboard does not send blueprint device data to custom widgets, so `onSyncBlueprintDevices` is never called. On a blueprint dashboard, read the selected devices from the widget's variables instead: each `origin.id` is the device selected for that variable's blueprint device, and it is `undefined` until the viewer selects one.
+`onSyncBlueprintDevices` receives blueprint device settings and selections when the dashboard sends them. A blueprint dashboard delivers the selected devices in the widget's variables, so read them there: each `origin.id` is the device selected for that variable's blueprint device, and it is `undefined` until the viewer selects one.
 
 ```javascript
 window.TagoIO.onStart(function (widget) {
@@ -413,32 +430,41 @@ Plan for the following:
 
 ## Scanning QR codes and barcodes
 
-Inside the TagoRUN mobile app, or a custom-branded app built on it, a widget can open the device scanner. This is the one platform capability the SDK does not wrap, so both the request and the reply are plain `postMessage`. The SDK's own listener ignores them, so a listener of your own runs alongside it.
+A widget can ask the dashboard to scan a QR code or a barcode. In the TagoRUN mobile app, or a custom-branded app built on it, the app's own scanner opens. In a browser, whether TagoRUN on the web, Admin, or a widget embedded in another page, the page around the widget opens a camera scanner. The SDK does not wrap the scanner, so both the request and the reply are plain `postMessage`. The SDK's own listener ignores them, so a listener of your own runs alongside it.
 
 ```javascript
-// Ask for a scan.
-window.parent.postMessage({ method: "barcode" }, "*");
+// Ask for a scan from a click on a <button id="scan">: in a browser, the request opens the camera.
+document.getElementById("scan").addEventListener("click", function () {
+  window.parent.postMessage({ method: "barcode" }, "*");
+});
 
 window.addEventListener("message", function (event) {
-  // Opened outside a dashboard, `window.parent` is this page, so skip its own request.
-  if (event.source === window) {
+  // Only the host page answers, and it is this widget's parent window. Opened on its own,
+  // `window.parent` is this page itself, so no message is a reply.
+  if (window.parent === window || event.source !== window.parent) {
     return;
   }
 
-  // The reply echoes the method you asked for, with the decoded string in `data`.
+  // The reply echoes the method you asked for. `data` holds the decoded string, or "" if the user canceled.
   if (event.data && event.data.method === "barcode") {
-    console.log("Scanned:", event.data.data);
+    if (event.data.data) {
+      console.log("Scanned:", event.data.data);
+    } else {
+      console.log("Scan canceled");
+    }
   }
 });
 ```
 
-`barcode` and `qrcode` open the same scanner, which reads QR codes and 1D barcodes alike. What changes is the reply: a widget that asks for `barcode` is answered with `barcode`.
+Either method reads QR codes and 1D barcodes. The TagoRUN app may shape its scan window to the method, a square for `qrcode` and a wide strip for `barcode`, so ask for the one that matches the code. The reply echoes the method: a widget that asks for `barcode` is answered with `barcode`.
 
 Plan for the following:
 
-- **It only works inside the mobile app.** Everywhere else, a mobile browser included, the request is dropped in silence. No reply, no error.
-- **The reply comes when the user is done, if at all.** It arrives only after the user has aimed and scanned, and no reply is documented for a scan the user cancels. Give the user a way to stop waiting instead of treating a slow reply as a failure.
-- **The reply carries no `key`.** The SDK matches data-operation replies by the `key` it sends, but a scan reply never carries one, so it cannot be matched to its request. Keep a single request in flight, and ignore a reply you are no longer waiting for.
+- **In a browser, the scanner needs a camera.** It also needs the user's permission to use it. Without either, the scanner shows an error and the user can only cancel. A page loaded inside another page's `<iframe>`, such as a widget embedded with the embed code from Admin, also needs `allow="camera"` on every `<iframe>` around it, and every page around it served over HTTPS.
+- **The reply comes when the user is done.** It arrives once the user scans a code or cancels, and a cancel answers with an empty `data`. An older host or app may never answer, so give the user a way to stop waiting instead of treating a slow reply as a failure.
+- **The reply carries no `key`.** The SDK matches data-operation replies by the `key` it sends, but a scan reply never carries one, so it cannot be matched to its request. Keep a single request in flight, since one sent while a scan is open may get no answer of its own, and ignore a reply you are no longer waiting for.
+
+The [`scan-code.html`](./examples/scan-code.html) example adds the rest: one request at a time, a way to stop waiting, and late replies ignored.
 
 ## TypeScript Support
 
@@ -507,7 +533,7 @@ This package includes HTML examples in the [`examples/`](./examples/) folder:
 | `send-data.html`        | Sending data back to devices                           |
 | `time-interval.html`    | Time-based data analysis                               |
 | `custom-units.html`     | Unit conversions and formatting                        |
-| `scan-code.html`        | Scanning a QR code or barcode with the mobile app      |
+| `scan-code.html`        | Scanning a QR code or barcode                          |
 | `edit-delete-data.html` | Editing and deleting the records a widget receives     |
 | `edit-resource.html`    | Editing device, user and entity rows, then refreshing  |
 | `navigation.html`       | Opening dashboards and web pages, closing a modal      |

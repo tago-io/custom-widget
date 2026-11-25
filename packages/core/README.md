@@ -21,9 +21,8 @@ import { WidgetStore } from "@tago-io/custom-widget-core";
 
 const store = new WidgetStore({
   realtimeStrategy: "merge", // "replace" | "append" | "merge"
-  realtimeMaxRecords: 1000, // max records for "append" strategy
+  realtimeMaxRecords: 1000, // "append" only: how many realtime blocks to keep, not records
   allowedOrigins: ["https://admin.tago.io"], // optional origin validation
-  readyOptions: { header: { color: "#333" } },
 });
 
 store.initialize(); // sends ready signal to platform

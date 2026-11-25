@@ -1,0 +1,199 @@
+import { TagoDashboardError } from "../errors.js";
+import type {
+  TDashboardErrorCode,
+  TDashboardParams,
+  TDashboardStyle,
+  TDashboardTheme,
+  TEndpointCallResult,
+  TEndpointSummary,
+  TSqlQuerySummary,
+  TSqlRow,
+  TSqlRunResult,
+} from "../types/index.js";
+
+type ErrorMeta = { op: string; requestID: string };
+
+export type TReadInbound =
+  | { kind: "theme"; theme: TDashboardTheme }
+  | { kind: "style"; style: TDashboardStyle }
+  | { kind: "params"; params: TDashboardParams }
+  | { kind: "response"; id: string; body: Record<string, unknown> };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Keep only string values. The host already coerces to strings, so anything else is a forged or
+ * future-shaped entry, and handing it on would break the "every value is a string" promise.
+ * No prototype, so a key the link does not carry reads `undefined` (not an inherited method), and
+ * a link key such as `constructor` or `__proto__` is just a key.
+ */
+function readParams(raw: Record<string, unknown>): TDashboardParams {
+  const params = Object.create(null) as Record<string, string>;
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      params[key] = value;
+    }
+  }
+  return params;
+}
+
+/**
+ * Narrow an inbound `message` event payload, or return null to ignore it.
+ *
+ * Allowlist, never denylist: opened standalone, the shell's own outbound messages echo back
+ * to itself, and every browser extension on the page posts here too.
+ */
+export function readInboundMessage(data: unknown): TReadInbound | null {
+  if (!isRecord(data) || typeof data.type !== "string") {
+    return null;
+  }
+
+  if (data.type === "dashboard:theme") {
+    return data.theme === "dark" || data.theme === "light" ? { kind: "theme", theme: data.theme } : null;
+  }
+
+  if (data.type === "dashboard:style") {
+    return isRecord(data.style) ? { kind: "style", style: data.style as TDashboardStyle } : null;
+  }
+
+  if (data.type === "dashboard:params") {
+    return isRecord(data.params) ? { kind: "params", params: readParams(data.params) } : null;
+  }
+
+  if (data.type === "dashboard:response") {
+    return typeof data.id === "string" && data.id.length > 0 ? { kind: "response", id: data.id, body: data } : null;
+  }
+
+  return null;
+}
+
+/**
+ * Turn a correlated response body into its result, or throw.
+ *
+ * A structurally broken body rejects rather than resolving `undefined` — otherwise a forged
+ * `{ ok: true }` surfaces much later as a crash inside the author's render code.
+ */
+export function readResponseResult(body: Record<string, unknown>, meta: ErrorMeta): unknown {
+  if (body.ok === true) {
+    if (!("result" in body)) {
+      throw new TagoDashboardError("api_error", "The dashboard sent a malformed response.", meta);
+    }
+    return body.result;
+  }
+
+  if (body.ok === false) {
+    const error = isRecord(body.error) ? body.error : {};
+    // An unrecognized code is forwarded verbatim, not coerced, so a newer host is not flattened.
+    // `TDashboardErrorCode` has an open tail precisely so this needs no cast.
+    const code: TDashboardErrorCode = typeof error.code === "string" ? error.code : "api_error";
+    const message = typeof error.message === "string" ? error.message : "The request failed.";
+    throw new TagoDashboardError(code, message, meta);
+  }
+
+  throw new TagoDashboardError("api_error", "The dashboard sent a malformed response.", meta);
+}
+
+function toNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The execute API returns `{ name, type }` per column and the host flattens it to a string.
+ * Accept both, so a host that stops flattening degrades to named columns rather than to an
+ * empty header row above populated rows.
+ */
+function toColumnName(column: unknown): string[] {
+  if (typeof column === "string") {
+    return [column];
+  }
+  if (isRecord(column) && typeof column.name === "string") {
+    return [column.name];
+  }
+  return [];
+}
+
+/**
+ * Coerce rather than reject on drift: the host already tolerates two `columns` shapes, so a
+ * cosmetic server change must not take down every deployed shell.
+ */
+export function normalizeSqlRunResult<TRow extends TSqlRow = TSqlRow>(
+  raw: unknown,
+  meta: ErrorMeta
+): TSqlRunResult<TRow> {
+  if (!isRecord(raw)) {
+    throw new TagoDashboardError("api_error", "The dashboard sent a malformed sql.run result.", meta);
+  }
+
+  const rawMeta = isRecord(raw.meta) ? raw.meta : {};
+  return {
+    columns: Array.isArray(raw.columns) ? raw.columns.flatMap(toColumnName) : [],
+    // A null inside `rows` breaks Object.keys in every consumer, and the host does not filter.
+    rows: Array.isArray(raw.rows) ? (raw.rows.filter(isRecord) as TRow[]) : [],
+    meta: {
+      row_count: toNullableNumber(rawMeta.row_count),
+      execution_ms: toNullableNumber(rawMeta.execution_ms),
+      served_from_cache: rawMeta.served_from_cache === true,
+    },
+  };
+}
+
+export function normalizeSqlListResult(raw: unknown, meta: ErrorMeta): TSqlQuerySummary[] {
+  if (!isRecord(raw)) {
+    throw new TagoDashboardError("api_error", "The dashboard sent a malformed sql.list result.", meta);
+  }
+  if (!Array.isArray(raw.queries)) {
+    return [];
+  }
+
+  const summaries: TSqlQuerySummary[] = [];
+  for (const entry of raw.queries) {
+    if (isRecord(entry) && typeof entry.id === "string") {
+      summaries.push({ id: entry.id, name: typeof entry.name === "string" ? entry.name : entry.id });
+    }
+  }
+  return summaries;
+}
+
+/** Same reading as `sql.list`: an entry without an id is dropped, and a nameless one is named after its id. */
+export function normalizeEndpointListResult(raw: unknown, meta: ErrorMeta): TEndpointSummary[] {
+  if (!isRecord(raw)) {
+    throw new TagoDashboardError("api_error", "The dashboard sent a malformed endpoint.list result.", meta);
+  }
+  if (!Array.isArray(raw.endpoints)) {
+    return [];
+  }
+
+  const summaries: TEndpointSummary[] = [];
+  for (const entry of raw.endpoints) {
+    if (isRecord(entry) && typeof entry.id === "string") {
+      summaries.push({ id: entry.id, name: typeof entry.name === "string" ? entry.name : entry.id });
+    }
+  }
+  return summaries;
+}
+
+/**
+ * Only the status is required: it is what says the call completed, and rejecting over anything else would turn a save
+ * that ran into an unknown outcome. Headers are coerced like the `sql.run` result, keeping string values only. The body
+ * is the Analysis's own answer and passes through untouched.
+ */
+export function normalizeEndpointCallResult<TBody = unknown>(
+  raw: unknown,
+  meta: ErrorMeta
+): TEndpointCallResult<TBody> {
+  if (!isRecord(raw) || typeof raw.status !== "number" || !Number.isInteger(raw.status)) {
+    throw new TagoDashboardError("api_error", "The dashboard sent a malformed endpoint.call result.", meta);
+  }
+
+  // No prototype, like the params map: a header the response does not carry reads `undefined`, never an inherited
+  // method, and a header named `__proto__` is a header.
+  const headers = Object.create(null) as Record<string, string>;
+  for (const [name, value] of Object.entries(isRecord(raw.headers) ? raw.headers : {})) {
+    if (typeof value === "string") {
+      headers[name] = value;
+    }
+  }
+  return { status: raw.status, headers, body: raw.body as TBody };
+}

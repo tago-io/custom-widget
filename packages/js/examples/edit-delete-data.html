@@ -74,10 +74,14 @@
       // promise stays pending, so stop waiting after a while.
       const REPLY_TIMEOUT_MS = 10000;
 
+      // The widget's bindings: each variable it reads and the device it reads it from.
+      let bindings = [];
       // Records from the last realtime message, newest first.
       let snapshot = [];
       // Changes TagoIO confirmed, applied on top of every snapshot: realtime may not bring
-      // the change back, and a later push can still carry the old record.
+      // the change back, and a later push can still carry the old record. Each entry keeps the
+      // value realtime showed when the save was sent, and is dropped as soon as realtime shows
+      // any other value: the saved one, or a newer change made somewhere else.
       const savedValues = new Map();
       const deletedIds = new Set();
       // Rows on screen by record id. A realtime push updates them in place, so it does not
@@ -101,12 +105,31 @@
       function parseValue(text, current) {
         const trimmed = text.trim();
         if (typeof current === "number") {
-          return trimmed === "" || Number.isNaN(Number(trimmed)) ? null : Number(trimmed);
+          return trimmed === "" || !Number.isFinite(Number(trimmed)) ? null : Number(trimmed);
         }
         if (typeof current === "boolean") {
           return trimmed === "true" ? true : trimmed === "false" ? false : null;
         }
         return text;
+      }
+
+      // autoFill makes one copy of an edit per device the variable is bound on. When a copy goes
+      // to a device that does not hold the record, the platform refuses the call, and the copies
+      // it handled before that one stay saved. The binding for the record's own device sends
+      // every copy to the device that holds it. Returns null when no binding matches.
+      function addressedTo(record) {
+        const binding = bindings.find(function (item) {
+          return item.variable === record.variable && item.origin.id === record.device;
+        });
+        return binding ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket } : null;
+      }
+
+      // The value realtime shows for a record, before any saved value is applied on top.
+      function realtimeValue(id) {
+        const record = snapshot.find(function (item) {
+          return item.id === id;
+        });
+        return record ? record.value : undefined;
       }
 
       function createButton(label, type, onClick) {
@@ -201,7 +224,7 @@
           })
           .map(function (record) {
             return savedValues.has(record.id)
-              ? Object.assign({}, record, { value: savedValues.get(record.id) })
+              ? Object.assign({}, record, { value: savedValues.get(record.id).value })
               : record;
           });
 
@@ -243,13 +266,25 @@
           return;
         }
 
+        const address = addressedTo(record);
+        if (!address) {
+          setRowStatus(row, "Not saved: this record's device is not bound to the widget.", true);
+          return;
+        }
+
         setBusy(row, true);
         setRowStatus(row, "Saving...", false);
-        // autoFill (on by default) adds `device` and `origin` from the widget's binding for
-        // this variable.
-        withTimeout(window.TagoIO.editData({ id: record.id, variable: record.variable, value: value }))
+        const before = realtimeValue(record.id);
+        const edit = Object.assign({ id: record.id, variable: record.variable, value: value }, address);
+        withTimeout(window.TagoIO.editData(edit))
           .then(function () {
-            savedValues.set(record.id, value);
+            // Show the saved value while realtime still shows the one from before the save.
+            // Otherwise realtime already shows this save, or a newer change made somewhere else.
+            if (realtimeValue(record.id) === before) {
+              savedValues.set(record.id, { value: value, staleValue: before });
+            } else {
+              savedValues.delete(record.id);
+            }
             row.dirty = false;
             setRowStatus(row, "Saved.", false);
             renderRecords();
@@ -288,6 +323,7 @@
 
       window.TagoIO.onStart(function (widget) {
         console.log("Edit and Delete Data Widget started:", widget);
+        bindings = widget.display.variables || [];
         document.getElementById("status").textContent = "Waiting for data...";
       });
 
@@ -307,12 +343,10 @@
           return new Date(b.time) - new Date(a.time);
         });
 
-        // Once realtime shows a confirmed change, stop overriding the record.
-        savedValues.forEach(function (value, id) {
-          const record = snapshot.find(function (item) {
-            return item.id === id;
-          });
-          if (!record || record.value === value) {
+        // Once realtime moves a record off the value it had when the save was sent, stop
+        // overriding it.
+        savedValues.forEach(function (saved, id) {
+          if (realtimeValue(id) !== saved.staleValue) {
             savedValues.delete(id);
           }
         });
@@ -336,9 +370,7 @@
         document.getElementById("error").style.display = "block";
       });
 
-      window.TagoIO.ready({
-        header: { color: "#00ACC1" },
-      });
+      window.TagoIO.ready();
     </script>
   </body>
 </html>

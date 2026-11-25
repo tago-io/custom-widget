@@ -133,7 +133,7 @@
       document.getElementById("run").addEventListener("click", function () {
         // The Analysis receives this array as its scope. Send plain objects in an array: a
         // string does not arrive as sent, and the dashboard strips the keys source,
-        // displayValue and orderingValue (a source value can also rewrite or drop the item).
+        // displayValue and orderingValue (source: "entity" also rewrites the item).
         // device tells the Analysis which device the widget shows. On a blueprint dashboard
         // it is the selected device, and null while none is selected.
         const first = widgetVariables[0];
@@ -158,9 +158,7 @@
         setStatus("Error: " + (error.message || "Unknown error"));
       });
 
-      window.TagoIO.ready({
-        header: { color: "#795548" },
-      });
+      window.TagoIO.ready();
     </script>
   </body>
 </html>

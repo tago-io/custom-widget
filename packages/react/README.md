@@ -53,7 +53,6 @@ function Dashboard() {
   realtimeStrategy="merge" // "replace" | "append" | "merge" (default: "merge")
   realtimeMaxRecords={1000} // "append" only: how many realtime blocks to keep, not records (default: 1000)
   allowedOrigins={["https://admin.tago.io"]} // optional: drops messages from every other origin
-  readyOptions={{ header: { color: "#333" } }}
   dictionary={MyDictionary} // optional: a class whose instances have translate(text), see i18n
 >
   <App />
@@ -71,15 +70,15 @@ Plan for the following:
 
 ### Receiving Data
 
-| Hook                        | Description                                                                                                                                                         |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useWidget()`               | `{ widget, isLoading, variables, dashboardId, widgetId, label }`. `isLoading` stays `true` until the widget settings arrive                                         |
-| `useRealtimeData(options?)` | `{ data, records, eventCount, lastUpdatedAt, clear }`: the realtime blocks and their records, with an optional `selector`                                           |
-| `useResourceData()`         | `{ resources, getByType, refresh, eventCount, lastUpdatedAt }`: platform resources (device list, users, entities)                                                   |
-| `useUserInformation()`      | `{ userInformation, token, language, runURL, customPreferences, preferences }`, empty until it arrives after the widget settings                                    |
-| `useBlueprintDevices()`     | `{ blueprintDevices, selected, settings }`, always empty: the dashboard does not send blueprint device data. Read the selected devices from `useWidget().variables` |
-| `useWidgetErrors()`         | `{ lastError, errors, clearErrors }`: the failures the dashboard reports ([Widget errors](#widget-errors))                                                          |
-| `useWidgetData()`           | Convenience: combines widget + realtime + errors                                                                                                                    |
+| Hook                        | Description                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useWidget()`               | `{ widget, isLoading, variables, dashboardId, widgetId, label }`. `isLoading` stays `true` until the widget settings arrive                               |
+| `useRealtimeData(options?)` | `{ data, records, eventCount, lastUpdatedAt, clear }`: the realtime blocks and their records, with an optional `selector`                                 |
+| `useResourceData()`         | `{ resources, getByType, refresh, eventCount, lastUpdatedAt }`: platform resources (device list, users, entities)                                         |
+| `useUserInformation()`      | `{ userInformation, token, language, runURL, customPreferences, preferences }`, empty until it arrives after the widget settings                          |
+| `useBlueprintDevices()`     | `{ blueprintDevices, selected, settings }`, filled when the dashboard sends blueprint device data. Read the selected devices from `useWidget().variables` |
+| `useWidgetErrors()`         | `{ lastError, errors, clearErrors }`: the failures the dashboard reports ([Widget errors](#widget-errors))                                                |
+| `useWidgetData()`           | Convenience: combines widget + realtime + errors                                                                                                          |
 
 ### Filtering realtime data
 
@@ -107,7 +106,7 @@ Each function returns a Promise that settles when the dashboard answers. The bus
 What each function takes:
 
 - `sendData(records)`: one record or an array, such as `{ variable: "temperature", value: 25.5, unit: "°C" }`.
-- `editData(records)`: each record's `id` and `variable` with the new `value`, such as `{ id: record.id, variable: record.variable, value: 30 }`.
+- `editData(records)`: each record's `id` and `variable` with the new `value`, such as `{ id: record.id, variable: record.variable, value: 30 }`, addressed to the record's device as `setToZero` does below.
 - `deleteData(records)`: records with `id` and `device`, such as the ones in `useRealtimeData().records`. The hook sends each one as a `"<recordId>:<deviceId>"` string.
 - `editResourceData(rows)`: see [Editing resources](#editing-resources).
 - `callEndpoint(endpointID, options?)`: see [Calling an Analysis Endpoint](#calling-an-analysis-endpoint).
@@ -133,7 +132,7 @@ function SendButton() {
     } catch (error) {
       reset(); // isSending stays true while no reply comes
       // A refused write rejects with the dashboard's reply, { status: false, message }.
-      setStatus(`Not stored: ${(error as { message?: string }).message}`);
+      setStatus(`Not confirmed: ${(error as { message?: string }).message}`);
     }
   }
 
@@ -145,14 +144,18 @@ function SendButton() {
 }
 
 function RecordActions({ record }: { record: TDataRecord }) {
+  const { variables } = useWidget();
   const { editData, isEditing, reset: resetEdit } = useEditData();
   const { deleteData, isDeleting, reset: resetDelete } = useDeleteData();
   const [status, setStatus] = useState("");
 
   async function setToZero() {
     try {
-      // useEditData adds device and origin from the widget's binding for record.variable.
-      await withTimeout(editData({ id: record.id, variable: record.variable, value: 0 }));
+      // Address the edit to the device that holds the record (see below).
+      const binding = variables.find((item) => item.variable === record.variable && item.origin.id === record.device);
+      if (!binding) throw new Error("The record's device is not bound to the widget.");
+      const address = { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket };
+      await withTimeout(editData({ id: record.id, variable: record.variable, value: 0, ...address }));
       setStatus("Saved.");
     } catch (error) {
       resetEdit();
@@ -187,11 +190,12 @@ function RecordActions({ record }: { record: TDataRecord }) {
 Plan for the following:
 
 - **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise never settles.
-- **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To write to a single device, bind the variable on that device only.
+- **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To send to a single device, bind the variable on that device only.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `setToZero` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
 - **A refused `sendData` rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`, and `error` holds it. A resolved `sendData` means every request succeeded.
 - **A resolved `editData` or `deleteData` means the platform accepted the change.** When the platform refuses one, the dashboard shows an error toast and never replies: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, and call `reset()` when it fires.
-- **Read `error.message`.** The dashboard's reply, `{ status: false, message }`, is a plain object, not an `Error`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, and the same reply also reaches `useWidgetErrors`. A call made after the provider unmounted, a call still waiting when it unmounts, and a call whose records `postMessage` cannot copy reject with an `Error` instead, so `error` is typed `TError | Error`.
-- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` until realtime shows it, as `edit-delete-data.tsx` does.
+- **Read `error.message`.** The dashboard's reply, `{ status: false, message }`, is a plain object, not an `Error`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`. A call made after the provider unmounted, a call still waiting when it unmounts, and a call whose records `postMessage` cannot copy reject with an `Error` instead, so `error` is typed `TError | Error`.
+- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` while realtime still shows the value from before the save, as `edit-delete-data.tsx` does.
 
 #### Editing resources
 
@@ -321,7 +325,7 @@ Plan for the following:
 
 - **Nothing runs without a selected Analysis.** The dashboard ignores the call while `widget.analysis_run` is empty, so keep the control disabled until it is set.
 - **No reply comes back.** `runAnalysis` returns nothing, and the widget never learns whether the Analysis ran or failed. To show a result, have the Analysis write to a variable the widget reads, and watch `useRealtimeData` for the new record.
-- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and a `source` value can also rewrite or drop the item, so leave those keys out.
+- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, with a falsy `value` sent as `""`, so leave those keys out.
 - **Wrap it in an arrow function.** `onClick={runAnalysis}` would send the click event as the scope, which the browser cannot copy into a message, so the call throws.
 
 ### Calling an Analysis Endpoint
@@ -415,13 +419,13 @@ Plan for the following:
 
 ### i18n
 
-`useDictionary(options?)` returns `{ t, tSync, dictionary, isLoading, language, error }`, and it does not translate text:
+`useDictionary(options?)` returns `{ t, tSync, dictionary, isLoading, language, error }`. It translates through the class passed as the provider's `dictionary` prop, and returns the original text when there is no dictionary to ask:
 
-- `tSync(text)` returns `text` unchanged.
-- `t(text)` resolves to `text` unchanged, unless the class passed as the provider's `dictionary` prop creates instances with a `translate(text)` method. The `Dictionary` class from `@tago-io/sdk` has no such method, so with it `t` returns the input too.
+- `t(text)` resolves to what `translate(text)` returns on an instance of that class, created for the current `language`. Without a `dictionary` prop, before the language is known, or when the instance has no `translate` method or it throws, `t` resolves to the original text. `t` passes on whatever `translate` returns, so have it return the original text for a key it does not know. The `Dictionary` class from `@tago-io/sdk` has no `translate` method, so pass a class of your own.
+- `tSync(text)` returns the original text. Use `t` for translations.
 - `language` is `options.language` when you pass it, and otherwise the viewer's language from user information.
 
-To show labels in the viewer's language, keep your own translations and pick them by language:
+To show labels in the viewer's language without a dictionary class, keep your own translations and pick them by language:
 
 ```tsx
 const LABELS: Record<string, { save: string }> = {
@@ -504,22 +508,25 @@ Plan for the following:
 
 ## Scanning QR codes and barcodes
 
-Inside the TagoRUN mobile app, or a custom-branded app built on it, a widget can open the device scanner. This is the one platform capability the SDK does not wrap, so both the request and the reply are plain `postMessage`. The provider's own listener ignores them, so your listener runs alongside it.
+A widget can ask the dashboard to scan a QR code or a barcode. In the TagoRUN mobile app, or a custom-branded app built on it, the app's own scanner opens. In a browser, whether TagoRUN on the web, Admin, or a widget embedded in another page, the page around the widget opens a camera scanner. The SDK does not wrap the scanner, so both the request and the reply are plain `postMessage`. The provider's own listener ignores them, so your listener runs alongside it.
 
 ```tsx
+import { useEffect, useState } from "react";
+
 function ScanButton() {
-  const [code, setCode] = useState("");
+  const [label, setLabel] = useState("Scan barcode");
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      // Opened outside a dashboard, `window.parent` is this page, so skip its own request.
-      if (event.source === window) {
+      // Only the host page answers, and it is this widget's parent window. Opened on its own,
+      // `window.parent` is this page itself, so no message is a reply.
+      if (window.parent === window || event.source !== window.parent) {
         return;
       }
 
-      // The reply echoes the method you asked for, with the decoded string in `data`.
+      // The reply echoes the method you asked for. `data` holds the decoded string, or "" if the user canceled.
       if (event.data?.method === "barcode") {
-        setCode(event.data.data);
+        setLabel(event.data.data || "Canceled, scan again");
       }
     }
 
@@ -527,22 +534,24 @@ function ScanButton() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  // Ask for a scan.
+  // Ask for a scan from a click: in a browser, the request opens the camera.
   return (
     <button type="button" onClick={() => window.parent.postMessage({ method: "barcode" }, "*")}>
-      {code || "Scan barcode"}
+      {label}
     </button>
   );
 }
 ```
 
-`barcode` and `qrcode` open the same scanner, which reads QR codes and 1D barcodes alike. What changes is the reply: a widget that asks for `barcode` is answered with `barcode`.
+Either method reads QR codes and 1D barcodes. The TagoRUN app may shape its scan window to the method, a square for `qrcode` and a wide strip for `barcode`, so ask for the one that matches the code. The reply echoes the method: a widget that asks for `barcode` is answered with `barcode`.
 
 Plan for the following:
 
-- **It only works inside the mobile app.** Everywhere else, a mobile browser included, the request is dropped in silence. No reply, no error.
-- **The reply comes when the user is done, if at all.** It arrives only after the user has aimed and scanned, and no reply is documented for a scan the user cancels. Give the user a way to stop waiting instead of treating a slow reply as a failure.
-- **The reply carries no `key`.** The SDK matches data-operation replies by the `key` it sends, but a scan reply never carries one, so it cannot be matched to its request. Keep a single request in flight, and ignore a reply you are no longer waiting for.
+- **In a browser, the scanner needs a camera.** It also needs the user's permission to use it. Without either, the scanner shows an error and the user can only cancel. A page loaded inside another page's `<iframe>`, such as a widget embedded with the embed code from Admin, also needs `allow="camera"` on every `<iframe>` around it, and every page around it served over HTTPS.
+- **The reply comes when the user is done.** It arrives once the user scans a code or cancels, and a cancel answers with an empty `data`. An older host or app may never answer, so give the user a way to stop waiting instead of treating a slow reply as a failure.
+- **The reply carries no `key`.** The SDK matches data-operation replies by the `key` it sends, but a scan reply never carries one, so it cannot be matched to its request. Keep a single request in flight, since one sent while a scan is open may get no answer of its own, and ignore a reply you are no longer waiting for.
+
+The [scan-code.tsx](./examples/scan-code.tsx) example adds the rest: one request at a time, a way to stop waiting, and late replies ignored.
 
 ## Examples
 
@@ -553,7 +562,7 @@ The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy
 - **[read-resource.tsx](./examples/read-resource.tsx)** — Read platform resources (device list, users, entities)
 - **[edit-resource.tsx](./examples/edit-resource.tsx)** — Edit resource rows driven by the `editable` columns
 - **[read-widget-info.tsx](./examples/read-widget-info.tsx)** — Widget config, user info, and blueprint devices
-- **[scan-code.tsx](./examples/scan-code.tsx)** — Scan a QR code or barcode with the mobile app
+- **[scan-code.tsx](./examples/scan-code.tsx)** — Scan a QR code or barcode
 - **[edit-delete-data.tsx](./examples/edit-delete-data.tsx)**: Edit and delete the data records a widget receives
 - **[navigation.tsx](./examples/navigation.tsx)**: Open a dashboard or web page, or close a widget modal
 - **[run-analysis.tsx](./examples/run-analysis.tsx)**: Run the widget's Analysis and show the data it writes
