@@ -62,12 +62,16 @@ export class MessageBridge {
 
   /**
    * Post a request and settle with the reply that carries its key. Pass `key` to know it before the reply
-   * arrives; it defaults to a new ID.
+   * arrives; it defaults to a new ID. A key that is still waiting for its reply rejects without posting.
    */
   sendWithResponse(message: OutboundMessage, key: string = generateId()): Promise<TData> {
     // A destroyed bridge posts nothing, so the request would never be answered.
     if (this.destroyed) {
       return Promise.reject(new Error(BRIDGE_DESTROYED));
+    }
+    // The pool holds one entry per key, so a second request would take it over and the first would never settle.
+    if (this.pool.has(key)) {
+      return Promise.reject(new Error(`A request with key "${key}" is still waiting for its reply.`));
     }
 
     const messageWithKey = { ...message, key };
