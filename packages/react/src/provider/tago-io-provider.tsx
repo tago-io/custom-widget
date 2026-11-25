@@ -3,10 +3,8 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 
 import { StoreContext, type StoreContextValue } from "./store-context.js";
 
-// React runs a child's effects before its parent's, so a request a child makes in an effect when an <Activity> shows
-// the tree again, or on the StrictMode replay, would find the bridge still destroyed. Layout effects all run before
-// any effect. On the server neither runs, and React 18 warns about useLayoutEffect there.
-const useStoreLifecycleEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+// On the server neither effect runs, and React 18 warns about useLayoutEffect there.
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export interface TagoIOProviderProps extends StoreOptions {
   children: ReactNode;
@@ -20,11 +18,18 @@ export function TagoIOProvider({ children, dictionary, ...options }: TagoIOProvi
     storeRef.current = new WidgetStore(options);
   }
 
-  useStoreLifecycleEffect(() => {
+  // React runs a child's effects before its parent's, so when an <Activity> shows the tree again, or on the StrictMode
+  // replay, a request a child makes in an effect would find the bridge still destroyed. Layout effects all run before
+  // any effect, so the store starts there. It stops in an effect instead: a Suspense boundary that shows its fallback
+  // cleans up only layout effects, and stopping then would drop the hooks' subscriptions for good. initialize() does
+  // nothing on a store that is still running.
+  useClientLayoutEffect(() => {
+    storeRef.current?.initialize();
+  }, []);
+
+  useEffect(() => {
     const store = storeRef.current;
-    if (!store) return;
-    store.initialize();
-    return () => store.destroy();
+    return () => store?.destroy();
   }, []);
 
   const ctxRef = useRef<StoreContextValue>(undefined);
