@@ -79,9 +79,9 @@
       // Records from the last realtime message, newest first.
       let snapshot = [];
       // Changes TagoIO confirmed, applied on top of every snapshot: realtime may not bring
-      // the change back, and a later push can still carry the old record. Each entry lists the
-      // values realtime showed before the save (`stale`), and is dropped once realtime shows any
-      // other value: the saved one, or a newer change made somewhere else.
+      // the change back, and a later push can still carry the old record. Each entry keeps the
+      // value realtime showed when the save was sent, and is dropped as soon as realtime shows
+      // any other value: the saved one, or a newer change made somewhere else.
       const savedValues = new Map();
       const deletedIds = new Set();
       // Rows on screen by record id. A realtime push updates them in place, so it does not
@@ -116,12 +116,12 @@
       // autoFill makes one copy of an edit per device the variable is bound on. When a copy goes
       // to a device that does not hold the record, the platform refuses the call, and the copies
       // it handled before that one stay saved. The binding for the record's own device sends
-      // every copy to the device that holds it. Without one, autoFill fills the record as usual.
+      // every copy to the device that holds it. Returns null when no binding matches.
       function addressedTo(record) {
         const binding = bindings.find(function (item) {
           return item.variable === record.variable && item.origin.id === record.device;
         });
-        return binding ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket } : {};
+        return binding ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket } : null;
       }
 
       // The value realtime shows for a record, before any saved value is applied on top.
@@ -266,20 +266,23 @@
           return;
         }
 
+        const address = addressedTo(record);
+        if (!address) {
+          setRowStatus(row, "Not saved: this record's device is not bound to the widget.", true);
+          return;
+        }
+
         setBusy(row, true);
         setRowStatus(row, "Saving...", false);
         const before = realtimeValue(record.id);
-        const edit = Object.assign({ id: record.id, variable: record.variable, value: value }, addressedTo(record));
+        const edit = Object.assign({ id: record.id, variable: record.variable, value: value }, address);
         withTimeout(window.TagoIO.editData(edit))
           .then(function () {
-            // Realtime has not caught up while it shows the value from before this save, or the
-            // value of an earlier save that is still waiting for realtime.
-            const previous = savedValues.get(record.id);
-            const stale = previous ? previous.stale.concat([previous.value]) : [before];
-            if (stale.indexOf(realtimeValue(record.id)) !== -1) {
-              savedValues.set(record.id, { value: value, stale: stale });
+            // Show the saved value while realtime still shows the one from before the save.
+            // Otherwise realtime already shows this save, or a newer change made somewhere else.
+            if (realtimeValue(record.id) === before) {
+              savedValues.set(record.id, { value: value, staleValue: before });
             } else {
-              // Realtime already shows this save, or a newer change made somewhere else.
               savedValues.delete(record.id);
             }
             row.dirty = false;
@@ -340,12 +343,10 @@
           return new Date(b.time) - new Date(a.time);
         });
 
-        // Once realtime shows a value that is not stale, stop overriding the record.
+        // Once realtime moves a record off the value it had when the save was sent, stop
+        // overriding it.
         savedValues.forEach(function (saved, id) {
-          const record = snapshot.find(function (item) {
-            return item.id === id;
-          });
-          if (!record || saved.stale.indexOf(record.value) === -1) {
+          if (realtimeValue(id) !== saved.staleValue) {
             savedValues.delete(id);
           }
         });

@@ -178,18 +178,30 @@ Plan for the following:
 Edit and delete the records `onRealtime` delivers. `editData` takes each record's `id` and `variable` with the new `value`, addressed to the record's device. `deleteData` takes `"<recordId>:<deviceId>"` strings, one or an array, so one call can delete records from several devices.
 
 ```javascript
-// withTimeout is the helper from Sending Data. `bindings` is widget.display.variables, kept by
-// your onStart handler as in the autoFill example below: the SDK keeps only one handler.
+// withTimeout is the helper from Sending Data.
+let bindings = [];
+// The SDK keeps one onStart handler, so set bindings in yours.
+window.TagoIO.onStart(function (widget) {
+  bindings = widget.display.variables;
+});
+
 async function changeValue(record, value) {
-  // Address the edit to the device that holds the record (see below).
-  const binding = bindings.find(function (item) {
-    return item.variable === record.variable && item.origin.id === record.device;
-  });
-  const address = binding
-    ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket }
-    : {};
   try {
-    const edit = Object.assign({ id: record.id, variable: record.variable, value: value }, address);
+    // Address the edit to the device that holds the record (see below).
+    const binding = bindings.find(function (item) {
+      return item.variable === record.variable && item.origin.id === record.device;
+    });
+    if (!binding) {
+      throw new Error("The record's device is not bound to the widget.");
+    }
+    const edit = {
+      id: record.id,
+      variable: record.variable,
+      value: value,
+      device: binding.origin.id,
+      origin: binding.origin.id,
+      bucket: binding.origin.bucket,
+    };
     await withTimeout(window.TagoIO.editData(edit), 10000);
     console.log("Saved");
   } catch (error) {
@@ -212,11 +224,7 @@ To choose the device yourself, turn `autoFill` off. `sendData` and `editData` th
 ```javascript
 window.TagoIO.autoFill = false;
 
-let bindings = [];
-window.TagoIO.onStart(function (widget) {
-  bindings = widget.display.variables;
-});
-
+// bindings is set in onStart, as in the example above.
 function sendToDevice(deviceId, value) {
   const binding = bindings.find(function (item) {
     return item.variable === "temperature" && item.origin.id === deviceId;
@@ -236,7 +244,7 @@ function sendToDevice(deviceId, value) {
 Plan for the following:
 
 - **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one copy of the edit per device. `deleteData` ignores `autoFill`: each string names its device.
-- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `changeValue` does: every copy then goes to the device that holds the record.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `changeValue` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
 - **With `autoFill` off, every record needs `origin`.** A record without it makes the call throw before any Promise exists, so `.catch()` never sees the error: wrap the call in `try`/`catch`.
 - **A resolved promise means the platform accepted the change.** When the platform refuses an edit or a delete, the dashboard shows an error toast and never replies, so the promise stays pending: race it against a timeout.
 - **`"Failed to delete"` reaches only `onError`.** The dashboard sends it without the request key, so no promise settles for it.
