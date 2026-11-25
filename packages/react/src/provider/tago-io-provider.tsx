@@ -1,7 +1,12 @@
 import { type StoreOptions, WidgetStore } from "@tago-io/custom-widget-core";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 
 import { StoreContext, type StoreContextValue } from "./store-context.js";
+
+// React runs a child's effects before its parent's, so a request a child makes in an effect when an <Activity> shows
+// the tree again, or on the StrictMode replay, would find the bridge still destroyed. Layout effects all run before
+// any effect. On the server neither runs, and React 18 warns about useLayoutEffect there.
+const useStoreLifecycleEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export interface TagoIOProviderProps extends StoreOptions {
   children: ReactNode;
@@ -15,7 +20,7 @@ export function TagoIOProvider({ children, dictionary, ...options }: TagoIOProvi
     storeRef.current = new WidgetStore(options);
   }
 
-  useEffect(() => {
+  useStoreLifecycleEffect(() => {
     const store = storeRef.current;
     if (!store) return;
     store.initialize();

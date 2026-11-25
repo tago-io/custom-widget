@@ -1,8 +1,9 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
+import { Activity, type ReactNode, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useCallEndpoint } from "../../src/hooks/use-call-endpoint.js";
+import { useWidget } from "../../src/hooks/use-widget.js";
 import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
 
 const endpointID = "65f1c0a2b3d4e5f6a7b8c9d0";
@@ -152,5 +153,59 @@ describe("useCallEndpoint under StrictMode", () => {
     await expect(outcome).resolves.toEqual(failure);
     expect(result.current.error).toBeNull();
     expect(result.current.isCalling).toBe(false);
+  });
+});
+
+describe("useCallEndpoint inside an <Activity> around the provider", () => {
+  beforeEach(() => {
+    postMessageSpy = vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("posts a call a child effect makes when the Activity shows the provider again", async () => {
+    const outcomes: unknown[] = [];
+    function Loader() {
+      const { isLoading } = useWidget();
+      const { callEndpoint } = useCallEndpoint();
+      useEffect(() => {
+        if (isLoading) return;
+        callEndpoint(endpointID).then(
+          (result) => outcomes.push(result),
+          (error: unknown) => outcomes.push(error)
+        );
+      }, [isLoading, callEndpoint]);
+      return null;
+    }
+    const tree = (mode: "visible" | "hidden") => (
+      <Activity mode={mode}>
+        <TagoIOProvider>
+          <Loader />
+        </TagoIOProvider>
+      </Activity>
+    );
+
+    const view = render(tree("visible"));
+    act(() => {
+      dispatch({ widget: { id: "w1", dashboard: "d1", display: { variables: [] } }, capabilities: ["call-endpoint"] });
+    });
+    await act(async () => {
+      answer(callKeys()[0], 200, { load: 1 });
+    });
+
+    view.rerender(tree("hidden"));
+    view.rerender(tree("visible"));
+    await act(async () => {
+      answer(callKeys()[1], 200, { load: 2 });
+    });
+
+    expect(callKeys()).toHaveLength(2);
+    expect(outcomes).toEqual([
+      { status: 200, headers: {}, body: { load: 1 } },
+      { status: 200, headers: {}, body: { load: 2 } },
+    ]);
   });
 });
