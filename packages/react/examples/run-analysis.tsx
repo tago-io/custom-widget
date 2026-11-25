@@ -76,7 +76,7 @@ function AnalysisRunner() {
   function handleRun() {
     // The Analysis receives this array as its scope. Send plain objects in an array: a string
     // does not arrive as sent, and the dashboard strips the keys source, displayValue and
-    // orderingValue (a source value can also rewrite or drop the item).
+    // orderingValue (source: "entity" also rewrites the item).
     // device tells the Analysis which device the widget shows. On a blueprint dashboard it is
     // the selected device, and null while none is selected.
     const scope = [{ device: variables[0]?.origin.id || null, requested_at: new Date().toISOString() }];
