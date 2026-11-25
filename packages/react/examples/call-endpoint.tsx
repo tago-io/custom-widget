@@ -54,29 +54,29 @@ function SetpointForm() {
 
   async function save() {
     setAnswer(null);
-    try {
-      // The Endpoint checks the value, so the field's text goes as typed, inside an object
-      // sent as JSON. A string body would go as text/plain, and the Analysis would get scope
-      // as nil.
-      const result = await callEndpoint<SetpointAnswer>(ENDPOINT_ID, {
-        method: "POST",
-        path: "/setpoint",
-        body: { setpoint },
-      });
-      // Every HTTP status except a redirect resolves, 4xx and 5xx included, so check it before
-      // reading the body.
-      if (result.status === 422) {
-        setAnswer({ text: result.body?.errors?.setpoint ?? "Invalid setpoint.", failed: true });
-      } else if (result.status >= 400) {
-        // Such as 403 "Sign in first." outside TagoRUN, 404 without Call Endpoint, or 429 when
-        // the profile's allowance ran out.
-        setAnswer({ text: result.body?.error ?? `Request failed (${result.status}).`, failed: true });
-      } else {
-        setAnswer({ text: `Saved: ${result.body.setpoint} C`, failed: false });
-      }
-    } catch {
-      // The hook rethrows a rejection and keeps it in `error`, so there is nothing more to do
-      // here. It never reaches useWidgetErrors.
+    // The Endpoint checks the value, so the field's text goes as typed, inside an object
+    // sent as JSON. A string body would go as text/plain, and the Analysis would get scope
+    // as nil.
+    const result = await callEndpoint<SetpointAnswer>(ENDPOINT_ID, {
+      method: "POST",
+      path: "/setpoint",
+      body: { setpoint },
+    }).catch(() => null);
+    // The hook rethrows a rejection and keeps it in `error`, which the status line shows, and it
+    // never reaches useWidgetErrors. The catch covers only the call, so an error in the code
+    // below is not mistaken for a call that did not complete.
+    if (!result) return;
+
+    // Every HTTP status except a redirect resolves, 4xx and 5xx included, so check it before
+    // reading the body.
+    if (result.status === 422) {
+      setAnswer({ text: result.body?.errors?.setpoint ?? "Invalid setpoint.", failed: true });
+    } else if (result.status >= 400) {
+      // Such as 403 "Sign in first." outside TagoRUN, 404 without Call Endpoint, or 429 when
+      // the profile's allowance ran out.
+      setAnswer({ text: result.body?.error ?? `Request failed (${result.status}).`, failed: true });
+    } else {
+      setAnswer({ text: `Saved: ${result.body.setpoint} C`, failed: false });
     }
   }
 

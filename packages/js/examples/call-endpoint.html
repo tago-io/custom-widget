@@ -99,26 +99,30 @@
           path: "/setpoint",
           body: { setpoint: form.elements.setpoint.value },
         })
-          .then(function (answer) {
-            // Every HTTP status except a redirect resolves, 4xx and 5xx included, so check it
-            // before reading the body.
-            if (answer.status === 422) {
-              const field = answer.body && answer.body.errors && answer.body.errors.setpoint;
-              setFeedback(field || "Invalid setpoint.", true);
-            } else if (answer.status >= 400) {
-              // Such as 403 "Sign in first." outside TagoRUN, 404 without Call Endpoint, or 429
-              // when the profile's allowance ran out.
-              const reason = answer.body && answer.body.error;
-              setFeedback(reason || "Request failed (" + answer.status + ").", true);
-            } else {
-              setFeedback("Saved: " + answer.body.setpoint + " C", false);
+          .then(
+            function (answer) {
+              // Every HTTP status except a redirect resolves, 4xx and 5xx included, so check it
+              // before reading the body.
+              if (answer.status === 422) {
+                const field = answer.body && answer.body.errors && answer.body.errors.setpoint;
+                setFeedback(field || "Invalid setpoint.", true);
+              } else if (answer.status >= 400) {
+                // Such as 403 "Sign in first." outside TagoRUN, 404 without Call Endpoint, or 429
+                // when the profile's allowance ran out.
+                const reason = answer.body && answer.body.error;
+                setFeedback(reason || "Request failed (" + answer.status + ").", true);
+              } else {
+                setFeedback("Saved: " + answer.body.setpoint + " C", false);
+              }
+            },
+            // The second handler gets only the call's rejection, so an error in the first one is
+            // not mistaken for a call that did not complete.
+            function (error) {
+              // The call did not complete. The rejection is a plain { code, message } object,
+              // and it never reaches onError.
+              setFeedback("Not completed (" + error.code + "): " + error.message, true);
             }
-          })
-          .catch(function (error) {
-            // The call did not complete. The rejection is a plain { code, message } object,
-            // and it never reaches onError.
-            setFeedback("Not completed (" + error.code + "): " + error.message, true);
-          })
+          )
           .finally(function () {
             saveButton.disabled = false;
           });

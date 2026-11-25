@@ -327,25 +327,27 @@ window.TagoIO.onStart(function () {
 form.addEventListener("submit", async function (event) {
   event.preventDefault();
   form.querySelector("button").disabled = true;
+  let answer;
   try {
-    const answer = await window.TagoIO.callEndpoint(ENDPOINT_ID, {
+    answer = await window.TagoIO.callEndpoint(ENDPOINT_ID, {
       method: "POST",
       path: "/setpoint",
       body: { setpoint: form.elements.setpoint.value },
     });
-    // Every HTTP status except a redirect resolves, so check it before reading the body.
-    if (answer.status === 422) {
-      feedback.textContent = (answer.body && answer.body.errors && answer.body.errors.setpoint) || "Invalid setpoint.";
-    } else if (answer.status >= 400) {
-      feedback.textContent = (answer.body && answer.body.error) || "Request failed (" + answer.status + ").";
-    } else {
-      feedback.textContent = "Saved: " + answer.body.setpoint + " C";
-    }
   } catch (error) {
     // The call did not complete: error is a plain { code, message } object.
     feedback.textContent = "Not completed (" + error.code + "): " + error.message;
+    return;
   } finally {
     form.querySelector("button").disabled = false;
+  }
+  // Every HTTP status except a redirect resolves, so check it before reading the body.
+  if (answer.status === 422) {
+    feedback.textContent = (answer.body && answer.body.errors && answer.body.errors.setpoint) || "Invalid setpoint.";
+  } else if (answer.status >= 400) {
+    feedback.textContent = (answer.body && answer.body.error) || "Request failed (" + answer.status + ").";
+  } else {
+    feedback.textContent = "Saved: " + answer.body.setpoint + " C";
   }
 });
 ```

@@ -355,22 +355,20 @@ function SetpointForm() {
 
   async function save() {
     setFeedback("");
-    try {
-      const answer = await callEndpoint<SetpointAnswer>(ENDPOINT_ID, {
-        method: "POST",
-        path: "/setpoint",
-        body: { setpoint },
-      });
-      // Every HTTP status except a redirect resolves, so check it before reading the body.
-      if (answer.status === 422) {
-        setFeedback(answer.body?.errors?.setpoint ?? "Invalid setpoint.");
-      } else if (answer.status >= 400) {
-        setFeedback(answer.body?.error ?? `Request failed (${answer.status}).`);
-      } else {
-        setFeedback(`Saved: ${answer.body.setpoint} C`);
-      }
-    } catch {
-      // The hook rethrows: the call did not complete, and `error` holds { code, message }.
+    const answer = await callEndpoint<SetpointAnswer>(ENDPOINT_ID, {
+      method: "POST",
+      path: "/setpoint",
+      body: { setpoint },
+    }).catch(() => null);
+    // The hook rethrows: the call did not complete, and `error` holds { code, message }.
+    if (!answer) return;
+    // Every HTTP status except a redirect resolves, so check it before reading the body.
+    if (answer.status === 422) {
+      setFeedback(answer.body?.errors?.setpoint ?? "Invalid setpoint.");
+    } else if (answer.status >= 400) {
+      setFeedback(answer.body?.error ?? `Request failed (${answer.status}).`);
+    } else {
+      setFeedback(`Saved: ${answer.body.setpoint} C`);
     }
   }
 
