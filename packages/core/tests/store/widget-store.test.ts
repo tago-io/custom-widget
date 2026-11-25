@@ -589,6 +589,15 @@ describe("WidgetStore", () => {
       expect((lastSent().payload as Record<string, unknown>).body).toEqual({ when: "2026-10-20T12:00:00.000Z" });
     });
 
+    it("names the body that JSON writes as nothing, posting nothing", async () => {
+      hostReady();
+
+      await expect(
+        store.callEndpoint(endpointID, { method: "POST", body: { toJSON: () => undefined } })
+      ).rejects.toEqual({ code: "bad_request", message: expect.stringContaining("The body, a value of type Object,") });
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+    });
+
     it("refuses a body JSON cannot encode with bad_request, posting nothing", async () => {
       hostReady();
 

@@ -298,7 +298,7 @@
   function encodeEndpointBody(body) {
     if (body === void 0 || typeof body === "string") return body;
     const json = JSON.stringify(body, refuseValuesJsonEmpties);
-    if (json === void 0) throw new TypeError(`A ${typeof body} is not a JSON value.`);
+    if (json === void 0) throw new TypeError(`The body, ${describeValue(body)}, is not a JSON value.`);
     const encoded = JSON.parse(json);
     if (typeof encoded === "string") {
       throw new TypeError(

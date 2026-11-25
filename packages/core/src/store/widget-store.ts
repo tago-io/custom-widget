@@ -122,7 +122,7 @@ function refuseValuesJsonEmpties(_key: string, value: unknown): unknown {
 function encodeEndpointBody(body: unknown): unknown {
   if (body === undefined || typeof body === "string") return body;
   const json = JSON.stringify(body, refuseValuesJsonEmpties);
-  if (json === undefined) throw new TypeError(`A ${typeof body} is not a JSON value.`);
+  if (json === undefined) throw new TypeError(`The body, ${describeValue(body)}, is not a JSON value.`);
   const encoded = JSON.parse(json) as unknown;
   if (typeof encoded === "string") {
     throw new TypeError(
