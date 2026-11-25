@@ -179,10 +179,26 @@ Edit and delete the records `onRealtime` delivers. `editData` takes each record'
 
 ```javascript
 // withTimeout is the helper from Sending Data.
+let bindings = [];
+window.TagoIO.onStart(function (widget) {
+  bindings = widget.display.variables;
+});
+
 async function changeValue(record, value) {
+  // Address the edit to the device that holds the record (see below).
+  const binding = bindings.find(function (item) {
+    return item.variable === record.variable && item.origin.id === record.device;
+  });
   try {
-    // autoFill adds device and origin from the widget's binding for record.variable.
-    await withTimeout(window.TagoIO.editData({ id: record.id, variable: record.variable, value: value }), 10000);
+    const edit = {
+      id: record.id,
+      variable: record.variable,
+      value: value,
+      device: record.device,
+      origin: record.device,
+      bucket: binding ? binding.origin.bucket : undefined,
+    };
+    await withTimeout(window.TagoIO.editData(edit), 10000);
     console.log("Saved");
   } catch (error) {
     console.error("Not saved:", error.message);
@@ -227,7 +243,8 @@ function sendToDevice(deviceId, value) {
 
 Plan for the following:
 
-- **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one edit per device. `deleteData` ignores `autoFill`: each string names its device.
+- **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one copy of the edit per device. `deleteData` ignores `autoFill`: each string names its device.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the record's own `device` and `origin`, and the `bucket` of the binding for that device, as `changeValue` does: every copy then goes to the device that holds the record.
 - **With `autoFill` off, every record needs `origin`.** A record without it makes the call throw before any Promise exists, so `.catch()` never sees the error: wrap the call in `try`/`catch`.
 - **A resolved promise means the platform accepted the change.** When the platform refuses an edit or a delete, the dashboard shows an error toast and never replies, so the promise stays pending: race it against a timeout.
 - **`"Failed to delete"` reaches only `onError`.** The dashboard sends it without the request key, so no promise settles for it.

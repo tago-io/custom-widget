@@ -164,6 +164,7 @@ function RecordRow({
   onSaved: (value: TValue) => void;
   onDeleted: () => void;
 }) {
+  const { variables } = useWidget();
   const { editData } = useEditData();
   const { deleteData } = useDeleteData();
   // null while the field shows the record's own value, so realtime updates reach it.
@@ -186,8 +187,13 @@ function RecordRow({
     setBusy(true);
     setStatus({ text: "Saving...", failed: false });
     try {
-      // useEditData adds `device` and `origin` from the widget's binding for this variable.
-      await withTimeout(editData({ id: record.id, variable: record.variable, value }));
+      // useEditData makes one copy of an edit per device the variable is bound on. When a copy
+      // goes to a device that does not hold the record, the platform refuses the call, and the
+      // copies it handled before that one stay saved. The record's own device, origin and bucket
+      // send every copy to the device that holds it.
+      const binding = variables.find((item) => item.variable === record.variable && item.origin.id === record.device);
+      const address = { device: record.device, origin: record.device, bucket: binding?.origin.bucket };
+      await withTimeout(editData({ id: record.id, variable: record.variable, value, ...address }));
       onSaved(value);
       setDraft(null);
       setStatus({ text: "Saved.", failed: false });

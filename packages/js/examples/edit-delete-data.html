@@ -74,6 +74,8 @@
       // promise stays pending, so stop waiting after a while.
       const REPLY_TIMEOUT_MS = 10000;
 
+      // The widget's bindings: each variable it reads and the device it reads it from.
+      let bindings = [];
       // Records from the last realtime message, newest first.
       let snapshot = [];
       // Changes TagoIO confirmed, applied on top of every snapshot: realtime may not bring
@@ -109,6 +111,17 @@
           return trimmed === "true" ? true : trimmed === "false" ? false : null;
         }
         return text;
+      }
+
+      // autoFill makes one copy of an edit per device the variable is bound on. When a copy goes
+      // to a device that does not hold the record, the platform refuses the call, and the copies
+      // it handled before that one stay saved. The record's own device, origin and bucket send
+      // every copy to the device that holds it.
+      function addressedTo(record) {
+        const binding = bindings.find(function (item) {
+          return item.variable === record.variable && item.origin.id === record.device;
+        });
+        return { device: record.device, origin: record.device, bucket: binding ? binding.origin.bucket : undefined };
       }
 
       function createButton(label, type, onClick) {
@@ -247,9 +260,8 @@
 
         setBusy(row, true);
         setRowStatus(row, "Saving...", false);
-        // autoFill (on by default) adds `device` and `origin` from the widget's binding for
-        // this variable.
-        withTimeout(window.TagoIO.editData({ id: record.id, variable: record.variable, value: value }))
+        const edit = Object.assign({ id: record.id, variable: record.variable, value: value }, addressedTo(record));
+        withTimeout(window.TagoIO.editData(edit))
           .then(function () {
             const shown = snapshot.find(function (item) {
               return item.id === record.id;
@@ -298,6 +310,7 @@
 
       window.TagoIO.onStart(function (widget) {
         console.log("Edit and Delete Data Widget started:", widget);
+        bindings = widget.display.variables || [];
         document.getElementById("status").textContent = "Waiting for data...";
       });
 

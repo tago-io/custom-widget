@@ -142,14 +142,17 @@ function SendButton() {
 }
 
 function RecordActions({ record }: { record: TDataRecord }) {
+  const { variables } = useWidget();
   const { editData, isEditing, reset: resetEdit } = useEditData();
   const { deleteData, isDeleting, reset: resetDelete } = useDeleteData();
   const [status, setStatus] = useState("");
 
   async function setToZero() {
     try {
-      // useEditData adds device and origin from the widget's binding for record.variable.
-      await withTimeout(editData({ id: record.id, variable: record.variable, value: 0 }));
+      // Address the edit to the device that holds the record (see below).
+      const binding = variables.find((item) => item.variable === record.variable && item.origin.id === record.device);
+      const address = { device: record.device, origin: record.device, bucket: binding?.origin.bucket };
+      await withTimeout(editData({ id: record.id, variable: record.variable, value: 0, ...address }));
       setStatus("Saved.");
     } catch (error) {
       resetEdit();
@@ -184,7 +187,8 @@ function RecordActions({ record }: { record: TDataRecord }) {
 Plan for the following:
 
 - **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise never settles.
-- **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To write to a single device, bind the variable on that device only.
+- **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To send to a single device, bind the variable on that device only.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the record's own `device` and `origin`, and the `bucket` of the binding for that device, as `setToZero` does: every copy then goes to the device that holds the record.
 - **A refused `sendData` rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`, and `error` holds it. A resolved `sendData` means every request succeeded.
 - **A resolved `editData` or `deleteData` means the platform accepted the change.** When the platform refuses one, the dashboard shows an error toast and never replies: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, and call `reset()` when it fires.
 - **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`.
