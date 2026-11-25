@@ -21,8 +21,8 @@ import {
 import React, { useEffect, useRef, useState } from "react";
 
 type TValue = NonNullable<TDataRecord["value"]>;
-// staleValue is what realtime showed for the record when the save was confirmed.
-type TSavedValue = { value: TValue; staleValue: TDataRecord["value"] };
+// `stale` lists the values realtime showed for the record before the save.
+type TSavedValue = { value: TValue; stale: TDataRecord["value"][] };
 
 // When the platform API refuses an edit or a delete, the host never replies and the
 // promise stays pending, so stop waiting after a while.
@@ -72,20 +72,20 @@ function RecordEditor() {
   const { lastError, clearErrors } = useWidgetErrors();
   // Changes TagoIO confirmed, applied on top of `records`: realtime may not bring the
   // change back, and a later push can still carry the old record. An entry is dropped once
-  // realtime shows any value other than its staleValue: the saved one, or a newer change
-  // made somewhere else.
+  // realtime shows a value that is not stale: the saved one, or a newer change made
+  // somewhere else.
   const [savedValues, setSavedValues] = useState<Map<string, TSavedValue>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   // The records of the latest render, read when a reply comes back.
   const latestRecords = useRef(records);
 
-  // Once realtime moves a record off the value it had before the save, stop overriding it.
+  // Once realtime shows a value that is not stale, stop overriding the record.
   useEffect(() => {
     latestRecords.current = records;
     const current = new Map(records.map((record) => [record.id, record.value]));
     setSavedValues((saved) => {
-      const pending = [...saved].filter(([id, entry]) => current.has(id) && current.get(id) === entry.staleValue);
+      const pending = [...saved].filter(([id, entry]) => current.has(id) && entry.stale.includes(current.get(id)));
       return pending.length === saved.size ? saved : new Map(pending);
     });
     setDeletedIds((deleted) => {
@@ -132,14 +132,19 @@ function RecordEditor() {
         <RecordRow
           key={record.id}
           record={record}
-          onSaved={(value) => {
+          realtimeValue={records.find((item) => item.id === record.id)?.value}
+          onSaved={(value, before) => {
             const shown = latestRecords.current.find((item) => item.id === record.id);
             setSavedValues((saved) => {
+              // Realtime has not caught up while it shows the value from before this save, or
+              // the value of an earlier save that is still waiting for realtime.
+              const previous = saved.get(record.id);
+              const stale = previous ? [...previous.stale, previous.value] : [before];
               const next = new Map(saved);
-              // Realtime may have shown the change before the reply came.
-              if (shown && shown.value !== value) {
-                next.set(record.id, { value, staleValue: shown.value });
+              if (shown && stale.includes(shown.value)) {
+                next.set(record.id, { value, stale });
               } else {
+                // Realtime already shows this save, or a newer change made somewhere else.
                 next.delete(record.id);
               }
               return next;
@@ -157,11 +162,14 @@ function RecordEditor() {
 
 function RecordRow({
   record,
+  realtimeValue,
   onSaved,
   onDeleted,
 }: {
   record: TDataRecord;
-  onSaved: (value: TValue) => void;
+  // The value realtime shows for the record, before any saved value is applied on top.
+  realtimeValue: TDataRecord["value"];
+  onSaved: (value: TValue, before: TDataRecord["value"]) => void;
   onDeleted: () => void;
 }) {
   const { variables } = useWidget();
@@ -186,15 +194,19 @@ function RecordRow({
 
     setBusy(true);
     setStatus({ text: "Saving...", failed: false });
+    const before = realtimeValue;
     try {
       // useEditData makes one copy of an edit per device the variable is bound on. When a copy
       // goes to a device that does not hold the record, the platform refuses the call, and the
-      // copies it handled before that one stay saved. The record's own device, origin and bucket
-      // send every copy to the device that holds it.
+      // copies it handled before that one stay saved. The binding for the record's own device
+      // sends every copy to the device that holds it. Without one, the hook fills the record as
+      // usual.
       const binding = variables.find((item) => item.variable === record.variable && item.origin.id === record.device);
-      const address = { device: record.device, origin: record.device, bucket: binding?.origin.bucket };
+      const address = binding
+        ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket }
+        : {};
       await withTimeout(editData({ id: record.id, variable: record.variable, value, ...address }));
-      onSaved(value);
+      onSaved(value, before);
       setDraft(null);
       setStatus({ text: "Saved.", failed: false });
     } catch (error) {

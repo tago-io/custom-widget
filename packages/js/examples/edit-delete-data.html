@@ -79,9 +79,9 @@
       // Records from the last realtime message, newest first.
       let snapshot = [];
       // Changes TagoIO confirmed, applied on top of every snapshot: realtime may not bring
-      // the change back, and a later push can still carry the old record. Each entry keeps the
-      // value realtime showed when the save was confirmed, and is dropped once realtime shows
-      // any other value: the saved one, or a newer change made somewhere else.
+      // the change back, and a later push can still carry the old record. Each entry lists the
+      // values realtime showed before the save (`stale`), and is dropped once realtime shows any
+      // other value: the saved one, or a newer change made somewhere else.
       const savedValues = new Map();
       const deletedIds = new Set();
       // Rows on screen by record id. A realtime push updates them in place, so it does not
@@ -115,13 +115,21 @@
 
       // autoFill makes one copy of an edit per device the variable is bound on. When a copy goes
       // to a device that does not hold the record, the platform refuses the call, and the copies
-      // it handled before that one stay saved. The record's own device, origin and bucket send
-      // every copy to the device that holds it.
+      // it handled before that one stay saved. The binding for the record's own device sends
+      // every copy to the device that holds it. Without one, autoFill fills the record as usual.
       function addressedTo(record) {
         const binding = bindings.find(function (item) {
           return item.variable === record.variable && item.origin.id === record.device;
         });
-        return { device: record.device, origin: record.device, bucket: binding ? binding.origin.bucket : undefined };
+        return binding ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket } : {};
+      }
+
+      // The value realtime shows for a record, before any saved value is applied on top.
+      function realtimeValue(id) {
+        const record = snapshot.find(function (item) {
+          return item.id === id;
+        });
+        return record ? record.value : undefined;
       }
 
       function createButton(label, type, onClick) {
@@ -260,16 +268,18 @@
 
         setBusy(row, true);
         setRowStatus(row, "Saving...", false);
+        const before = realtimeValue(record.id);
         const edit = Object.assign({ id: record.id, variable: record.variable, value: value }, addressedTo(record));
         withTimeout(window.TagoIO.editData(edit))
           .then(function () {
-            const shown = snapshot.find(function (item) {
-              return item.id === record.id;
-            });
-            // Realtime may have shown the change before the reply came.
-            if (shown && shown.value !== value) {
-              savedValues.set(record.id, { value: value, staleValue: shown.value });
+            // Realtime has not caught up while it shows the value from before this save, or the
+            // value of an earlier save that is still waiting for realtime.
+            const previous = savedValues.get(record.id);
+            const stale = previous ? previous.stale.concat([previous.value]) : [before];
+            if (stale.indexOf(realtimeValue(record.id)) !== -1) {
+              savedValues.set(record.id, { value: value, stale: stale });
             } else {
+              // Realtime already shows this save, or a newer change made somewhere else.
               savedValues.delete(record.id);
             }
             row.dirty = false;
@@ -330,12 +340,12 @@
           return new Date(b.time) - new Date(a.time);
         });
 
-        // Once realtime moves a record off the value it had before the save, stop overriding it.
+        // Once realtime shows a value that is not stale, stop overriding the record.
         savedValues.forEach(function (saved, id) {
           const record = snapshot.find(function (item) {
             return item.id === id;
           });
-          if (!record || record.value !== saved.staleValue) {
+          if (!record || saved.stale.indexOf(record.value) === -1) {
             savedValues.delete(id);
           }
         });

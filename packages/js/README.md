@@ -86,13 +86,13 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 > **Note**: These operations only work with data that is within the Custom Widget's configured settings and permissions.
 
-| Function                                  | Direction | Description                                                                                                                              |
-| ----------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.sendData(data, callback)`         | You send  | Send one record or an array to the devices bound to the widget ([Sending Data](#sending-data))                                           |
-| `TagoIO.editData(data, callback)`         | You send  | Change stored records: each needs its `id`, its `variable` and the new `value` ([Editing and deleting data](#editing-and-deleting-data)) |
-| `TagoIO.deleteData(data, callback)`       | You send  | Delete stored records, given as `"<recordId>:<deviceId>"` strings ([Editing and deleting data](#editing-and-deleting-data))              |
-| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resource rows (devices, users, entities)                                                                                   |
-| `TagoIO.refreshResources()`               | You send  | Ask the dashboard to load the widget's resource rows again. No reply: any rows it loads arrive through `onRealtime`                      |
+| Function                                  | Direction | Description                                                                                                                                                   |
+| ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TagoIO.sendData(data, callback)`         | You send  | Send one record or an array to the devices bound to the widget ([Sending Data](#sending-data))                                                                |
+| `TagoIO.editData(data, callback)`         | You send  | Change stored records: each needs its `id`, its `variable`, the new `value` and the record's device ([Editing and deleting data](#editing-and-deleting-data)) |
+| `TagoIO.deleteData(data, callback)`       | You send  | Delete stored records, given as `"<recordId>:<deviceId>"` strings ([Editing and deleting data](#editing-and-deleting-data))                                   |
+| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resource rows (devices, users, entities)                                                                                                        |
+| `TagoIO.refreshResources()`               | You send  | Ask the dashboard to load the widget's resource rows again. No reply: any rows it loads arrive through `onRealtime`                                           |
 
 `sendData`, `editData`, `deleteData` and `editResourceData` return a Promise, or `undefined` when you pass a `callback`, which then receives `(data)` on success and `(null, error)` on failure.
 
@@ -160,7 +160,7 @@ async function sendSensorData() {
     console.log("Data stored:", reply.result);
   } catch (error) {
     // A refused write rejects with the dashboard's reply, { status: false, message }.
-    console.error("Not stored:", error.message);
+    console.error("Not confirmed:", error.message);
   }
 }
 ```
@@ -175,29 +175,21 @@ Plan for the following:
 
 ## Editing and deleting data
 
-Edit and delete the records `onRealtime` delivers. `editData` takes each record's `id` and `variable` with the new `value`. `deleteData` takes `"<recordId>:<deviceId>"` strings, one or an array, so one call can delete records from several devices.
+Edit and delete the records `onRealtime` delivers. `editData` takes each record's `id` and `variable` with the new `value`, addressed to the record's device. `deleteData` takes `"<recordId>:<deviceId>"` strings, one or an array, so one call can delete records from several devices.
 
 ```javascript
-// withTimeout is the helper from Sending Data.
-let bindings = [];
-window.TagoIO.onStart(function (widget) {
-  bindings = widget.display.variables;
-});
-
+// withTimeout is the helper from Sending Data. `bindings` is widget.display.variables, kept by
+// your onStart handler as in the autoFill example below: the SDK keeps only one handler.
 async function changeValue(record, value) {
   // Address the edit to the device that holds the record (see below).
   const binding = bindings.find(function (item) {
     return item.variable === record.variable && item.origin.id === record.device;
   });
+  const address = binding
+    ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket }
+    : {};
   try {
-    const edit = {
-      id: record.id,
-      variable: record.variable,
-      value: value,
-      device: record.device,
-      origin: record.device,
-      bucket: binding ? binding.origin.bucket : undefined,
-    };
+    const edit = Object.assign({ id: record.id, variable: record.variable, value: value }, address);
     await withTimeout(window.TagoIO.editData(edit), 10000);
     console.log("Saved");
   } catch (error) {
@@ -244,11 +236,11 @@ function sendToDevice(deviceId, value) {
 Plan for the following:
 
 - **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one copy of the edit per device. `deleteData` ignores `autoFill`: each string names its device.
-- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the record's own `device` and `origin`, and the `bucket` of the binding for that device, as `changeValue` does: every copy then goes to the device that holds the record.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `changeValue` does: every copy then goes to the device that holds the record.
 - **With `autoFill` off, every record needs `origin`.** A record without it makes the call throw before any Promise exists, so `.catch()` never sees the error: wrap the call in `try`/`catch`.
 - **A resolved promise means the platform accepted the change.** When the platform refuses an edit or a delete, the dashboard shows an error toast and never replies, so the promise stays pending: race it against a timeout.
 - **`"Failed to delete"` reaches only `onError`.** The dashboard sends it without the request key, so no promise settles for it.
-- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of each new snapshot until realtime shows it, as `edit-delete-data.html` does.
+- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of each new snapshot while realtime still shows the value from before the save, as `edit-delete-data.html` does.
 
 ## Editing Resources
 
@@ -295,7 +287,7 @@ Plan for the following:
 
 - **Nothing runs without a selected Analysis.** The dashboard ignores the call while `widget.analysis_run` is empty, so keep the control disabled until it is set.
 - **No reply comes back.** `runAnalysis` returns nothing, and the widget never learns whether the Analysis ran or failed. To show a result, have the Analysis write to a variable the widget reads, and watch `onRealtime` for the new record.
-- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, so leave those keys out.
+- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, with a falsy `value` sent as `""`, so leave those keys out.
 
 ## Blueprint Devices
 

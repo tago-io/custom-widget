@@ -105,7 +105,7 @@ Each function returns a Promise that settles when the dashboard answers. The bus
 What each function takes:
 
 - `sendData(records)`: one record or an array, such as `{ variable: "temperature", value: 25.5, unit: "°C" }`.
-- `editData(records)`: each record's `id` and `variable` with the new `value`, such as `{ id: record.id, variable: record.variable, value: 30 }`.
+- `editData(records)`: each record's `id` and `variable` with the new `value`, such as `{ id: record.id, variable: record.variable, value: 30 }`, addressed to the record's device as `setToZero` does below.
 - `deleteData(records)`: records with `id` and `device`, such as the ones in `useRealtimeData().records`. The hook sends each one as a `"<recordId>:<deviceId>"` string.
 - `editResourceData(rows)`: see [Editing resources](#editing-resources).
 
@@ -130,7 +130,7 @@ function SendButton() {
     } catch (error) {
       reset(); // isSending stays true while no reply comes
       // A refused write rejects with the dashboard's reply, { status: false, message }.
-      setStatus(`Not stored: ${(error as { message?: string }).message}`);
+      setStatus(`Not confirmed: ${(error as { message?: string }).message}`);
     }
   }
 
@@ -151,7 +151,9 @@ function RecordActions({ record }: { record: TDataRecord }) {
     try {
       // Address the edit to the device that holds the record (see below).
       const binding = variables.find((item) => item.variable === record.variable && item.origin.id === record.device);
-      const address = { device: record.device, origin: record.device, bucket: binding?.origin.bucket };
+      const address = binding
+        ? { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket }
+        : {};
       await withTimeout(editData({ id: record.id, variable: record.variable, value: 0, ...address }));
       setStatus("Saved.");
     } catch (error) {
@@ -188,11 +190,11 @@ Plan for the following:
 
 - **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise never settles.
 - **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To send to a single device, bind the variable on that device only.
-- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the record's own `device` and `origin`, and the `bucket` of the binding for that device, as `setToZero` does: every copy then goes to the device that holds the record.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `setToZero` does: every copy then goes to the device that holds the record.
 - **A refused `sendData` rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`, and `error` holds it. A resolved `sendData` means every request succeeded.
 - **A resolved `editData` or `deleteData` means the platform accepted the change.** When the platform refuses one, the dashboard shows an error toast and never replies: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, and call `reset()` when it fires.
 - **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`.
-- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` until realtime shows it, as `edit-delete-data.tsx` does.
+- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` while realtime still shows the value from before the save, as `edit-delete-data.tsx` does.
 
 #### Editing resources
 
@@ -322,14 +324,14 @@ Plan for the following:
 
 - **Nothing runs without a selected Analysis.** The dashboard ignores the call while `widget.analysis_run` is empty, so keep the control disabled until it is set.
 - **No reply comes back.** `runAnalysis` returns nothing, and the widget never learns whether the Analysis ran or failed. To show a result, have the Analysis write to a variable the widget reads, and watch `useRealtimeData` for the new record.
-- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, so leave those keys out.
+- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, with a falsy `value` sent as `""`, so leave those keys out.
 - **Wrap it in an arrow function.** `onClick={runAnalysis}` would send the click event as the scope, which the browser cannot copy into a message, so the call throws.
 
 ### i18n
 
-`useDictionary(options?)` returns `{ t, tSync, dictionary, isLoading, language, error }`. It looks text up in the class passed as the provider's `dictionary` prop, and returns the original text when that class has no translation for it:
+`useDictionary(options?)` returns `{ t, tSync, dictionary, isLoading, language, error }`. It translates through the class passed as the provider's `dictionary` prop, and returns the original text when there is no dictionary to ask:
 
-- `t(text)` resolves to what `translate(text)` returns on an instance of that class, created for the current `language`. Without a `dictionary` prop, before the language is known, or when the instance has no `translate` method or it throws, `t` resolves to the original text. The `Dictionary` class from `@tago-io/sdk` has no `translate` method, so pass a class of your own.
+- `t(text)` resolves to what `translate(text)` returns on an instance of that class, created for the current `language`. Without a `dictionary` prop, before the language is known, or when the instance has no `translate` method or it throws, `t` resolves to the original text. `t` passes on whatever `translate` returns, so have it return the original text for a key it does not know. The `Dictionary` class from `@tago-io/sdk` has no `translate` method, so pass a class of your own.
 - `tSync(text)` returns the original text. Use `t` for translations.
 - `language` is `options.language` when you pass it, and otherwise the viewer's language from user information.
 
