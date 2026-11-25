@@ -10,6 +10,7 @@ import type {
   TEndpointCallErrorCode,
   TEndpointCallOptions,
   TEndpointCallResult,
+  TEndpointQueryValue,
   TError,
   TReadyOptions,
   TRealtimeData,
@@ -70,20 +71,38 @@ function constructorName(value: object): string {
   return (value as { constructor?: { name?: string } }).constructor?.name || "object";
 }
 
+/** Names a value in an error message without converting it, which throws for a prototype-free object or a Symbol. */
+function describeValue(value: unknown): string {
+  if (typeof value === "string") return JSON.stringify(value);
+  if (value === null || value === undefined) return String(value);
+  return `a value of type ${typeof value === "object" ? constructorName(value) : typeof value}`;
+}
+
 /** An object literal, prototype-free ones included. Not an array, a Map, a Date or a class instance. */
-function isPlainObject(value: object): boolean {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!isObject(value)) return false;
   const prototype = Object.getPrototypeOf(value) as unknown;
   return prototype === Object.prototype || prototype === null;
 }
 
+/** JSON writes a Number, String or Boolean object as its value, but a replacer still sees the object. */
+function isBoxedPrimitive(value: object): boolean {
+  return value instanceof Number || value instanceof String || value instanceof Boolean;
+}
+
 /**
  * JSON writes a FormData, a Map, a Blob, or a class instance that keeps its data in private fields, as {}, so the
- * Analysis would get an empty body and no error. That is any object other than a plain object or an array with no
- * enumerable fields of its own. A replacer sees each value after toJSON() ran, so a Date inside an object arrives here
- * as its string, and a class instance with fields is written as its fields.
+ * Analysis would get an empty body and no error. That is any object other than a plain object, an array or a boxed
+ * primitive with no enumerable fields of its own. A replacer sees each value after toJSON() ran, so a Date inside an
+ * object arrives here as its string, and a class instance with fields is written as its fields.
  */
 function refuseValuesJsonEmpties(_key: string, value: unknown): unknown {
-  const emptied = isObject(value) && !Array.isArray(value) && !isPlainObject(value) && Object.keys(value).length === 0;
+  const emptied =
+    isObject(value) &&
+    !Array.isArray(value) &&
+    !isPlainObject(value) &&
+    !isBoxedPrimitive(value) &&
+    Object.keys(value).length === 0;
   if (emptied) {
     throw new TypeError(
       `The body holds a value of type ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
@@ -108,6 +127,40 @@ function encodeEndpointBody(body: unknown): unknown {
     throw new TypeError(
       "The body's JSON is a bare string, which the dashboard would send as text. Put the value in an object, or pass a string to send text."
     );
+  }
+  return encoded;
+}
+
+/** `Number.isFinite` never coerces, so it also refuses NaN, Infinity and anything that is not a number. */
+function isQueryValue(value: unknown): value is TEndpointQueryValue {
+  return typeof value === "string" || typeof value === "boolean" || Number.isFinite(value);
+}
+
+/**
+ * The dashboard accepts only strings, finite numbers and booleans, or arrays of them, and refuses the whole call over
+ * one bad value with a message that names no key. Checking here names the key and costs no round trip. A key set to
+ * undefined is left out, as JSON leaves one out of a body.
+ */
+function encodeEndpointQuery(query: unknown): Record<string, TEndpointQueryValue | TEndpointQueryValue[]> {
+  // A URLSearchParams or a Map has no entries of its own, so it would go out as an empty query.
+  if (!isPlainObject(query)) {
+    throw new TypeError(
+      `The query must be a plain object of keys and values, not ${describeValue(query)}. For a URLSearchParams, pass Object.fromEntries(params).`
+    );
+  }
+  // No prototype, so a __proto__ key stays a key instead of setting the prototype.
+  const encoded = Object.create(null) as Record<string, TEndpointQueryValue | TEndpointQueryValue[]>;
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined) continue;
+    if (isQueryValue(value)) {
+      encoded[key] = value;
+    } else if (Array.isArray(value) && value.every(isQueryValue)) {
+      encoded[key] = [...value];
+    } else {
+      throw new TypeError(
+        `Query key ${JSON.stringify(key)} must be a string, a finite number or a boolean, or an array of them.`
+      );
+    }
   }
   return encoded;
 }
@@ -294,7 +347,7 @@ export class WidgetStore {
     if (typeof endpointID !== "string" || !ENDPOINT_ID_PATTERN.test(endpointID)) {
       throw endpointCallError(
         "bad_request",
-        `Invalid Endpoint ID "${String(endpointID)}": pass the 24-character ID of the Analysis.`
+        `Invalid Endpoint ID ${describeValue(endpointID)}: pass the 24-character ID of the Analysis.`
       );
     }
 
@@ -312,9 +365,25 @@ export class WidgetStore {
 
     let payload: Record<string, unknown>;
     try {
+      // A path string passed where the options go would otherwise run GET / on the Endpoint.
+      if (options !== undefined && !isPlainObject(options)) {
+        throw new TypeError(
+          `The options must be an object such as { method, path, query, body }, not ${describeValue(options)}.`
+        );
+      }
       // Named fields only, and no `variables`: the dashboard sends any message with `variables` to the data operations.
       const { method, path, query, body } = options ?? {};
-      payload = { endpoint_id: endpointID, method, path, query, body: encodeEndpointBody(body) };
+      // The dashboard refuses this too, but with a message that does not say why, and a missing `method` is the usual cause.
+      if (body !== undefined && (typeof method !== "string" || method.toUpperCase() === "GET")) {
+        throw new TypeError('A body is not allowed with GET, the default method. Set method, for example to "POST".');
+      }
+      payload = {
+        endpoint_id: endpointID,
+        method,
+        path,
+        query: query === undefined ? undefined : encodeEndpointQuery(query),
+        body: encodeEndpointBody(body),
+      };
     } catch (error) {
       throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
     }

@@ -82,11 +82,14 @@
     }
     /**
      * Post a request and settle with the reply that carries its key. Pass `key` to know it before the reply
-     * arrives; it defaults to a new ID.
+     * arrives; it defaults to a new ID. A key that is still waiting for its reply rejects without posting.
      */
     sendWithResponse(message, key = generateId()) {
       if (this.destroyed) {
         return Promise.reject(new Error(BRIDGE_DESTROYED));
+      }
+      if (this.pool.has(key)) {
+        return Promise.reject(new Error(`A request with key "${key}" is still waiting for its reply.`));
       }
       const messageWithKey = { ...message, key };
       return new Promise((resolve, reject) => {
@@ -267,12 +270,21 @@
   function constructorName(value) {
     return value.constructor?.name || "object";
   }
+  function describeValue(value) {
+    if (typeof value === "string") return JSON.stringify(value);
+    if (value === null || value === void 0) return String(value);
+    return `a value of type ${typeof value === "object" ? constructorName(value) : typeof value}`;
+  }
   function isPlainObject(value) {
+    if (!isObject(value)) return false;
     const prototype = Object.getPrototypeOf(value);
     return prototype === Object.prototype || prototype === null;
   }
+  function isBoxedPrimitive(value) {
+    return value instanceof Number || value instanceof String || value instanceof Boolean;
+  }
   function refuseValuesJsonEmpties(_key, value) {
-    const emptied = isObject(value) && !Array.isArray(value) && !isPlainObject(value) && Object.keys(value).length === 0;
+    const emptied = isObject(value) && !Array.isArray(value) && !isPlainObject(value) && !isBoxedPrimitive(value) && Object.keys(value).length === 0;
     if (emptied) {
       throw new TypeError(
         `The body holds a value of type ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
@@ -289,6 +301,30 @@
       throw new TypeError(
         "The body's JSON is a bare string, which the dashboard would send as text. Put the value in an object, or pass a string to send text."
       );
+    }
+    return encoded;
+  }
+  function isQueryValue(value) {
+    return typeof value === "string" || typeof value === "boolean" || Number.isFinite(value);
+  }
+  function encodeEndpointQuery(query) {
+    if (!isPlainObject(query)) {
+      throw new TypeError(
+        `The query must be a plain object of keys and values, not ${describeValue(query)}. For a URLSearchParams, pass Object.fromEntries(params).`
+      );
+    }
+    const encoded = /* @__PURE__ */ Object.create(null);
+    for (const [key, value] of Object.entries(query)) {
+      if (value === void 0) continue;
+      if (isQueryValue(value)) {
+        encoded[key] = value;
+      } else if (Array.isArray(value) && value.every(isQueryValue)) {
+        encoded[key] = [...value];
+      } else {
+        throw new TypeError(
+          `Query key ${JSON.stringify(key)} must be a string, a finite number or a boolean, or an array of them.`
+        );
+      }
     }
     return encoded;
   }
@@ -430,7 +466,7 @@
       if (typeof endpointID !== "string" || !ENDPOINT_ID_PATTERN.test(endpointID)) {
         throw endpointCallError(
           "bad_request",
-          `Invalid Endpoint ID "${String(endpointID)}": pass the 24-character ID of the Analysis.`
+          `Invalid Endpoint ID ${describeValue(endpointID)}: pass the 24-character ID of the Analysis.`
         );
       }
       const { capabilities } = this.state;
@@ -445,8 +481,22 @@
       }
       let payload;
       try {
+        if (options !== void 0 && !isPlainObject(options)) {
+          throw new TypeError(
+            `The options must be an object such as { method, path, query, body }, not ${describeValue(options)}.`
+          );
+        }
         const { method, path, query, body } = options ?? {};
-        payload = { endpoint_id: endpointID, method, path, query, body: encodeEndpointBody(body) };
+        if (body !== void 0 && (typeof method !== "string" || method.toUpperCase() === "GET")) {
+          throw new TypeError('A body is not allowed with GET, the default method. Set method, for example to "POST".');
+        }
+        payload = {
+          endpoint_id: endpointID,
+          method,
+          path,
+          query: query === void 0 ? void 0 : encodeEndpointQuery(query),
+          body: encodeEndpointBody(body)
+        };
       } catch (error) {
         throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
       }

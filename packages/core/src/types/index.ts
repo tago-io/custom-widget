@@ -274,12 +274,17 @@ export type TEndpointCallOptions = {
   method?: TEndpointMethod;
   /** Below the Endpoint root, such as "/setpoint". Defaults to "/". The dashboard refuses `.` and `..` segments. */
   path?: string;
-  /** An array repeats its key. */
-  query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[]>;
+  /**
+   * A plain object; an array repeats its key. A key set to undefined is left out. Any other value that is not a
+   * string, a finite number or a boolean rejects with `bad_request` naming its key, before anything is posted. So does
+   * a URLSearchParams or a Map, which would go out empty: pass `Object.fromEntries(params)`.
+   */
+  query?: Record<string, TEndpointQueryValue | TEndpointQueryValue[] | undefined>;
   /**
    * Send a JSON value; a string is sent as text/plain, so the Analysis gets `scope` as nil and reads
-   * `context.request.body`. Not allowed with GET. Any other value is encoded with JSON's rules, so toJSON()
-   * applies, as for a Date inside an object. These reject with `bad_request` before anything is posted:
+   * `context.request.body`. Any other value is encoded with JSON's rules, so toJSON() applies, as for a Date inside
+   * an object. These reject with `bad_request` before anything is posted:
+   * - any body with GET, the default method, so set `method` with a body;
    * - a value JSON cannot encode, such as a BigInt or a cycle;
    * - a value JSON would write as {}, such as a FormData, a Map, a Set, a Blob or a class instance that keeps its
    *   data in private fields, even inside an object. Convert it to a plain object first, for example with
@@ -304,13 +309,15 @@ export type TEndpointCallResult<TBody = unknown> = {
 
 /**
  * Why callEndpoint rejected:
- * - `bad_request`: the ID is not a 24-character ID, `options` holds a value JSON or a message cannot carry, or the
- *   dashboard refused the request. The Endpoint did not run.
+ * - `bad_request`: the ID is not a 24-character ID, `options` is not an object or holds a request the SDK refuses
+ *   (see TEndpointCallOptions) or a value a message cannot carry, or the dashboard refused the request. The Endpoint
+ *   did not run.
  * - `api_error`: the dashboard could not complete the call, as with a refused redirect or a network failure,
  *   or its reply was malformed. The Endpoint may have run: a redirect is the Analysis's own answer.
  * - `not_ready`: the widget settings have not arrived yet. Nothing was sent.
  * - `unsupported`: the dashboard does not support Endpoint calls from custom widgets. Nothing was sent.
- * - `aborted`: the widget stopped before the answer arrived, or before the call was made.
+ * - `aborted`: the widget stopped before the answer arrived, or before the call was made. A call that was already
+ *   sent may have run.
  *
  * A code from a newer dashboard passes through unchanged.
  */

@@ -351,6 +351,83 @@ describe("WidgetStore", () => {
       expect(mockPostMessage).not.toHaveBeenCalled();
     });
 
+    it("rejects an ID that has no string form with bad_request", async () => {
+      await expect(store.callEndpoint(Object.create(null) as string)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("Invalid Endpoint ID"),
+      });
+    });
+
+    function postedEndpointCall(): boolean {
+      return mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint");
+    }
+
+    it.each([
+      { label: "a path string", options: "/setpoint" },
+      { label: "a number", options: 22 },
+      { label: "an array", options: ["POST", "/setpoint"] },
+      { label: "null", options: null },
+    ])("refuses $label in place of the options object with bad_request, posting nothing", async ({ options }) => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, options as never)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("{ method, path, query, body }"),
+      });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
+    it.each([
+      { label: "no method", options: { body: { setpoint: 22 } } },
+      { label: "GET", options: { method: "GET" as const, body: { setpoint: 22 } } },
+      { label: "a lowercase get", options: { method: "get" as "GET", body: "22" } },
+    ])("refuses a body with $label with bad_request, posting nothing", async ({ options }) => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, options)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("Set method"),
+      });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
+    it("leaves out query keys set to undefined", () => {
+      hostReady();
+      // No answer comes, so the call settles with aborted when afterEach destroys the store.
+      store.callEndpoint(endpointID, { query: { page: 2, filter: undefined } }).catch(() => {});
+
+      expect((lastSent().payload as Record<string, unknown>).query).toEqual({ page: 2 });
+      expect(Object.keys((lastSent().payload as { query: object }).query)).toEqual(["page"]);
+    });
+
+    it.each([
+      { label: "NaN", value: Number.NaN },
+      { label: "Infinity", value: Number.POSITIVE_INFINITY },
+      { label: "null", value: null },
+      { label: "an object", value: { from: 1 } },
+      { label: "an array holding an object", value: [1, { from: 1 }] },
+    ])("refuses a query value that is $label with bad_request naming its key, posting nothing", async ({ value }) => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, { query: { limit: value as unknown as number } })).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining('"limit"'),
+      });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
+    it.each([
+      { label: "a URLSearchParams", make: () => new URLSearchParams("page=2") },
+      { label: "a Map", make: () => new Map([["page", "2"]]) },
+    ])("refuses $label as the query, which would go out empty, posting nothing", async ({ make }) => {
+      hostReady();
+
+      await expect(
+        store.callEndpoint(endpointID, { query: make() as unknown as Record<string, string> })
+      ).rejects.toEqual({ code: "bad_request", message: expect.stringContaining("Object.fromEntries") });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
     it("posts the payload under call-endpoint without variables", async () => {
       hostReady();
       const promise = store.callEndpoint(endpointID, {
@@ -484,9 +561,10 @@ describe("WidgetStore", () => {
         throw new DOMException("() => {} could not be cloned.", "DataCloneError");
       });
 
-      await expect(
-        store.callEndpoint(endpointID, { query: { done: (() => {}) as unknown as string } })
-      ).rejects.toEqual({ code: "bad_request", message: expect.any(String) });
+      await expect(store.callEndpoint(endpointID, { path: (() => {}) as unknown as string })).rejects.toEqual({
+        code: "bad_request",
+        message: expect.any(String),
+      });
       expect(store.getBridge().pendingCount).toBe(0);
     });
 
@@ -565,7 +643,7 @@ describe("WidgetStore", () => {
       });
     });
 
-    it("sends plain objects, arrays, prototype-free objects, scalars, nested Dates, toJSON objects and class instances with fields", () => {
+    it("sends plain objects, arrays, prototype-free objects, scalars, nested Dates, toJSON objects, class instances with fields and boxed primitives", () => {
       hostReady();
       const prototypeFree = Object.assign(Object.create(null) as Record<string, unknown>, { setpoint: 22 });
       class Setpoint {
@@ -582,6 +660,9 @@ describe("WidgetStore", () => {
         { toJSON: () => ({ setpoint: 22 }) },
         new Setpoint(22),
         {},
+        // JSON writes a boxed primitive as its value.
+        { enabled: new Boolean(false), count: new Number(5), label: new String("C") },
+        new Number(5),
       ];
 
       for (const body of bodies) {
@@ -604,6 +685,8 @@ describe("WidgetStore", () => {
         { setpoint: 22 },
         { value: 22 },
         {},
+        { enabled: false, count: 5, label: "C" },
+        5,
       ]);
     });
 
