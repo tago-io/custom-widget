@@ -1,6 +1,6 @@
-import { render, renderHook, act } from "@testing-library/react";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { Activity, type ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useDeleteData } from "../../src/hooks/use-delete-data.js";
 import { useEditData } from "../../src/hooks/use-edit-data.js";
@@ -50,6 +50,12 @@ const storedRecord = {
 describe("mutation hooks", () => {
   beforeEach(() => {
     postMessageSpy = vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
+  });
+
+  // Each test mounts a provider, whose store would otherwise keep listening and answer later tests' replies.
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
   });
 
   describe("useSendData", () => {
