@@ -78,9 +78,9 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 | Function                   | Direction   | Description                                                                                                                  |
 | -------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.ready(options)`    | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget.                                   |
+| `TagoIO.ready()`           | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget.                                   |
 | `TagoIO.onStart(callback)` | You receive | Called when TagoIO starts your widget. Provides configuration, variables, and settings.                                      |
-| `TagoIO.onError(callback)` | You receive | Called when the dashboard reports a failed request ([Error Handling](#error-handling)). Platform API errors do not reach it. |
+| `TagoIO.onError(callback)` | You receive | Called when the dashboard reports a failed request ([Error Handling](#error-handling)). Some platform errors never reach it. |
 
 ### Data Operations
 
@@ -98,11 +98,11 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 ### Real-time Events
 
-| Function                                  | Direction   | Description                                                                                                                                        |
-| ----------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.onRealtime(callback)`             | You receive | Called with every data and resource block the widget has, each time that set changes ([Working with Real-time Data](#working-with-real-time-data)) |
-| `TagoIO.onSyncUserInformation(callback)`  | You receive | Called after each `ready()` with the viewer's token, language, runURL and preferences                                                              |
-| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Not called: the dashboard does not send blueprint device data ([Blueprint Devices](#blueprint-devices))                                            |
+| Function                                  | Direction   | Description                                                                                                                                            |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TagoIO.onRealtime(callback)`             | You receive | Called with every data and resource block the widget has, each time that set changes ([Working with Real-time Data](#working-with-real-time-data))     |
+| `TagoIO.onSyncUserInformation(callback)`  | You receive | Called after each `ready()` with the viewer's token, language, runURL and preferences                                                                  |
+| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Called when the dashboard sends blueprint device data. Read the selected devices from the widget's variables ([Blueprint Devices](#blueprint-devices)) |
 
 ### Utilities
 
@@ -157,17 +157,10 @@ async function sendSensorData() {
       window.TagoIO.sendData({ variable: "temperature", value: 25.5, unit: "°C" }),
       10000
     );
-    // The promise resolves even when the platform refused the write, so check each entry.
-    const refused = reply.result.filter(function (entry) {
-      return entry.status === "rejected";
-    });
-    if (refused.length > 0) {
-      console.error("Not stored:", refused[0].reason);
-      return;
-    }
     console.log("Data stored:", reply.result);
   } catch (error) {
-    console.error("Failed to send data:", error.message);
+    // A refused write rejects with the dashboard's reply, { status: false, message }.
+    console.error("Not stored:", error.message);
   }
 }
 ```
@@ -176,9 +169,9 @@ Plan for the following:
 
 - **Send after `onStart`, and only bound variables.** The SDK drops a record whose variable is not bound to the widget. When it drops every record, as it does before the widget settings arrive, the promise never settles.
 - **A variable bound on several devices is written to each.** The SDK makes one record per device the variable is bound on. To write to one device only, turn `autoFill` off and pass `origin` ([Editing and deleting data](#editing-and-deleting-data)).
-- **A resolved promise does not prove the write.** `result` holds one entry per request the dashboard made to the platform: `{ status: "fulfilled", value }` or `{ status: "rejected", reason }`.
+- **A refused write rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`. A resolved promise means every request succeeded, and `result` holds one `{ status: "fulfilled", value }` entry per request.
 - **Stop waiting after a while.** No request times out by itself, and some failures get no reply, so race each call against a timer, as `withTimeout` does.
-- **Rejections are plain objects.** A record whose `variable`, `origin` and `bucket` match none of the widget's bindings rejects with the dashboard's reply, `{ status: false, message: "Invalid variable" }`, not an `Error`, so read `error.message`. The same reply also reaches `onError`.
+- **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `onError`.
 
 ## Editing and deleting data
 
@@ -289,7 +282,7 @@ Plan for the following:
 
 ## Blueprint Devices
 
-The dashboard does not send blueprint device data to custom widgets, so `onSyncBlueprintDevices` is never called. On a blueprint dashboard, read the selected devices from the widget's variables instead: each `origin.id` is the device selected for that variable's blueprint device, and it is `undefined` until the viewer selects one.
+`onSyncBlueprintDevices` receives blueprint device settings and selections when the dashboard sends them. A blueprint dashboard delivers the selected devices in the widget's variables, so read them there: each `origin.id` is the device selected for that variable's blueprint device, and it is `undefined` until the viewer selects one.
 
 ```javascript
 window.TagoIO.onStart(function (widget) {
@@ -415,7 +408,7 @@ The React SDK, `@tago-io/custom-widget-react`, ships its own type declarations.
 
 ## Error Handling
 
-`onError` receives every failure the dashboard reports with `status: false`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `sendData`, `editData` and `deleteData` never reach `onError`: check results and set timeouts, as in [Sending Data](#sending-data).
+`onError` receives every failure the dashboard reports with `status: false`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `editData` and `deleteData` never reach `onError`: the dashboard shows a toast and never replies, so race those calls against a timer, as `withTimeout` does in [Sending Data](#sending-data).
 
 ```javascript
 window.TagoIO.onError(function (error) {

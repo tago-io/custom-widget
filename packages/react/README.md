@@ -53,7 +53,6 @@ function Dashboard() {
   realtimeStrategy="merge" // "replace" | "append" | "merge" (default: "merge")
   realtimeMaxRecords={1000} // "append" only: how many realtime blocks to keep, not records (default: 1000)
   allowedOrigins={["https://admin.tago.io"]} // optional: drops messages from every other origin
-  readyOptions={{ header: { color: "#333" } }}
   dictionary={MyDictionary} // optional: a class whose instances have translate(text), see i18n
 >
   <App />
@@ -71,15 +70,15 @@ Plan for the following:
 
 ### Receiving Data
 
-| Hook                        | Description                                                                                                                                                         |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useWidget()`               | `{ widget, isLoading, variables, dashboardId, widgetId, label }`. `isLoading` stays `true` until the widget settings arrive                                         |
-| `useRealtimeData(options?)` | `{ data, records, eventCount, lastUpdatedAt, clear }`: the realtime blocks and their records, with an optional `selector`                                           |
-| `useResourceData()`         | `{ resources, getByType, refresh, eventCount, lastUpdatedAt }`: platform resources (device list, users, entities)                                                   |
-| `useUserInformation()`      | `{ userInformation, token, language, runURL, customPreferences, preferences }`, empty until it arrives after the widget settings                                    |
-| `useBlueprintDevices()`     | `{ blueprintDevices, selected, settings }`, always empty: the dashboard does not send blueprint device data. Read the selected devices from `useWidget().variables` |
-| `useWidgetErrors()`         | `{ lastError, errors, clearErrors }`: the failures the dashboard reports ([Widget errors](#widget-errors))                                                          |
-| `useWidgetData()`           | Convenience: combines widget + realtime + errors                                                                                                                    |
+| Hook                        | Description                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useWidget()`               | `{ widget, isLoading, variables, dashboardId, widgetId, label }`. `isLoading` stays `true` until the widget settings arrive                               |
+| `useRealtimeData(options?)` | `{ data, records, eventCount, lastUpdatedAt, clear }`: the realtime blocks and their records, with an optional `selector`                                 |
+| `useResourceData()`         | `{ resources, getByType, refresh, eventCount, lastUpdatedAt }`: platform resources (device list, users, entities)                                         |
+| `useUserInformation()`      | `{ userInformation, token, language, runURL, customPreferences, preferences }`, empty until it arrives after the widget settings                          |
+| `useBlueprintDevices()`     | `{ blueprintDevices, selected, settings }`, filled when the dashboard sends blueprint device data. Read the selected devices from `useWidget().variables` |
+| `useWidgetErrors()`         | `{ lastError, errors, clearErrors }`: the failures the dashboard reports ([Widget errors](#widget-errors))                                                |
+| `useWidgetData()`           | Convenience: combines widget + realtime + errors                                                                                                          |
 
 ### Filtering realtime data
 
@@ -126,15 +125,12 @@ function SendButton() {
 
   async function send() {
     try {
-      const reply = await withTimeout(sendData({ variable: "temperature", value: 25.5, unit: "°C" }));
-      // The promise resolves even when the platform refused the write, so check each entry.
-      const refused = (reply.result as unknown as PromiseSettledResult<unknown>[]).filter(
-        (entry): entry is PromiseRejectedResult => entry.status === "rejected"
-      );
-      setStatus(refused.length > 0 ? `Not stored: ${refused[0].reason?.message ?? refused[0].reason}` : "Stored.");
+      await withTimeout(sendData({ variable: "temperature", value: 25.5, unit: "°C" }));
+      setStatus("Stored.");
     } catch (error) {
       reset(); // isSending stays true while no reply comes
-      setStatus(`Not sent: ${(error as { message?: string }).message}`);
+      // A refused write rejects with the dashboard's reply, { status: false, message }.
+      setStatus(`Not stored: ${(error as { message?: string }).message}`);
     }
   }
 
@@ -189,9 +185,9 @@ Plan for the following:
 
 - **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise never settles.
 - **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To write to a single device, bind the variable on that device only.
-- **A resolved `sendData` does not prove the write.** `result` holds one entry per request the dashboard made to the platform: `{ status: "fulfilled", value }` or `{ status: "rejected", reason }`. The `TData` type does not describe it, hence the cast above.
+- **A refused `sendData` rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`, and `error` holds it. A resolved `sendData` means every request succeeded.
 - **A resolved `editData` or `deleteData` means the platform accepted the change.** When the platform refuses one, the dashboard shows an error toast and never replies: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, and call `reset()` when it fires.
-- **Rejections are plain objects.** A record whose `variable`, `origin` and `bucket` match none of the widget's bindings rejects with the dashboard's reply, `{ status: false, message: "Invalid variable" }`, not an `Error`, so read `error.message`. The same reply also reaches `useWidgetErrors`.
+- **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`.
 - **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` until realtime shows it, as `edit-delete-data.tsx` does.
 
 #### Editing resources
@@ -220,7 +216,7 @@ Plan for the following:
 
 ### Widget errors
 
-`useWidgetErrors()` returns `{ lastError, errors, clearErrors }`. It receives every failure the dashboard reports with `status: false`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `sendData`, `editData` and `deleteData` never reach it. Entries are plain objects with a `message`, not `Error` instances.
+`useWidgetErrors()` returns `{ lastError, errors, clearErrors }`. It receives every failure the dashboard reports with `status: false`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `editData` and `deleteData` never reach it. Entries are plain objects with a `message`, not `Error` instances.
 
 `clearErrors()` empties the list for every component under the provider. A mutation hook's `reset()` does not touch it.
 
@@ -327,13 +323,13 @@ Plan for the following:
 
 ### i18n
 
-`useDictionary(options?)` returns `{ t, tSync, dictionary, isLoading, language, error }`, and it does not translate text:
+`useDictionary(options?)` returns `{ t, tSync, dictionary, isLoading, language, error }`. It looks text up in the class passed as the provider's `dictionary` prop, and returns the original text when that class has no translation for it:
 
-- `tSync(text)` returns `text` unchanged.
-- `t(text)` resolves to `text` unchanged, unless the class passed as the provider's `dictionary` prop creates instances with a `translate(text)` method. The `Dictionary` class from `@tago-io/sdk` has no such method, so with it `t` returns the input too.
+- `t(text)` resolves to what `translate(text)` returns on an instance of that class, created for the current `language`. Without a `dictionary` prop, before the language is known, or when the instance has no `translate` method or it throws, `t` resolves to the original text. The `Dictionary` class from `@tago-io/sdk` has no `translate` method, so pass a class of your own.
+- `tSync(text)` returns the original text. Use `t` for translations.
 - `language` is `options.language` when you pass it, and otherwise the viewer's language from user information.
 
-To show labels in the viewer's language, keep your own translations and pick them by language:
+To show labels in the viewer's language without a dictionary class, keep your own translations and pick them by language:
 
 ```tsx
 const LABELS: Record<string, { save: string }> = {
