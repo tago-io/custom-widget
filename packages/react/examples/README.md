@@ -11,7 +11,7 @@ Each file is a self-contained React component you can copy into your project.
 | [read-resource.tsx](./read-resource.tsx)       | Read platform resources (device list, users, entities) |
 | [edit-resource.tsx](./edit-resource.tsx)       | Edit resource rows driven by the `editable` columns    |
 | [read-widget-info.tsx](./read-widget-info.tsx) | Widget config, user info, and blueprint devices        |
-| [scan-code.tsx](./scan-code.tsx)               | Scan a QR code or barcode with the mobile app          |
+| [scan-code.tsx](./scan-code.tsx)               | Scan a QR code or barcode                              |
 | [edit-delete-data.tsx](./edit-delete-data.tsx) | Edit and delete the data records a widget receives     |
 | [navigation.tsx](./navigation.tsx)             | Open a dashboard or web page, or close a widget modal  |
 | [run-analysis.tsx](./run-analysis.tsx)         | Run the widget's Analysis and show the data it writes  |

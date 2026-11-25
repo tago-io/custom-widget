@@ -5,5 +5,11 @@
     "rootDir": "./src"
   },
   "include": [],
-  "references": [{ "path": "./packages/js" }, { "path": "./packages/core" }, { "path": "./packages/react" }]
+  "references": [
+    { "path": "./packages/js" },
+    { "path": "./packages/core" },
+    { "path": "./packages/react" },
+    { "path": "./packages/dashboard" },
+    { "path": "./packages/dashboard-react" }
+  ]
 }

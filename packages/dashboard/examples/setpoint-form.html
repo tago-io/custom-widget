@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Room temperature</title>
+
+    <script>
+      document.documentElement.dataset.theme =
+        new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light";
+    </script>
+
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #182733;
+        --muted: #6b6b76;
+        --line: #d4d4d8;
+        --error: #b91c1c;
+        --ok: #15803d;
+      }
+      :root[data-theme="dark"] {
+        --bg: #0b0b0c;
+        --fg: #f4f4f5;
+        --muted: #8b8b95;
+        --line: #3f3f46;
+        --error: #f87171;
+        --ok: #4ade80;
+      }
+      body {
+        margin: 48px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          18px/1.5 system-ui,
+          sans-serif;
+      }
+      input,
+      button {
+        font: inherit;
+        padding: 10px;
+        color: inherit;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      input {
+        width: 6ch;
+        margin-left: 8px;
+      }
+      button {
+        margin-left: 8px;
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+      #feedback {
+        min-height: 2em;
+      }
+      #feedback[data-kind="error"] {
+        color: var(--error);
+      }
+      #feedback[data-kind="ok"] {
+        color: var(--ok);
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      The Analysis is the one from the docs.tago.io recipe "Validate a Custom Dashboard form":
+      https://docs.tago.io/docs/tagoio/analysis/endpoints/recipes/validate-dashboard-form
+      It answers POST /setpoint with 200 and { ok, setpoint } when the value is from 5 to 30, with 422 and
+      { errors: { setpoint } } otherwise, and with another 4xx and { error } when the caller cannot save.
+      A Run user needs Call Endpoint on that Analysis.
+
+      There is no <form>: the dashboard frame blocks native form submission, so the button and Enter save instead.
+    -->
+    <h1>Room temperature</h1>
+    <label>Setpoint (5 to 30 C)<input id="setpoint" value="22" aria-describedby="feedback" /></label>
+    <button id="save" type="button">Save setpoint</button>
+    <p id="feedback" role="status"></p>
+
+    <script src="../dist/custom-dashboard.min.js"></script>
+    <script>
+      // The ID of the Analysis, the 24 characters at the end of its Endpoint URL.
+      const ANALYSIS_ID = "YOUR_ANALYSIS_ID";
+
+      const input = document.getElementById("setpoint");
+      const saveButton = document.getElementById("save");
+      const feedback = document.getElementById("feedback");
+
+      // Server text goes through textContent, never innerHTML.
+      function showFeedback(kind, text) {
+        feedback.dataset.kind = kind;
+        feedback.textContent = text;
+      }
+
+      // Every HTTP status resolves, so branch on it before reading the body.
+      function showAnswer({ status, body }, setpoint) {
+        if (status === 422) {
+          showFeedback("error", body?.errors?.setpoint ?? "Invalid setpoint.");
+        } else if (status >= 400) {
+          showFeedback("error", body?.error ?? `Request failed (${status}).`);
+        } else {
+          showFeedback("ok", `Saved: ${body?.setpoint ?? setpoint} C`);
+        }
+      }
+
+      async function save() {
+        if (saveButton.disabled) return;
+        const setpoint = input.value;
+        saveButton.disabled = true;
+        showFeedback("pending", "Saving...");
+
+        try {
+          const answer = await TagoDashboard.endpoint.call(ANALYSIS_ID, {
+            method: "POST",
+            path: "/setpoint",
+            body: { setpoint },
+          });
+          showAnswer(answer, setpoint);
+        } catch (error) {
+          // The call did not complete. After no_response, aborted or api_error the Analysis may still have run,
+          // so do not retry on your own: read the value back, or let the user decide.
+          showFeedback("error", `Not completed (${error.code}): ${error.message}`);
+        } finally {
+          saveButton.disabled = false;
+        }
+      }
+
+      saveButton.addEventListener("click", save);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") save();
+      });
+
+      TagoDashboard.theme.subscribe(() => {
+        document.documentElement.dataset.theme = TagoDashboard.theme.get();
+      });
+    </script>
+  </body>
+</html>
