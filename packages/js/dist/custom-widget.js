@@ -266,7 +266,7 @@
       return endpointCallError(code, message);
     }
     if (reason instanceof Error && reason.message === BRIDGE_DESTROYED) {
-      return endpointCallError("aborted", "The widget stopped before the dashboard answered.");
+      return endpointCallError("aborted", "The widget stopped before the dashboard answered. The Endpoint may have run.");
     }
     return endpointCallError("bad_request", `The request could not be posted to the dashboard: ${errorMessage(reason)}`);
   }
@@ -321,7 +321,7 @@
       if (value === void 0) continue;
       if (isQueryValue(value)) {
         encoded[key] = value;
-      } else if (Array.isArray(value) && value.every(isQueryValue)) {
+      } else if (Array.isArray(value) && [...value].every(isQueryValue)) {
         encoded[key] = [...value];
       } else {
         throw new TypeError(
@@ -502,6 +502,9 @@
         };
       } catch (error) {
         throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
+      }
+      if (this.bridge.isDestroyed) {
+        throw endpointCallError("aborted", "The widget stopped before the call was sent. Nothing was sent.");
       }
       const key = generateId();
       this.endpointCallKeys.add(key);

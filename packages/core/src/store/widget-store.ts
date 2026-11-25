@@ -50,7 +50,8 @@ function errorMessage(error: unknown): string {
 
 /**
  * The bridge rejects with the dashboard's failure reply, with BRIDGE_DESTROYED once the store is destroyed, or with
- * what postMessage threw before posting, such as a DataCloneError.
+ * what postMessage threw before posting, such as a DataCloneError. callEndpoint checks for a destroyed bridge before
+ * posting, so BRIDGE_DESTROYED here means the call was sent.
  */
 function toEndpointCallError(reason: unknown): TEndpointCallError {
   if (isObject(reason) && reason.status === false) {
@@ -62,7 +63,7 @@ function toEndpointCallError(reason: unknown): TEndpointCallError {
     return endpointCallError(code, message);
   }
   if (reason instanceof Error && reason.message === BRIDGE_DESTROYED) {
-    return endpointCallError("aborted", "The widget stopped before the dashboard answered.");
+    return endpointCallError("aborted", "The widget stopped before the dashboard answered. The Endpoint may have run.");
   }
   return endpointCallError("bad_request", `The request could not be posted to the dashboard: ${errorMessage(reason)}`);
 }
@@ -154,7 +155,8 @@ function encodeEndpointQuery(query: unknown): Record<string, TEndpointQueryValue
     if (value === undefined) continue;
     if (isQueryValue(value)) {
       encoded[key] = value;
-    } else if (Array.isArray(value) && value.every(isQueryValue)) {
+    } else if (Array.isArray(value) && [...value].every(isQueryValue)) {
+      // every() skips holes, which the spread turns into undefined, so the spread goes first.
       encoded[key] = [...value];
     } else {
       throw new TypeError(
@@ -386,6 +388,11 @@ export class WidgetStore {
       };
     } catch (error) {
       throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
+    }
+
+    // Checked here so this rejection says nothing was sent, while one from the bridge means the call may have run.
+    if (this.bridge.isDestroyed) {
+      throw endpointCallError("aborted", "The widget stopped before the call was sent. Nothing was sent.");
     }
 
     // The bridge settles the request and runs handleInbound in one synchronous pass, and the await below resumes

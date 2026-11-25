@@ -406,6 +406,14 @@ describe("WidgetStore", () => {
       { label: "null", value: null },
       { label: "an object", value: { from: 1 } },
       { label: "an array holding an object", value: [1, { from: 1 }] },
+      {
+        label: "an array with a hole",
+        value: (() => {
+          const holey: number[] = [1];
+          holey[2] = 2;
+          return holey;
+        })(),
+      },
     ])("refuses a query value that is $label with bad_request naming its key, posting nothing", async ({ value }) => {
       hostReady();
 
@@ -709,17 +717,20 @@ describe("WidgetStore", () => {
       store.destroy();
       mockPostMessage.mockClear();
 
-      await expect(store.callEndpoint(endpointID)).rejects.toEqual({ code: "aborted", message: expect.any(String) });
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({
+        code: "aborted",
+        message: expect.stringContaining("Nothing was sent"),
+      });
       expect(mockPostMessage).not.toHaveBeenCalled();
     });
 
-    it("rejects with aborted when the store is destroyed mid-call", async () => {
+    it("rejects with aborted when the store is destroyed mid-call, saying the Endpoint may have run", async () => {
       hostReady();
       const promise = store.callEndpoint(endpointID);
 
       store.destroy();
 
-      await expect(promise).rejects.toEqual({ code: "aborted", message: expect.any(String) });
+      await expect(promise).rejects.toEqual({ code: "aborted", message: expect.stringContaining("may have run") });
     });
   });
 
