@@ -19,10 +19,10 @@ export function TagoIOProvider({ children, dictionary, ...options }: TagoIOProvi
   }
 
   // React runs a child's effects before its parent's, so when an <Activity> shows the tree again, or on the StrictMode
-  // replay, a request a child makes in an effect would find the bridge still destroyed. Layout effects all run before
-  // any effect, so the store starts there. It stops in an effect instead: a Suspense boundary that shows its fallback
-  // cleans up only layout effects, and stopping then would drop the hooks' subscriptions for good. initialize() does
-  // nothing on a store that is still running.
+  // replay, a request a child makes in a useEffect would find the bridge still destroyed. Layout effects all run before
+  // any useEffect, so the store starts there; a child's own useLayoutEffect still runs first. It stops in a useEffect
+  // instead: a Suspense boundary that shows its fallback cleans up only layout effects, and stopping then would drop
+  // the hooks' subscriptions for good. initialize() does nothing on a store that is still running.
   useClientLayoutEffect(() => {
     storeRef.current?.initialize();
   }, []);

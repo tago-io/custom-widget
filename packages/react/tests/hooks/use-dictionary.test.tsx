@@ -1,6 +1,6 @@
-import { renderHook, act } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useDictionary } from "../../src/hooks/use-dictionary.js";
 import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
@@ -25,7 +25,13 @@ function wrapperWithDict({ children }: { children: ReactNode }) {
 
 describe("useDictionary", () => {
   beforeEach(() => {
-    window.parent.postMessage = vi.fn();
+    vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
+  });
+
+  // Each test mounts a provider, whose store would otherwise keep listening and take later tests' messages.
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
   });
 
   it("returns pass-through when no dictionary class is provided", () => {
