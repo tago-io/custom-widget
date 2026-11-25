@@ -1,18 +1,31 @@
 import { TagoDashboardError } from "../errors.js";
 import { getInitialTheme } from "../page/location.js";
 import {
+  normalizeEndpointCallResult,
+  normalizeEndpointListResult,
   normalizeSqlListResult,
   normalizeSqlRunResult,
   readInboundMessage,
   readResponseResult,
 } from "../protocol/messages.js";
-import { isValidQueryId, serializeQueryParams } from "../protocol/params.js";
+import {
+  describeValue,
+  encodeEndpointBody,
+  encodeEndpointQuery,
+  isPlainObject,
+  isValidAnalysisID,
+  isValidQueryId,
+  serializeQueryParams,
+} from "../protocol/params.js";
 import type {
   TCallOptions,
   TDashboardClientOptions,
   TDashboardParams,
   TDashboardStyle,
   TDashboardTheme,
+  TEndpointCallResult,
+  TEndpointRequest,
+  TEndpointSummary,
   TOutboundMessage,
   TQueryParam,
   TReadableStore,
@@ -24,6 +37,12 @@ import { createRequestIdFactory } from "./generate-id.js";
 import { PendingPool } from "./pending-pool.js";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+
+/** The longest delay `setTimeout` honors; above it, browsers fire the timer after about 1 ms. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** The one op that changes something. A failure after it was posted leaves the outcome unknown. */
+const ENDPOINT_CALL_OP = "endpoint.call";
 
 /**
  * The host attaches its listener in an effect, so under React StrictMode it briefly detaches.
@@ -58,6 +77,14 @@ export class DashboardClient {
       params?: TQueryParam[],
       options?: TCallOptions
     ) => Promise<TSqlRunResult<TRow>>;
+  };
+  readonly endpoint: {
+    list: (options?: TCallOptions) => Promise<TEndpointSummary[]>;
+    call: <TBody = unknown>(
+      analysisID: string,
+      request?: TEndpointRequest,
+      options?: TCallOptions
+    ) => Promise<TEndpointCallResult<TBody>>;
   };
 
   private readonly options: TDashboardClientOptions;
@@ -129,6 +156,11 @@ export class DashboardClient {
       run: (queryID, params, callOptions) => this.runQuery(queryID, params, callOptions),
     };
 
+    this.endpoint = {
+      list: (callOptions) => this.listEndpoints(callOptions),
+      call: (analysisID, request, callOptions) => this.callEndpoint(analysisID, request, callOptions),
+    };
+
     if (options.autoStart) {
       this.start();
     }
@@ -162,7 +194,9 @@ export class DashboardClient {
 
     if (!this.isEmbedded && !this.warnedNoHost) {
       this.warnedNoHost = true;
-      console.info("[TagoIO Dashboard] No dashboard host detected — running standalone. sql.* calls will fail fast.");
+      console.info(
+        "[TagoIO Dashboard] No dashboard host detected — running standalone. sql.* and endpoint.* calls will fail fast."
+      );
     }
 
     this.postReady();
@@ -193,11 +227,18 @@ export class DashboardClient {
     }
     this.parked.clear();
 
-    for (const entry of this.pending.drain()) {
+    // Every drained request was posted, so it keeps its id. If start() runs again and the answer still arrives, it is
+    // logged as late rather than dropped as noise, which for an aborted save is a trace that the call did run.
+    for (const [requestID, entry] of this.pending.drain()) {
       if (entry.timer) {
         clearTimeout(entry.timer);
       }
-      entry.reject(new TagoDashboardError("aborted", "The dashboard client was stopped.", { op: entry.op }));
+      this.pending.markExpired(requestID);
+      const message =
+        entry.op === ENDPOINT_CALL_OP
+          ? "The dashboard client was stopped before the Endpoint answered. The call was sent and may have run."
+          : "The dashboard client was stopped.";
+      entry.reject(new TagoDashboardError("aborted", message, { op: entry.op, requestID }));
     }
   }
 
@@ -274,10 +315,12 @@ export class DashboardClient {
     const entry = this.pending.take(id);
     if (!entry) {
       if (this.pending.wasExpired(id)) {
-        // This one we can name: the request timed out and the answer turned up anyway. Worth
-        // saying so, because the alternative reading is "my query silently did nothing".
+        // This one we can name: the request timed out or was aborted, and the answer turned up anyway.
+        // Worth saying so, because the alternative reading is "my query silently did nothing".
         // `debug` rather than `warn`, since it is diagnostic and browsers hide it by default.
-        console.debug(`[TagoIO Dashboard] Ignoring a late response for ${id}, which already timed out.`);
+        console.debug(
+          `[TagoIO Dashboard] Ignoring a late response for ${id}, which already timed out or was aborted by stop().`
+        );
         return;
       }
       // Duplicated, addressed to another client in this document, or forged. All noise.
@@ -357,7 +400,7 @@ export class DashboardClient {
     options: TCallOptions | undefined,
     coalesceKey: string
   ): Promise<{ result: unknown; requestID: string }> {
-    const timeoutMs = options?.timeoutMs ?? this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs = this.resolveTimeout(options);
     const key = `${op}|${coalesceKey}|${timeoutMs}`;
 
     const existing = this.inFlight.get(key);
@@ -378,6 +421,10 @@ export class DashboardClient {
     );
     this.inFlight.set(key, promise);
     return promise;
+  }
+
+  private resolveTimeout(options: TCallOptions | undefined): number {
+    return options?.timeoutMs ?? this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   private dispatch(op: string, payload: unknown, timeoutMs: number): Promise<{ result: unknown; requestID: string }> {
@@ -404,24 +451,24 @@ export class DashboardClient {
         return;
       }
 
+      // `0`, `Infinity` and anything that is not a number mean no backstop. `Number()` keeps a numeric string from a
+      // plain-JS shell working, and a delay past what setTimeout honors is capped to that limit, about 24.8 days.
+      const delay = Number(timeoutMs);
       const timer =
-        timeoutMs > 0
-          ? setTimeout(() => {
-              const expired = this.pending.take(requestID);
-              if (!expired) {
-                return;
-              }
-              this.pending.markExpired(requestID);
-              expired.reject(
-                new TagoDashboardError(
-                  "no_response",
-                  `The dashboard did not answer ${op} within ${timeoutMs}ms. It may have been reloaded or navigated away. ` +
-                    "This is a transport backstop, not a query limit: a query that runs too long comes back as `timeout` instead. " +
-                    "If the dashboard is simply slow, raise timeoutMs.",
-                  { op, requestID }
-                )
-              );
-            }, timeoutMs)
+        Number.isFinite(delay) && delay > 0
+          ? setTimeout(
+              () => {
+                const expired = this.pending.take(requestID);
+                if (!expired) {
+                  return;
+                }
+                this.pending.markExpired(requestID);
+                expired.reject(
+                  new TagoDashboardError("no_response", noResponseMessage(op, timeoutMs), { op, requestID })
+                );
+              },
+              Math.min(delay, MAX_TIMER_MS)
+            )
           : null;
 
       const added = this.pending.add(requestID, {
@@ -515,7 +562,7 @@ export class DashboardClient {
     if (!isValidQueryId(queryID)) {
       throw new TagoDashboardError(
         "bad_request",
-        `Invalid query id ${JSON.stringify(queryID)} — expected 24 alphanumeric characters.`,
+        `Invalid query id ${describeValue(queryID)} — expected 24 alphanumeric characters.`,
         { op: "sql.run" }
       );
     }
@@ -527,6 +574,88 @@ export class DashboardClient {
     const { result, requestID } = await this.send("sql.run", payload, options, coalesceKey);
     return normalizeSqlRunResult<TRow>(result, { op: "sql.run", requestID });
   }
+
+  private async listEndpoints(options?: TCallOptions): Promise<TEndpointSummary[]> {
+    const { result, requestID } = await this.send("endpoint.list", undefined, options, "");
+    return normalizeEndpointListResult(result, { op: "endpoint.list", requestID });
+  }
+
+  /**
+   * Never coalesced, unlike every read: two identical POSTs are two saves, and sharing one request would drop the
+   * second. Never retried either, for the same reason.
+   */
+  private async callEndpoint<TBody = unknown>(
+    analysisID: string,
+    request?: TEndpointRequest,
+    options?: TCallOptions
+  ): Promise<TEndpointCallResult<TBody>> {
+    if (!isValidAnalysisID(analysisID)) {
+      throw new TagoDashboardError(
+        "bad_request",
+        `Invalid Analysis ID ${describeValue(analysisID)}: expected the 24 alphanumeric characters in the Endpoint URL.`,
+        { op: ENDPOINT_CALL_OP }
+      );
+    }
+
+    const payload: Record<string, unknown> = { endpoint_id: analysisID };
+    // A string here is usually a path passed where the request goes, and would run `GET /` instead.
+    if (request !== undefined && !isPlainObject(request)) {
+      throw new TagoDashboardError(
+        "bad_request",
+        `The request must be an object such as { method, path, query, body }, not ${describeValue(request)}.`,
+        { op: ENDPOINT_CALL_OP }
+      );
+    }
+    const { method, path, query, body } = request ?? {};
+    if (method !== undefined) {
+      payload.method = method;
+    }
+    if (path !== undefined) {
+      payload.path = path;
+    }
+    // The host refuses this too, but with a message that does not say why, and forgetting `method` is the usual cause.
+    if (body !== undefined && (typeof method !== "string" || method.toUpperCase() === "GET")) {
+      throw new TagoDashboardError(
+        "bad_request",
+        'A request body is not allowed with GET, the default method. Set method, for example to "POST".',
+        { op: ENDPOINT_CALL_OP }
+      );
+    }
+    try {
+      if (query !== undefined) {
+        payload.query = encodeEndpointQuery(query);
+      }
+      const encoded = encodeEndpointBody(body);
+      if (encoded !== undefined) {
+        payload.body = encoded;
+      }
+    } catch (error) {
+      throw new TagoDashboardError(
+        "bad_request",
+        `The request cannot be sent: ${error instanceof Error ? error.message : String(error)}`,
+        { op: ENDPOINT_CALL_OP, cause: error }
+      );
+    }
+
+    const { result, requestID } = await this.dispatch(ENDPOINT_CALL_OP, payload, this.resolveTimeout(options));
+    return normalizeEndpointCallResult<TBody>(result, { op: ENDPOINT_CALL_OP, requestID });
+  }
+}
+
+function noResponseMessage(op: string, timeoutMs: number): string {
+  const unanswered = `The dashboard did not answer ${op} within ${timeoutMs}ms. It may have been reloaded or navigated away.`;
+  if (op === ENDPOINT_CALL_OP) {
+    // With the default backstop an Endpoint answers 504 first, after its own 30 seconds, so a lost reply is the usual
+    // cause. A timeoutMs under 30 seconds can cut off a slow Endpoint too. Either way the call may have run.
+    return (
+      `${unanswered} The call was sent and may have run, so check its effect before calling again. ` +
+      "If the Endpoint can take longer than that, raise timeoutMs."
+    );
+  }
+  return (
+    `${unanswered} This is a transport backstop, not a query limit: a query that runs too long comes back as ` +
+    "`timeout` instead. If the dashboard is simply slow, raise timeoutMs."
+  );
 }
 
 export function createDashboardClient(options?: TDashboardClientOptions): DashboardClient {

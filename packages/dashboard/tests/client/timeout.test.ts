@@ -81,6 +81,47 @@ describe("transport backstop", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await assertion;
   });
+
+  it.each([Number.POSITIVE_INFINITY, 2 ** 31, Number.NaN])(
+    "does not fire early for a timeoutMs of %s, which setTimeout would cut to about 1 ms",
+    async (timeoutMs) => {
+      ctx = setupClient();
+      let settled = false;
+      const promise = ctx.client.sql.list({ timeoutMs });
+      void promise.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        }
+      );
+
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(settled).toBe(false);
+
+      ctx.respondOk({ queries: [] });
+      await expect(promise).resolves.toEqual([]);
+    }
+  );
+
+  it("still honors a numeric string from a plain-JS shell, rather than turning the backstop off", async () => {
+    ctx = setupClient();
+    const promise = ctx.client.sql.list({ timeoutMs: "1000" as unknown as number });
+    const assertion = expect(promise).rejects.toMatchObject({ code: "no_response" });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await assertion;
+  });
+
+  it("tells an endpoint.call that timed out to raise timeoutMs, and that it may have run", async () => {
+    ctx = setupClient({ timeoutMs: 1_000 });
+    const promise = ctx.client.endpoint.call("6a1f0c2b9e8d7f6a5b4c3d2e", { method: "POST" });
+    const assertion = expect(promise).rejects.toThrow(/may have run.*timeoutMs/s);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await assertion;
+  });
 });
 
 describe("timer hygiene", () => {

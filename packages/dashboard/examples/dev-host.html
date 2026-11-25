@@ -59,6 +59,10 @@
           { id: "bbbbbbbbbbbbbbbbbbbbbbbb", name: "readings (mock)" },
         ];
 
+        // One Endpoint that answers like the docs.tago.io recipe "Validate a Custom Dashboard form".
+        var ENDPOINTS = [{ id: "cccccccccccccccccccccccc", name: "Save setpoint (mock)" }];
+        var METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+
         var shell = document.getElementById("shell");
         var themeSelect = document.getElementById("theme");
         var srcInput = document.getElementById("src");
@@ -112,6 +116,43 @@
           };
         }
 
+        function endpointAnswer(status, body) {
+          return { status: status, headers: { "content-type": "application/json" }, body: body };
+        }
+
+        // The real host refuses these before it calls anything, as a bridge error rather than an HTTP status.
+        function isRefusedByHost(call) {
+          var method = String(call.method || "GET").toUpperCase();
+          var segments = String(call.path || "").split("/");
+          return (
+            !/^[a-z0-9]{24}$/i.test(call.endpoint_id) ||
+            METHODS.indexOf(method) === -1 ||
+            (method === "GET" && call.body !== undefined) ||
+            segments.indexOf(".") !== -1 ||
+            segments.indexOf("..") !== -1
+          );
+        }
+
+        // The recipe's Analysis: POST /setpoint saves a number from 5 to 30 and answers 422 for anything else.
+        function answerAsRecipe(call) {
+          var known = ENDPOINTS.some(function (endpoint) {
+            return endpoint.id === call.endpoint_id;
+          });
+          // An Endpoint the viewer may not call answers 404, as an HTTP status, not as a bridge error.
+          if (!known) return endpointAnswer(404, { message: "Endpoint can't be found", status: false });
+
+          var method = String(call.method || "GET").toUpperCase();
+          var path = "/" + String(call.path || "").replace(/^\/+/, "");
+          if (method !== "POST" || path !== "/setpoint") return endpointAnswer(404, { error: "Not found." });
+
+          // A missing, empty or non-numeric value is out of range here (NaN or 0), as Luau's tonumber makes it nil there.
+          var setpoint = Number(call.body?.setpoint);
+          if (!(setpoint >= 5 && setpoint <= 30)) {
+            return endpointAnswer(422, { errors: { setpoint: "Enter a number from 5 to 30." } });
+          }
+          return endpointAnswer(200, { ok: true, setpoint: setpoint });
+        }
+
         window.addEventListener("message", function (event) {
           var data = event.data;
           if (!data || typeof data !== "object") return;
@@ -156,6 +197,26 @@
                     ok: false,
                     error: { code: "not_found", message: "SQL query can't be found" },
                   }
+            );
+            return;
+          }
+
+          if (data.op === "endpoint.list") {
+            reply({ type: "dashboard:response", id: data.id, ok: true, result: { endpoints: ENDPOINTS } });
+            return;
+          }
+
+          if (data.op === "endpoint.call") {
+            var call = data.payload ?? {};
+            reply(
+              isRefusedByHost(call)
+                ? {
+                    type: "dashboard:response",
+                    id: data.id,
+                    ok: false,
+                    error: { code: "bad_request", message: "Invalid endpoint.call payload" },
+                  }
+                : { type: "dashboard:response", id: data.id, ok: true, result: answerAsRecipe(call) }
             );
             return;
           }
