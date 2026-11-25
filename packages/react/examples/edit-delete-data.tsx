@@ -18,9 +18,11 @@ import {
   useWidget,
   useWidgetErrors,
 } from "@tago-io/custom-widget-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 type TValue = NonNullable<TDataRecord["value"]>;
+// staleValue is what realtime showed for the record when the save was confirmed.
+type TSavedValue = { value: TValue; staleValue: TDataRecord["value"] };
 
 // When the platform API refuses an edit or a delete, the host never replies and the
 // promise stays pending, so stop waiting after a while.
@@ -43,7 +45,7 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
 function parseValue(text: string, current: TDataRecord["value"]): TValue | null {
   const trimmed = text.trim();
   if (typeof current === "number") {
-    return trimmed === "" || Number.isNaN(Number(trimmed)) ? null : Number(trimmed);
+    return trimmed === "" || !Number.isFinite(Number(trimmed)) ? null : Number(trimmed);
   }
   if (typeof current === "boolean") {
     return trimmed === "true" ? true : trimmed === "false" ? false : null;
@@ -69,16 +71,21 @@ function RecordEditor() {
   const { records } = useRealtimeData();
   const { lastError, clearErrors } = useWidgetErrors();
   // Changes TagoIO confirmed, applied on top of `records`: realtime may not bring the
-  // change back, and a later push can still carry the old record.
-  const [savedValues, setSavedValues] = useState<Map<string, TValue>>(() => new Map());
+  // change back, and a later push can still carry the old record. An entry is dropped once
+  // realtime shows any value other than its staleValue: the saved one, or a newer change
+  // made somewhere else.
+  const [savedValues, setSavedValues] = useState<Map<string, TSavedValue>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
+  // The records of the latest render, read when a reply comes back.
+  const latestRecords = useRef(records);
 
-  // Once realtime shows a confirmed change, stop overriding the record.
+  // Once realtime moves a record off the value it had before the save, stop overriding it.
   useEffect(() => {
+    latestRecords.current = records;
     const current = new Map(records.map((record) => [record.id, record.value]));
     setSavedValues((saved) => {
-      const pending = [...saved].filter(([id, value]) => current.has(id) && current.get(id) !== value);
+      const pending = [...saved].filter(([id, entry]) => current.has(id) && current.get(id) === entry.staleValue);
       return pending.length === saved.size ? saved : new Map(pending);
     });
     setDeletedIds((deleted) => {
@@ -94,7 +101,10 @@ function RecordEditor() {
   // Sort a copy: `records` belongs to the SDK store.
   const rows = records
     .filter((record) => !deletedIds.includes(record.id))
-    .map((record) => (savedValues.has(record.id) ? { ...record, value: savedValues.get(record.id) } : record))
+    .map((record) => {
+      const saved = savedValues.get(record.id);
+      return saved ? { ...record, value: saved.value } : record;
+    })
     .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
   return (
@@ -122,7 +132,19 @@ function RecordEditor() {
         <RecordRow
           key={record.id}
           record={record}
-          onSaved={(value) => setSavedValues((saved) => new Map(saved).set(record.id, value))}
+          onSaved={(value) => {
+            const shown = latestRecords.current.find((item) => item.id === record.id);
+            setSavedValues((saved) => {
+              const next = new Map(saved);
+              // Realtime may have shown the change before the reply came.
+              if (shown && shown.value !== value) {
+                next.set(record.id, { value, staleValue: shown.value });
+              } else {
+                next.delete(record.id);
+              }
+              return next;
+            });
+          }}
           onDeleted={() => {
             setDeletedIds((deleted) => [...deleted, record.id]);
             setNotice(`Deleted ${record.variable} from ${new Date(record.time).toLocaleString()}.`);

@@ -77,7 +77,9 @@
       // Records from the last realtime message, newest first.
       let snapshot = [];
       // Changes TagoIO confirmed, applied on top of every snapshot: realtime may not bring
-      // the change back, and a later push can still carry the old record.
+      // the change back, and a later push can still carry the old record. Each entry keeps the
+      // value realtime showed when the save was confirmed, and is dropped once realtime shows
+      // any other value: the saved one, or a newer change made somewhere else.
       const savedValues = new Map();
       const deletedIds = new Set();
       // Rows on screen by record id. A realtime push updates them in place, so it does not
@@ -101,7 +103,7 @@
       function parseValue(text, current) {
         const trimmed = text.trim();
         if (typeof current === "number") {
-          return trimmed === "" || Number.isNaN(Number(trimmed)) ? null : Number(trimmed);
+          return trimmed === "" || !Number.isFinite(Number(trimmed)) ? null : Number(trimmed);
         }
         if (typeof current === "boolean") {
           return trimmed === "true" ? true : trimmed === "false" ? false : null;
@@ -201,7 +203,7 @@
           })
           .map(function (record) {
             return savedValues.has(record.id)
-              ? Object.assign({}, record, { value: savedValues.get(record.id) })
+              ? Object.assign({}, record, { value: savedValues.get(record.id).value })
               : record;
           });
 
@@ -249,7 +251,15 @@
         // this variable.
         withTimeout(window.TagoIO.editData({ id: record.id, variable: record.variable, value: value }))
           .then(function () {
-            savedValues.set(record.id, value);
+            const shown = snapshot.find(function (item) {
+              return item.id === record.id;
+            });
+            // Realtime may have shown the change before the reply came.
+            if (shown && shown.value !== value) {
+              savedValues.set(record.id, { value: value, staleValue: shown.value });
+            } else {
+              savedValues.delete(record.id);
+            }
             row.dirty = false;
             setRowStatus(row, "Saved.", false);
             renderRecords();
@@ -307,12 +317,12 @@
           return new Date(b.time) - new Date(a.time);
         });
 
-        // Once realtime shows a confirmed change, stop overriding the record.
-        savedValues.forEach(function (value, id) {
+        // Once realtime moves a record off the value it had before the save, stop overriding it.
+        savedValues.forEach(function (saved, id) {
           const record = snapshot.find(function (item) {
             return item.id === id;
           });
-          if (!record || record.value === value) {
+          if (!record || record.value !== saved.staleValue) {
             savedValues.delete(id);
           }
         });
