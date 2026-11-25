@@ -297,7 +297,7 @@ export type TEndpointCallOptions = {
 
 /**
  * The Endpoint's answer. Every HTTP status resolves with it, 4xx and 5xx included, except a redirect: the dashboard
- * refuses to follow one, so a 3xx rejects with `api_error`.
+ * refuses to follow one, so a 301, 302, 303, 307 or 308 rejects with `api_error`.
  */
 export type TEndpointCallResult<TBody = unknown> = {
   status: number;

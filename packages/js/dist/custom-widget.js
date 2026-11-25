@@ -82,11 +82,14 @@
     }
     /**
      * Post a request and settle with the reply that carries its key. Pass `key` to know it before the reply
-     * arrives; it defaults to a new ID. A key that is still waiting for its reply rejects without posting.
+     * arrives; it defaults to a new ID. An empty key, or one still waiting for its reply, rejects without posting.
      */
     sendWithResponse(message, key = generateId()) {
       if (this.destroyed) {
         return Promise.reject(new Error(BRIDGE_DESTROYED));
+      }
+      if (!key) {
+        return Promise.reject(new Error("A request needs a non-empty key."));
       }
       if (this.pool.has(key)) {
         return Promise.reject(new Error(`A request with key "${key}" is still waiting for its reply.`));

@@ -169,6 +169,12 @@ describe("MessageBridge", () => {
       await expect(promise).resolves.toEqual({ status: true, key: "caller-key", result: [] });
     });
 
+    it("refuses an empty key, which no reply can settle, posting nothing", async () => {
+      await expect(bridge.sendWithResponse({ variables: [] }, "")).rejects.toThrow("key");
+      expect(mockPostMessage).not.toHaveBeenCalled();
+      expect(bridge.pendingCount).toBe(0);
+    });
+
     it("refuses a key that is already waiting, posting nothing and keeping the first request", async () => {
       const first = bridge.sendWithResponse({ variables: [] }, "caller-key");
       mockPostMessage.mockClear();
