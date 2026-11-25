@@ -1,7 +1,7 @@
 /**
  * Scan Code Example
  *
- * Shows how to ask the TagoRUN mobile app to scan a QR code or a barcode.
+ * Shows how to ask the dashboard to scan a QR code or a barcode.
  * This is the React equivalent of the JavaScript "scan-code.html" example.
  *
  * The scanner is not wrapped by the SDK, so the request and the reply are plain
@@ -40,24 +40,24 @@ function Scanner() {
     // A second reply can land before the re-render removes this listener; take only the first.
     let answered = false;
 
-    // Inside the app the reply only comes once the user has scanned, which can take a
-    // while. Outside the app it never comes, because the platform drops the request in
-    // silence. The page cannot tell the two apart, so this is a hint, not a verdict.
+    // The reply comes once the user scans or cancels, which can take a while. A host
+    // with no scanner never answers. The page cannot tell the two apart, so this is a
+    // hint, not a verdict.
     const hintTimeoutId = window.setTimeout(() => {
-      setStatus("Still waiting. Outside the mobile app, nothing ever answers.");
+      setStatus("Still waiting. If no scanner opened, nothing will answer. Press Stop waiting.");
     }, 5000);
 
     function onMessage(event: MessageEvent) {
-      // Opened outside a dashboard, `window.parent` is this same window, so the request
-      // arrives here too. Inside a dashboard the host is a different window.
-      if (event.source === window) {
+      // Only the host page answers, and it is this widget's parent window. Opened on its
+      // own, `window.parent` is this same window, so no message is a reply.
+      if (window.parent === window || event.source !== window.parent) {
         return;
       }
 
-      // The reply echoes the method that was asked for and carries the decoded string
-      // in `data`.
-      const message = event.data as { method?: string; data?: unknown } | null;
-      if (!message || (message.method !== "barcode" && message.method !== "qrcode")) {
+      // The reply echoes the method that was asked for, so a message with any other
+      // method is not the answer.
+      const message = event.data as { method?: string; data?: string } | null;
+      if (!message || message.method !== pending) {
         return;
       }
 
@@ -70,8 +70,9 @@ function Scanner() {
       window.clearTimeout(hintTimeoutId);
       setPending(null);
 
-      if (typeof message.data !== "string" || message.data === "") {
-        setStatus(`The scanner answered "${message.method}" with no value.`);
+      // `data` holds the decoded string, or "" when the user canceled.
+      if (!message.data) {
+        setStatus("Scan canceled.");
         return;
       }
 
@@ -93,8 +94,8 @@ function Scanner() {
     window.parent.postMessage({ method }, "*");
   }
 
-  // The platform documents no reply for a scan the user cancels, so the page needs
-  // its own way out.
+  // A cancel answers with an empty `data`, but an older host or app may never answer,
+  // so the page keeps its own way out.
   function stopWaiting() {
     setPending(null);
     setStatus("Stopped waiting. A reply that arrives now is ignored.");
@@ -106,8 +107,8 @@ function Scanner() {
     <div style={{ fontFamily: "Arial, sans-serif", padding: 20 }}>
       <h1>Scan a QR code or a barcode</h1>
       <p>
-        Both buttons open the same scanner in the TagoRUN mobile app. The reply carries back whichever method you asked
-        for.
+        Either button reads QR codes and barcodes. The TagoRUN mobile app opens its own scanner, and a browser opens a
+        camera scanner on the page. The reply carries back whichever method you asked for.
       </p>
 
       <button type="button" disabled={pending !== null} onClick={() => requestScan("barcode")} style={buttonStyle}>

@@ -190,32 +190,41 @@ window.TagoIO.closeModal();
 
 ## Scanning QR codes and barcodes
 
-Inside the TagoRUN mobile app, or a custom-branded app built on it, a widget can open the device scanner. This is the one platform capability the SDK does not wrap, so both the request and the reply are plain `postMessage`. The SDK's own listener ignores them, so a listener of your own runs alongside it.
+A widget can ask the dashboard to scan a QR code or a barcode. In the TagoRUN mobile app, or a custom-branded app built on it, the app's own scanner opens. In a browser, whether TagoRUN on the web, Admin, or a widget embedded in another page, the page around the widget opens a camera scanner. The SDK does not wrap the scanner, so both the request and the reply are plain `postMessage`. The SDK's own listener ignores them, so a listener of your own runs alongside it.
 
 ```javascript
-// Ask for a scan.
-window.parent.postMessage({ method: "barcode" }, "*");
+// Ask for a scan from a click on a <button id="scan">: in a browser, the request opens the camera.
+document.getElementById("scan").addEventListener("click", function () {
+  window.parent.postMessage({ method: "barcode" }, "*");
+});
 
 window.addEventListener("message", function (event) {
-  // Opened outside a dashboard, `window.parent` is this page, so skip its own request.
-  if (event.source === window) {
+  // Only the host page answers, and it is this widget's parent window. Opened on its own,
+  // `window.parent` is this page itself, so no message is a reply.
+  if (window.parent === window || event.source !== window.parent) {
     return;
   }
 
-  // The reply echoes the method you asked for, with the decoded string in `data`.
+  // The reply echoes the method you asked for. `data` holds the decoded string, or "" if the user canceled.
   if (event.data && event.data.method === "barcode") {
-    console.log("Scanned:", event.data.data);
+    if (event.data.data) {
+      console.log("Scanned:", event.data.data);
+    } else {
+      console.log("Scan canceled");
+    }
   }
 });
 ```
 
-`barcode` and `qrcode` open the same scanner, which reads QR codes and 1D barcodes alike. What changes is the reply: a widget that asks for `barcode` is answered with `barcode`.
+Either method reads QR codes and 1D barcodes. The TagoRUN app may shape its scan window to the method, a square for `qrcode` and a wide strip for `barcode`, so ask for the one that matches the code. The reply echoes the method: a widget that asks for `barcode` is answered with `barcode`.
 
 Plan for the following:
 
-- **It only works inside the mobile app.** Everywhere else, a mobile browser included, the request is dropped in silence. No reply, no error.
-- **The reply comes when the user is done, if at all.** It arrives only after the user has aimed and scanned, and no reply is documented for a scan the user cancels. Give the user a way to stop waiting instead of treating a slow reply as a failure.
-- **The reply carries no `key`.** The SDK matches data-operation replies by the `key` it sends, but a scan reply never carries one, so it cannot be matched to its request. Keep a single request in flight, and ignore a reply you are no longer waiting for.
+- **In a browser, the scanner needs a camera.** It also needs the user's permission to use it. Without either, the scanner shows an error and the user can only cancel. A page loaded inside another page's `<iframe>`, such as a widget embedded with the embed code from Admin, also needs `allow="camera"` on every `<iframe>` around it, and every page around it served over HTTPS.
+- **The reply comes when the user is done.** It arrives once the user scans a code or cancels, and a cancel answers with an empty `data`. An older host or app may never answer, so give the user a way to stop waiting instead of treating a slow reply as a failure.
+- **The reply carries no `key`.** The SDK matches data-operation replies by the `key` it sends, but a scan reply never carries one, so it cannot be matched to its request. Keep a single request in flight, since one sent while a scan is open may get no answer of its own, and ignore a reply you are no longer waiting for.
+
+The [`scan-code.html`](./examples/scan-code.html) example adds the rest: one request at a time, a way to stop waiting, and late replies ignored.
 
 ## TypeScript Support
 
@@ -263,7 +272,7 @@ This package includes HTML examples in the [`examples/`](./examples/) folder:
 | `send-data.html`        | Sending data back to devices                           |
 | `time-interval.html`    | Time-based data analysis                               |
 | `custom-units.html`     | Unit conversions and formatting                        |
-| `scan-code.html`        | Scanning a QR code or barcode with the mobile app      |
+| `scan-code.html`        | Scanning a QR code or barcode                          |
 
 ## External Project Examples
 
