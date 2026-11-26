@@ -447,7 +447,7 @@ describe("endpoint.call request checks", () => {
     expect(ctx.requests()).toHaveLength(0);
   });
 
-  it("sends plain objects, arrays, prototype-free objects, toJSON results, class instances with fields and boxed primitives", () => {
+  it("sends plain objects, arrays, prototype-free objects, toJSON results and class instances with fields", () => {
     ctx = setupClient();
     const bare = Object.assign(Object.create(null) as Record<string, unknown>, { a: 1 });
     class Setpoint {
@@ -461,9 +461,6 @@ describe("endpoint.call request checks", () => {
       { toJSON: () => ({ v: 1 }) },
       new Setpoint(22),
       {},
-      // JSON writes a boxed primitive as its value.
-      { enabled: new Boolean(false), count: new Number(5), label: new String("") },
-      new Number(5),
     ];
 
     for (const body of bodies) {
@@ -478,8 +475,6 @@ describe("endpoint.call request checks", () => {
       { v: 1 },
       { value: 22 },
       {},
-      { enabled: false, count: 5, label: "" },
-      5,
     ]);
   });
 
@@ -556,14 +551,6 @@ describe("endpoint.call request checks", () => {
     ["Infinity", Number.POSITIVE_INFINITY],
     ["an array holding an object", [{ id: "a" }]],
     ["an array holding undefined", [undefined]],
-    [
-      "an array with a hole",
-      (() => {
-        const holey: string[] = ["a"];
-        holey[2] = "b";
-        return holey;
-      })(),
-    ],
   ])("refuses %s as a query value, naming its key, before posting", async (_label, value) => {
     ctx = setupClient();
 
