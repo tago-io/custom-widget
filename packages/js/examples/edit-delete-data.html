@@ -70,8 +70,8 @@
        * Demonstrates changing and deleting the data records the widget receives, with editData and deleteData
        */
 
-      // When the platform API refuses an edit or a delete, the host never replies and the
-      // promise stays pending, so stop waiting after a while.
+      // A refused edit or delete rejects with the dashboard's message. An older host, such as a
+      // TagoDeploy instance that has not been updated, may never answer, so stop waiting after a while.
       const REPLY_TIMEOUT_MS = 10000;
 
       // The widget's bindings: each variable it reads and the device it reads it from.
@@ -81,7 +81,8 @@
       // Changes TagoIO confirmed, applied on top of every snapshot: realtime may not bring
       // the change back, and a later push can still carry the old record. Each entry keeps the
       // value realtime showed when the save was sent, and is dropped as soon as realtime shows
-      // any other value: the saved one, or a newer change made somewhere else.
+      // any other value: the saved one, a newer change made somewhere else, or the value of an
+      // earlier save from this row.
       const savedValues = new Map();
       const deletedIds = new Set();
       // Rows on screen by record id. A realtime push updates them in place, so it does not
@@ -92,12 +93,27 @@
         let timeoutId;
         const timeout = new Promise(function (resolve, reject) {
           timeoutId = window.setTimeout(function () {
-            reject(new Error("TagoIO did not confirm the change within " + REPLY_TIMEOUT_MS / 1000 + " seconds."));
+            const error = new Error(
+              "No answer from TagoIO within " + REPLY_TIMEOUT_MS / 1000 + " seconds. The change may still go through."
+            );
+            error.name = "TimeoutError";
+            reject(error);
           }, REPLY_TIMEOUT_MS);
         });
         return Promise.race([promise, timeout]).finally(function () {
           window.clearTimeout(timeoutId);
         });
+      }
+
+      // A timeout leaves the outcome unknown, so it gets neither the failure style nor a
+      // "Not saved" or "Not deleted" label.
+      function showFailure(row, label, error) {
+        const reason = (error && error.message) || "Unknown error";
+        if (error && error.name === "TimeoutError") {
+          setRowStatus(row, reason, false);
+        } else {
+          setRowStatus(row, label + ": " + reason, true);
+        }
       }
 
       // Send the value with the type it had, so a numeric variable does not turn into text.
@@ -290,7 +306,7 @@
             renderRecords();
           })
           .catch(function (error) {
-            setRowStatus(row, "Not saved: " + (error.message || "Unknown error"), true);
+            showFailure(row, "Not saved", error);
           })
           .finally(function () {
             setBusy(row, false);
@@ -312,7 +328,7 @@
             renderRecords();
           })
           .catch(function (error) {
-            setRowStatus(row, "Not deleted: " + (error.message || "Unknown error"), true);
+            showFailure(row, "Not deleted", error);
             setBusy(row, false);
           });
       }
@@ -362,8 +378,9 @@
         renderRecords();
       });
 
-      // The host reports some failures without the request key, so no promise settles for
-      // them. "Failed to delete" arrives only here.
+      // Every failure the host reports lands here, including the ones a row already shows. This is
+      // the only place that sees a failure sent without the request key, such as the
+      // "Failed to delete" of an older host, or one that comes after its row stopped waiting.
       window.TagoIO.onError(function (error) {
         console.error("Widget error:", error);
         document.getElementById("error-text").textContent = "Error: " + (error.message || "Unknown error");
