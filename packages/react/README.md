@@ -51,50 +51,154 @@ function Dashboard() {
 ```tsx
 <TagoIOProvider
   realtimeStrategy="merge" // "replace" | "append" | "merge" (default: "merge")
-  realtimeMaxRecords={1000} // max records for "append" strategy
-  allowedOrigins={["https://admin.tago.io"]} // optional origin validation
-  readyOptions={{ header: { color: "#333" } }}
-  dictionary={Dictionary} // optional: Dictionary class from @tago-io/sdk
+  realtimeMaxRecords={1000} // "append" only: how many realtime blocks to keep, not records (default: 1000)
+  allowedOrigins={["https://admin.tago.io"]} // optional: drops messages from every other origin
+  dictionary={MyDictionary} // optional: a class whose instances have translate(text), see i18n
 >
   <App />
 </TagoIOProvider>
 ```
 
+The provider reads its props once, when it mounts.
+
+Plan for the following:
+
+- **Keep `"merge"`, or use `"replace"`.** The dashboard sends the widget's whole data set in every realtime message, so `"append"` stacks copies of it.
+- **`allowedOrigins` must list every origin the dashboard runs on.** Messages from any other origin are dropped, replies included, so a TagoRUN domain, custom domain or TagoDeploy host missing from the list leaves the widget loading and every call pending. Leave it out unless you know them all.
+
 ## Hooks
 
 ### Receiving Data
 
-| Hook                        | Description                                                     |
-| --------------------------- | --------------------------------------------------------------- |
-| `useWidget()`               | Widget config, loading state, variables, IDs                    |
-| `useRealtimeData(options?)` | Realtime data with optional selector for filtering              |
-| `useResourceData()`         | Platform resources (device list, users, entities) + `refresh()` |
-| `useUserInformation()`      | User token, language, runURL                                    |
-| `useBlueprintDevices()`     | Blueprint device selections and settings                        |
-| `useWidgetErrors()`         | Error accumulation with clear                                   |
-| `useWidgetData()`           | Convenience: combines widget + realtime + errors                |
+| Hook                        | Description                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useWidget()`               | `{ widget, isLoading, variables, dashboardId, widgetId, label }`. `isLoading` stays `true` until the widget settings arrive                               |
+| `useRealtimeData(options?)` | `{ data, records, eventCount, lastUpdatedAt, clear }`: the realtime blocks and their records, with an optional `selector`                                 |
+| `useResourceData()`         | `{ resources, getByType, refresh, eventCount, lastUpdatedAt }`: platform resources (device list, users, entities)                                         |
+| `useUserInformation()`      | `{ userInformation, token, language, runURL, customPreferences, preferences }`, empty until it arrives after the widget settings                          |
+| `useBlueprintDevices()`     | `{ blueprintDevices, selected, settings }`, filled when the dashboard sends blueprint device data. Read the selected devices from `useWidget().variables` |
+| `useWidgetErrors()`         | `{ lastError, errors, clearErrors }`: the failures the dashboard reports ([Widget errors](#widget-errors))                                                |
+| `useWidgetData()`           | Convenience: combines widget + realtime + errors                                                                                                          |
 
-### Selective Subscriptions
+### Filtering realtime data
 
-Components only re-render when their specific data slice changes:
+Every realtime message re-renders the components that call `useRealtimeData`, with or without a `selector`, because `eventCount` changes on each one. Filter `records` where you render them: each record carries its own `variable` and `device`.
 
 ```tsx
-// Only re-renders when temperature data changes
-const { records } = useRealtimeData({
-  selector: (data) => data.filter((d) => d.data?.variable?.includes("temperature")),
-});
+const { records } = useRealtimeData();
+const temperatures = records.filter((record) => record.variable === "temperature");
 ```
+
+`selector` receives the realtime blocks and returns the ones to keep, and `data` and `records` then hold only those. Return blocks from the array it receives, as `filter` does: a selector that builds new block objects makes React re-render until it throws.
 
 ### Mutations
 
-| Hook                    | Description                                            |
-| ----------------------- | ------------------------------------------------------ |
-| `useSendData()`         | Send data records to devices                           |
-| `useEditData()`         | Edit existing data records                             |
-| `useDeleteData()`       | Delete data records                                    |
-| `useEditResourceData()` | Edit platform resource rows (devices, users, entities) |
+| Hook                    | Returns                                         |
+| ----------------------- | ----------------------------------------------- |
+| `useSendData()`         | `{ sendData, isSending, error, reset }`         |
+| `useEditData()`         | `{ editData, isEditing, error, reset }`         |
+| `useDeleteData()`       | `{ deleteData, isDeleting, error, reset }`      |
+| `useEditResourceData()` | `{ editResourceData, isEditing, error, reset }` |
 
-Each returns its mutation function plus a busy flag, `error`, and `reset` — e.g. `useSendData()` returns `{ sendData, isSending, error, reset }` and `useEditResourceData()` returns `{ editResourceData, isEditing, error, reset }`.
+Each function returns a Promise that settles when the dashboard answers. The busy flag turns `true` when a call starts and `false` when any call settles, so with overlapping calls it can clear while one still waits. `error` holds the last rejection, and `reset()` clears both without cancelling the call.
+
+What each function takes:
+
+- `sendData(records)`: one record or an array, such as `{ variable: "temperature", value: 25.5, unit: "°C" }`.
+- `editData(records)`: each record's `id` and `variable` with the new `value`, such as `{ id: record.id, variable: record.variable, value: 30 }`, addressed to the record's device as `setToZero` does below.
+- `deleteData(records)`: records with `id` and `device`, such as the ones in `useRealtimeData().records`. The hook sends each one as a `"<recordId>:<deviceId>"` string.
+- `editResourceData(rows)`: see [Editing resources](#editing-resources).
+
+```tsx
+// No request times out by itself, and some never get an answer (see the notes below).
+function withTimeout<T>(promise: Promise<T>, ms = 10_000): Promise<T> {
+  let timeoutId = 0;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(`No reply from TagoIO after ${ms / 1000} seconds.`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
+function SendButton() {
+  const { sendData, isSending, reset } = useSendData();
+  const [status, setStatus] = useState("");
+
+  async function send() {
+    try {
+      await withTimeout(sendData({ variable: "temperature", value: 25.5, unit: "°C" }));
+      setStatus("Stored.");
+    } catch (error) {
+      reset(); // isSending stays true while no reply comes
+      // A refused write rejects with the dashboard's reply, { status: false, message }.
+      setStatus(`Not confirmed: ${(error as { message?: string }).message}`);
+    }
+  }
+
+  return (
+    <p>
+      <button type="button" disabled={isSending} onClick={() => void send()}>
+        Send
+      </button>{" "}
+      {status}
+    </p>
+  );
+}
+
+function RecordActions({ record }: { record: TDataRecord }) {
+  const { variables } = useWidget();
+  const { editData, isEditing, reset: resetEdit } = useEditData();
+  const { deleteData, isDeleting, reset: resetDelete } = useDeleteData();
+  const [status, setStatus] = useState("");
+
+  async function setToZero() {
+    try {
+      // Address the edit to the device that holds the record (see below).
+      const binding = variables.find((item) => item.variable === record.variable && item.origin.id === record.device);
+      if (!binding) throw new Error("The record's device is not bound to the widget.");
+      const address = { device: binding.origin.id, origin: binding.origin.id, bucket: binding.origin.bucket };
+      await withTimeout(editData({ id: record.id, variable: record.variable, value: 0, ...address }));
+      setStatus("Saved.");
+    } catch (error) {
+      resetEdit();
+      // A missing binding, a refusal or a timeout. After a timeout, the edit may still go through.
+      setStatus(`Not confirmed: ${(error as { message?: string }).message}`);
+    }
+  }
+
+  async function remove() {
+    try {
+      await withTimeout(deleteData(record));
+      setStatus("Deleted.");
+    } catch (error) {
+      resetDelete();
+      setStatus(`Not confirmed: ${(error as { message?: string }).message}`);
+    }
+  }
+
+  return (
+    <p>
+      <button type="button" disabled={isEditing} onClick={() => void setToZero()}>
+        Set to 0
+      </button>{" "}
+      <button type="button" disabled={isDeleting} onClick={() => void remove()}>
+        Delete
+      </button>{" "}
+      {status}
+    </p>
+  );
+}
+```
+
+Plan for the following:
+
+- **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise rejects with `"No records to process"`. While `isLoading` is `true`, no variable is bound yet, and the dashboard ignores a request until it has handled `ready()`, which the provider sends after its children's first effects, so a call made that early may never settle.
+- **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To send to a single device, bind the variable on that device only.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `setToZero` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
+- **Addressed edits can still repeat.** With the variable bound on several devices, the record's device gets one identical copy per binding. That is redundant but correct.
+- **A refused write rejects.** When the platform refuses a `sendData`, `editData` or `deleteData`, the promise rejects with the dashboard's reply, `{ status: false, message }`, and the hook's `error` holds it until the next call or `reset()`. For an edit or a delete, `message` is the platform's error or `"Failed to edit"` / `"Failed to delete"`. A resolved promise means the platform accepted the change.
+- **Keep a timeout for requests that get no answer.** No request times out by itself. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a refused request unanswered: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, as `withTimeout` does, and call `reset()` when it fires. On a current host, a refusal rejects the promise long before the timer fires.
+- **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`.
+- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` while realtime still shows the value from before the save, as `edit-delete-data.tsx` does.
 
 #### Editing resources
 
@@ -113,24 +217,208 @@ await editResourceData({ user: "USER_ID", phone: "+1 555 0100" });
 await editResourceData({ id: "ROW_ID", entity: "ENTITY_ID", status: "closed" });
 ```
 
-### Navigation
+Plan for the following:
+
+- **Keep entity rows and device or user rows in separate calls.** The dashboard sends all the rows of one call to a single endpoint.
+- **Rows do not update by themselves.** After a save, call `refresh()` from `useResourceData()` to load device, user and entity_list rows again. Nothing replies to it, and any rows it loads arrive through `useResourceData()`.
+- **Check entity results.** An entity edit can resolve even when the platform refused it: `result.status` holds the HTTP status, and `result.data` the API answer, which can carry `status: false`.
+- **Stop waiting after a while.** The promise settles only when the dashboard answers, so race it against a timeout, as `withTimeout` does above.
+
+### Widget errors
+
+`useWidgetErrors()` returns `{ lastError, errors, clearErrors }`. It receives every failure the dashboard reports with `status: false`. A failure that answers a call carries that call's `key` and also rejects its promise, so you can handle it where you make the call. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, and a call whose records the hook dropped gets `"No records to process"`. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a failure unanswered or answer it without the `key`, as it does with `"Failed to delete"`. Only this hook sees such a failure, if anything does, and its call never settles. Entries are plain objects with a `message`, not `Error` instances.
+
+`clearErrors()` empties the list for every component under the provider. A mutation hook's `reset()` does not touch it.
 
 ```tsx
-const { openLink, closeModal } = useNavigation();
+function ErrorBanner() {
+  const { lastError, clearErrors } = useWidgetErrors();
+
+  if (!lastError) return null;
+
+  return (
+    <p role="alert">
+      {lastError.message}{" "}
+      <button type="button" onClick={clearErrors}>
+        Dismiss
+      </button>
+    </p>
+  );
+}
 ```
+
+### Navigation
+
+`useNavigation()` returns `{ openLink, closeModal }`. `openLink(url)` asks the dashboard to open a link, and `closeModal()` asks it to close the modal the widget is in. Both return nothing, and no reply comes back.
+
+```tsx
+import { TagoIOProvider, useNavigation } from "@tago-io/custom-widget-react";
+
+function App() {
+  return (
+    <TagoIOProvider>
+      <Links />
+    </TagoIOProvider>
+  );
+}
+
+function Links() {
+  const { openLink, closeModal } = useNavigation();
+
+  // Wrap openLink in an arrow function: onClick={openLink} would pass the click event as the URL.
+  return (
+    <div>
+      {/* A dashboard, in the same tab. The query string preselects a blueprint device on it. */}
+      <button type="button" onClick={() => openLink("/dashboards/info/DASHBOARD_ID?IDENTIFIER=DEVICE_ID")}>
+        Open dashboard
+      </button>
+      {/* A web page, in a new tab. */}
+      <button type="button" onClick={() => openLink("https://docs.tago.io/docs/tagoio/widgets/custom-widget/")}>
+        Open the docs
+      </button>
+      {/* The modal a header button opened this widget in. */}
+      <button type="button" onClick={closeModal}>
+        Close
+      </button>
+    </div>
+  );
+}
+```
+
+Plan for the following:
+
+- **Dashboards open in the same tab.** A link that contains `/dashboards/info/<dashboardId>` opens that dashboard in the current tab, without a page reload, and keeps the query string. The dashboard drops everything before `/dashboards/`, so the relative form works on the Admin, TagoRUN and TagoDeploy domains alike. Keep `/info/`: the `/dashboards/<id>` address the browser bar shows is not treated as a dashboard link.
+- **Blueprint devices are picked by Identifier.** To preselect a device on a blueprint dashboard, add `?<identifier>=<deviceId>` to the link, where `<identifier>` is the Identifier of one of that dashboard's blueprint devices.
+- **Web pages open in a new tab.** Any other full `https://` URL opens in a new tab. The dashboard page opens that tab, and browsers block it when the click was not recent, so call `openLink` in the click handler itself, not after awaiting a request or a timer.
+- **Use `openLink`, not a plain link.** An `<a href>` navigates the widget's own frame, not the dashboard around it.
+- **Some links are not supported.** These do nothing useful: Admin pages other than dashboards (`https://admin.tago.io/devices/<id>`), `mailto:` and `tel:` links, bare e-mail addresses, and relative paths that are not dashboard links. In a dashboard embedded in another site, `openLink` does nothing at all. In the TagoRUN mobile app, or a custom-branded app built on it, the dashboard hands the link to the app.
+- **`closeModal` only closes a widget modal.** A header button set to open a widget shows it in a modal, and `closeModal` closes that modal. On a dashboard tile it does nothing, and the widget cannot tell which of the two it is in. A header button set to open an iframe loads the page in a plain iframe, where `useWidget().isLoading` stays `true` and `closeModal` does nothing.
+- **Closing removes the widget from the page.** Let a pending `sendData` or `editData` call settle before `closeModal`, or its reply is lost.
+
+### Running an Analysis
+
+`useRunAnalysis()` returns only `{ runAnalysis }`: no busy flag, no error and no promise. `runAnalysis(scope)` runs the Analysis selected in the widget settings, under **Options** > **Run analysis when sending data**. The widget gets the ID of that Analysis in `widget.analysis_run`.
+
+```tsx
+function RunButton() {
+  const { widget } = useWidget();
+  const { runAnalysis } = useRunAnalysis();
+  const [requested, setRequested] = useState(false);
+
+  // The dashboard ignores runAnalysis while no Analysis is selected.
+  const hasAnalysis = Boolean(widget?.analysis_run);
+
+  return (
+    <button
+      type="button"
+      disabled={!hasAnalysis}
+      onClick={() => {
+        // The Analysis receives this array as its scope.
+        runAnalysis([{ zone: "north" }]);
+        setRequested(true);
+      }}
+    >
+      {requested ? "Requested" : "Run Analysis"}
+    </button>
+  );
+}
+```
+
+Plan for the following:
+
+- **Nothing runs without a selected Analysis.** The dashboard ignores the call while `widget.analysis_run` is empty, so keep the control disabled until it is set.
+- **No reply comes back.** `runAnalysis` returns nothing, and the widget never learns whether the Analysis ran or failed. To show a result, have the Analysis write to a variable the widget reads, and watch `useRealtimeData` for the new record.
+- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, with a falsy `value` sent as `""`, so leave those keys out.
+- **Wrap it in an arrow function.** `onClick={runAnalysis}` would send the click event as the scope, which the browser cannot copy into a message, so the call throws.
 
 ### i18n
 
+`useDictionary(options?)` returns `{ t, tSync, dictionary, isLoading, language, error }`. It translates through the class passed as the provider's `dictionary` prop, and returns the original text when there is no dictionary to ask:
+
+- `t(text)` resolves to what `translate(text)` returns on an instance of that class, created for the current `language`. Without a `dictionary` prop, before the language is known, or when the instance has no `translate` method or it throws, `t` resolves to the original text. `t` passes on whatever `translate` returns, so have it return the original text for a key it does not know. The `Dictionary` class from `@tago-io/sdk` has no `translate` method, so pass a class of your own.
+- `tSync(text)` returns the original text. Use `t` for translations.
+- `language` is `options.language` when you pass it, and otherwise the viewer's language from user information.
+
+To show labels in the viewer's language without a dictionary class, keep your own translations and pick them by language:
+
 ```tsx
-import { Dictionary } from "@tago-io/sdk";
+const LABELS: Record<string, { save: string }> = {
+  en: { save: "Save" },
+  pt: { save: "Salvar" },
+};
 
-// In provider:
-<TagoIOProvider dictionary={Dictionary}>
-
-// In component:
-const { t, tSync, language } = useDictionary();
-const translated = await t("Hello");
+function SaveLabel() {
+  const { language } = useUserInformation();
+  // language is a locale tag such as "pt-BR", and null until user information arrives.
+  const labels = LABELS[language?.split(/[-_]/)[0] ?? "en"] ?? LABELS.en;
+  return <span>{labels.save}</span>;
+}
 ```
+
+## Formatting and grouping helpers
+
+`@tago-io/custom-widget-react` re-exports these helpers from `@tago-io/custom-widget-core`. The JavaScript SDK does not include them.
+
+```ts
+declare function formatValue(
+  value: string | number | boolean | undefined,
+  options?: {
+    locale?: string;
+    minimumFractionDigits?: number;
+    maximumFractionDigits?: number;
+    style?: "decimal" | "currency" | "percent" | "unit";
+    currency?: string;
+    unit?: string;
+  }
+): string;
+
+declare function formatDate(
+  date: string | Date | number,
+  options?: {
+    locale?: string;
+    dateStyle?: "full" | "long" | "medium" | "short";
+    timeStyle?: "full" | "long" | "medium" | "short";
+    relative?: boolean;
+  }
+): string;
+
+declare function groupByDevice(records: TDataRecord[]): Record<string, TDataRecord[]>; // key: device ID
+declare function groupByVariable(records: TDataRecord[]): Record<string, TDataRecord[]>; // key: variable name
+declare function getLatestByVariable(records: TDataRecord[]): Record<string, TDataRecord>; // newest record per variable
+```
+
+```tsx
+function LatestTemperatures() {
+  const { records } = useRealtimeData();
+  const { language } = useUserInformation();
+  // Intl rejects tags such as "pt_BR", and undefined uses the browser's language.
+  const locale = language?.replace("_", "-");
+
+  return (
+    <ul>
+      {Object.entries(groupByDevice(records)).map(([deviceId, deviceRecords]) => {
+        const latest = getLatestByVariable(deviceRecords).temperature;
+        if (!latest) return null;
+        const value = formatValue(latest.value, { locale, maximumFractionDigits: 1 });
+        const unit = latest.unit ? ` ${latest.unit}` : "";
+        return (
+          <li key={deviceId}>
+            {deviceId}: {value}
+            {unit}, {formatDate(latest.time, { locale, relative: true })}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+```
+
+Plan for the following:
+
+- **Group by device before picking the latest reading.** `getLatestByVariable` and `groupByVariable` key by variable name alone, so records from different devices with the same variable merge. `groupByDevice` keys by each record's `device`, falling back to `origin`. `getLatestByVariable` compares `time` as text.
+- **`formatValue` does not know TagoIO units.** Numbers and numeric strings go through `Intl.NumberFormat`. Other strings come back unchanged, booleans as `"true"` or `"false"`, `undefined` as `""` and an empty string as `"0"`. With `style: "unit"`, Intl expects a unit such as `"celsius"`: a unit like `"°C"` makes it fail, and you get the plain number. Append `record.unit` yourself.
+- **`formatDate` uses the browser's time zone.** It has no time zone option, and it reads a number as milliseconds. `relative: true` prints text such as `"5 minutes ago"`, and `"now"`, in English, for anything under a second.
+- **User information arrives after the widget settings.** Until it does, `language` is `null`, and a `locale` of `undefined` uses the browser's language.
 
 ## Scanning QR codes and barcodes
 
@@ -183,12 +471,16 @@ The [scan-code.tsx](./examples/scan-code.tsx) example adds the rest: one request
 
 The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy into your project:
 
-- **[read-data.tsx](./examples/read-data.tsx)** — Display real-time data from devices
-- **[send-data.tsx](./examples/send-data.tsx)** — Send data back to devices with a form
-- **[read-resource.tsx](./examples/read-resource.tsx)** — Read platform resources (device list, users, entities)
-- **[edit-resource.tsx](./examples/edit-resource.tsx)** — Edit resource rows driven by the `editable` columns
-- **[read-widget-info.tsx](./examples/read-widget-info.tsx)** — Widget config, user info, and blueprint devices
-- **[scan-code.tsx](./examples/scan-code.tsx)** — Scan a QR code or barcode
+- **[read-data.tsx](./examples/read-data.tsx)**: Display real-time data from devices
+- **[send-data.tsx](./examples/send-data.tsx)**: Send data back to devices with a form
+- **[read-resource.tsx](./examples/read-resource.tsx)**: Read platform resources (device list, users, entities)
+- **[edit-resource.tsx](./examples/edit-resource.tsx)**: Edit resource rows driven by the `editable` columns
+- **[read-widget-info.tsx](./examples/read-widget-info.tsx)**: Widget config, user info, and blueprint devices
+- **[scan-code.tsx](./examples/scan-code.tsx)**: Scan a QR code or barcode
+- **[edit-delete-data.tsx](./examples/edit-delete-data.tsx)**: Edit and delete the data records a widget receives
+- **[navigation.tsx](./examples/navigation.tsx)**: Open a dashboard or web page, or close a widget modal
+- **[run-analysis.tsx](./examples/run-analysis.tsx)**: Run the widget's Analysis and show the data it writes
+- **[format-data.tsx](./examples/format-data.tsx)**: Format the latest readings in the viewer's language
 
 ## Re-exports
 

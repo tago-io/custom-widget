@@ -78,97 +78,243 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 | Function                   | Direction   | Description                                                                                |
 | -------------------------- | ----------- | ------------------------------------------------------------------------------------------ |
-| `TagoIO.ready(options)`    | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget. |
+| `TagoIO.ready()`           | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget. |
 | `TagoIO.onStart(callback)` | You receive | Called when TagoIO starts your widget. Provides configuration, variables, and settings.    |
-| `TagoIO.onError(callback)` | You receive | Called when API errors or widget issues occur.                                             |
+| `TagoIO.onError(callback)` | You receive | Called when the dashboard reports a failed request ([Error Handling](#error-handling)).    |
 
 ### Data Operations
 
 > **Note**: These operations only work with data that is within the Custom Widget's configured settings and permissions.
 
-| Function                                  | Direction | Description                                                                            |
-| ----------------------------------------- | --------- | -------------------------------------------------------------------------------------- |
-| `TagoIO.sendData(data, callback)`         | You send  | Send data to TagoIO devices                                                            |
-| `TagoIO.editData(data, callback)`         | You send  | Edit existing device data                                                              |
-| `TagoIO.deleteData(data, callback)`       | You send  | Delete device data                                                                     |
-| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resource rows (devices, users, entities)                                 |
-| `TagoIO.refreshResources()`               | You send  | Ask the platform to re-fetch resource collections; fresh data arrives via `onRealtime` |
+| Function                                  | Direction | Description                                                                                                                                                   |
+| ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TagoIO.sendData(data, callback)`         | You send  | Send one record or an array to the devices bound to the widget ([Sending Data](#sending-data))                                                                |
+| `TagoIO.editData(data, callback)`         | You send  | Change stored records: each needs its `id`, its `variable`, the new `value` and the record's device ([Editing and deleting data](#editing-and-deleting-data)) |
+| `TagoIO.deleteData(data, callback)`       | You send  | Delete stored records, given as `"<recordId>:<deviceId>"` strings ([Editing and deleting data](#editing-and-deleting-data))                                   |
+| `TagoIO.editResourceData(data, callback)` | You send  | Edit platform resource rows (devices, users, entities)                                                                                                        |
+| `TagoIO.refreshResources()`               | You send  | Ask the dashboard to load the widget's resource rows again. No reply: any rows it loads arrive through `onRealtime`                                           |
+
+`sendData`, `editData`, `deleteData` and `editResourceData` return a Promise, or `undefined` when you pass a `callback`, which then receives `(data)` on success and `(null, error)` on failure.
 
 ### Real-time Events
 
-| Function                                  | Direction   | Description                                         |
-| ----------------------------------------- | ----------- | --------------------------------------------------- |
-| `TagoIO.onRealtime(callback)`             | You receive | Called when new data arrives from connected devices |
-| `TagoIO.onSyncUserInformation(callback)`  | You receive | Called when user context or authentication updates  |
-| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Called when blueprint device configurations change  |
+| Function                                  | Direction   | Description                                                                                                                                            |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TagoIO.onRealtime(callback)`             | You receive | Called with every data and resource block the widget has, each time that set changes ([Working with Real-time Data](#working-with-real-time-data))     |
+| `TagoIO.onSyncUserInformation(callback)`  | You receive | Called after each `ready()` with the viewer's token, language, runURL and preferences                                                                  |
+| `TagoIO.onSyncBlueprintDevices(callback)` | You receive | Called when the dashboard sends blueprint device data. Read the selected devices from the widget's variables ([Blueprint Devices](#blueprint-devices)) |
 
 ### Utilities
 
-| Function               | Description                                                       |
-| ---------------------- | ----------------------------------------------------------------- |
-| `TagoIO.openLink(url)` | Navigate to other dashboards or external links                    |
-| `TagoIO.closeModal()`  | Close widget modal (for header button widgets)                    |
-| `TagoIO.autoFill`      | Boolean flag to enable/disable automatic device/bucket ID filling |
+| Function                    | Description                                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `TagoIO.openLink(url)`      | Open a dashboard in the same tab or a web page in a new tab ([Navigation](#navigation))                                             |
+| `TagoIO.closeModal()`       | Close the modal a header button opened the widget in. Does nothing on a dashboard tile                                              |
+| `TagoIO.runAnalysis(scope)` | Run the Analysis selected in the widget settings, with `scope` as its input. No reply ([Running an Analysis](#running-an-analysis)) |
+| `TagoIO.autoFill`           | `true` by default: `sendData` and `editData` fill each record's `device` and `origin` from the widget's bound variables             |
 
 ## Working with Real-time Data
+
+Each `onRealtime` call carries every block the widget has, not only what changed, so rebuild your view from it instead of appending to what you have. Data blocks hold their records in `result`. Resource blocks (device, user and entity rows) have `resource` instead of `data`.
 
 ```javascript
 window.TagoIO.onRealtime(function (data) {
   data.forEach(function (dataGroup) {
-    if (dataGroup.result) {
-      dataGroup.result.forEach(function (dataPoint) {
-        console.log("Variable:", dataPoint.variable);
-        console.log("Value:", dataPoint.value);
-        console.log("Time:", dataPoint.time);
-      });
+    // Resource blocks hold rows, not data records.
+    if (dataGroup.resource || !dataGroup.result) {
+      return;
     }
+    dataGroup.result.forEach(function (dataPoint) {
+      console.log("Variable:", dataPoint.variable);
+      console.log("Value:", dataPoint.value);
+      console.log("Time:", dataPoint.time);
+    });
   });
 });
 ```
 
 ## Sending Data
 
+With `autoFill` on (the default), a record needs only its `variable` and `value`: the SDK adds `device` and `origin` from the widget's binding for that variable, and `bucket` when the binding has one.
+
 ```javascript
+// No request times out by itself, and some never get an answer (see the notes below).
+function withTimeout(promise, ms) {
+  let timeoutId;
+  const timeout = new Promise(function (resolve, reject) {
+    timeoutId = setTimeout(function () {
+      reject(new Error("No reply from TagoIO after " + ms / 1000 + " seconds."));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(function () {
+    clearTimeout(timeoutId);
+  });
+}
+
 async function sendSensorData() {
   try {
-    const result = await window.TagoIO.sendData({
-      variable: "temperature",
-      value: 25.5,
-      unit: "°C",
-      time: new Date().toISOString(),
-    });
-    console.log("Data sent successfully:", result);
+    const reply = await withTimeout(
+      window.TagoIO.sendData({ variable: "temperature", value: 25.5, unit: "°C" }),
+      10000
+    );
+    console.log("Data stored:", reply.result);
   } catch (error) {
-    console.error("Failed to send data:", error);
+    // A refused write rejects with the dashboard's reply, { status: false, message }.
+    console.error("Not confirmed:", error.message);
   }
 }
 ```
 
-## Editing Resources
+Plan for the following:
 
-The payload identity key depends on the resource type. Only columns listed in the resource's `editable` array are accepted — the platform enforces this server-side.
+- **Send after `onStart`, and only bound variables.** The SDK drops a record whose variable is not bound to the widget, and when it drops every record, the promise rejects with `"No records to process"`. Before `onStart`, no variable is bound yet, and the dashboard ignores a request until it has handled `ready()`, so a call made that early may never settle.
+- **A variable bound on several devices is written to each.** The SDK makes one record per device the variable is bound on. To write to one device only, turn `autoFill` off and pass `origin` ([Editing and deleting data](#editing-and-deleting-data)).
+- **A refused write rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`. A resolved promise means every request succeeded, and `result` holds one `{ status: "fulfilled", value }` entry per API call the dashboard made to store the records, not one per record.
+- **Keep a timeout for requests that get no answer.** No request times out by itself. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a refused request unanswered. Race each call against a timer, as `withTimeout` does. On a current host, a refusal rejects the promise long before the timer fires.
+- **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `onError`.
+
+## Editing and deleting data
+
+Edit and delete the records `onRealtime` delivers. `editData` takes each record's `id` and `variable` with the new `value`, addressed to the record's device. `deleteData` takes `"<recordId>:<deviceId>"` strings, one or an array, so one call can delete records from several devices.
 
 ```javascript
-// Device row — identity key is `device`
-await window.TagoIO.editResourceData({ device: "DEVICE_ID", name: "New name", "tags.type": "sensor" });
+// withTimeout is the helper from Sending Data.
+let bindings = [];
+// The SDK keeps one onStart handler, so set bindings in yours.
+window.TagoIO.onStart(function (widget) {
+  bindings = widget.display.variables;
+});
 
-// User row — identity key is `user`
-await window.TagoIO.editResourceData({ user: "USER_ID", phone: "+1 555 0100" });
+async function changeValue(record, value) {
+  try {
+    // Address the edit to the device that holds the record (see below).
+    const binding = bindings.find(function (item) {
+      return item.variable === record.variable && item.origin.id === record.device;
+    });
+    if (!binding) {
+      throw new Error("The record's device is not bound to the widget.");
+    }
+    const edit = {
+      id: record.id,
+      variable: record.variable,
+      value: value,
+      device: binding.origin.id,
+      origin: binding.origin.id,
+      bucket: binding.origin.bucket,
+    };
+    await withTimeout(window.TagoIO.editData(edit), 10000);
+    console.log("Saved");
+  } catch (error) {
+    // A missing binding, a refusal or a timeout. After a timeout, the edit may still go through.
+    console.error("Not confirmed:", error.message);
+  }
+}
 
-// Entity row — row `id` plus the entity block id (resource.id)
-await window.TagoIO.editResourceData({ id: "ROW_ID", entity: "ENTITY_ID", status: "closed" });
+async function removeRecord(record) {
+  try {
+    await withTimeout(window.TagoIO.deleteData(record.id + ":" + record.device), 10000);
+    console.log("Deleted");
+  } catch (error) {
+    console.error("Not confirmed:", error.message);
+  }
+}
 ```
+
+To choose the device yourself, turn `autoFill` off. `sendData` and `editData` then send records exactly as you write them, and the dashboard accepts a record only when its `variable`, `origin` and `bucket` match one of the widget's bindings, so copy them from `widget.display.variables`:
+
+```javascript
+window.TagoIO.autoFill = false;
+
+// bindings is set in onStart, as in the example above.
+function sendToDevice(deviceId, value) {
+  const binding = bindings.find(function (item) {
+    return item.variable === "temperature" && item.origin.id === deviceId;
+  });
+  if (!binding) {
+    throw new Error("temperature is not bound to device " + deviceId);
+  }
+  return window.TagoIO.sendData({
+    variable: "temperature",
+    value: value,
+    origin: binding.origin.id,
+    bucket: binding.origin.bucket,
+  });
+}
+```
+
+Plan for the following:
+
+- **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one copy of the edit per device. `deleteData` ignores `autoFill`: each string names its device.
+- **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `changeValue` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
+- **Addressed edits can still repeat.** With the variable bound on several devices, the record's device gets one identical copy per binding. That is redundant but correct. To send a single copy, turn `autoFill` off: `changeValue` already passes `origin`.
+- **With `autoFill` off, every record needs `origin`.** A record without it makes the call throw before any Promise exists, so `.catch()` never sees the error: wrap the call in `try`/`catch`.
+- **A refused edit or delete rejects.** The promise rejects with the dashboard's reply, `{ status: false, message }`, where `message` is the platform's error or `"Failed to edit"` / `"Failed to delete"`. A resolved promise means the platform accepted the change.
+- **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of each new snapshot while realtime still shows the value from before the save, as `edit-delete-data.html` does.
+
+## Editing Resources
+
+The payload identity key depends on the resource type. Only columns listed in the resource's `editable` array are accepted; the platform enforces this server-side.
+
+```javascript
+async function saveRows() {
+  // Device row: identity key is `device`
+  await window.TagoIO.editResourceData({ device: "DEVICE_ID", name: "New name", "tags.type": "sensor" });
+
+  // User row: identity key is `user`
+  await window.TagoIO.editResourceData({ user: "USER_ID", phone: "+1 555 0100" });
+
+  // Entity row: row `id` plus the entity block id (resource.id)
+  await window.TagoIO.editResourceData({ id: "ROW_ID", entity: "ENTITY_ID", status: "closed" });
+}
+```
+
+Plan for the following:
+
+- **Keep entity rows and device or user rows in separate calls.** The dashboard sends all the rows of one call to a single endpoint.
+- **Rows do not update by themselves.** After a save, call `refreshResources()` to load device, user and entity_list rows again. Nothing replies to it, and any rows it loads arrive through `onRealtime`.
+- **Check entity results.** An entity edit can resolve even when the platform refused it: `result.status` holds the HTTP status, and `result.data` the API answer, which can carry `status: false`.
+- **Stop waiting after a while.** The promise settles only when the dashboard answers, so race it against a timeout, as in [Sending Data](#sending-data).
+
+## Running an Analysis
+
+`runAnalysis(scope)` runs the Analysis selected in the widget settings, under **Options** > **Run analysis when sending data**. The widget gets the ID of that Analysis in `widget.analysis_run`.
+
+```javascript
+// Markup: <button id="run" type="button" disabled>Run Analysis</button>
+// The SDK keeps one onStart handler, so do this in yours.
+window.TagoIO.onStart(function (widget) {
+  // The dashboard ignores runAnalysis while no Analysis is selected.
+  document.getElementById("run").disabled = !widget.analysis_run;
+});
+
+document.getElementById("run").addEventListener("click", function () {
+  // The Analysis receives this array as its scope.
+  window.TagoIO.runAnalysis([{ zone: "north" }]);
+});
+```
+
+Plan for the following:
+
+- **Nothing runs without a selected Analysis.** The dashboard ignores the call while `widget.analysis_run` is empty, so keep the control disabled until it is set.
+- **No reply comes back.** `runAnalysis` returns nothing, and the widget never learns whether the Analysis ran or failed. To show a result, have the Analysis write to a variable the widget reads, and watch `onRealtime` for the new record.
+- **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, with a falsy `value` sent as `""`, so leave those keys out.
 
 ## Blueprint Devices
 
+`onSyncBlueprintDevices` receives blueprint device settings and selections when the dashboard sends them. A blueprint dashboard delivers the selected devices in the widget's variables, so read them there: each `origin.id` is the device selected for that variable's blueprint device, and it is `undefined` until the viewer selects one.
+
 ```javascript
-window.TagoIO.onSyncBlueprintDevices(function (blueprintData) {
-  console.log("Blueprint settings:", blueprintData.settings);
-  console.log("Selected devices:", blueprintData.selected);
+// The SDK keeps one onStart handler, so do this in yours.
+window.TagoIO.onStart(function (widget) {
+  widget.display.variables.forEach(function (item) {
+    console.log(item.variable, "comes from device", item.origin.id);
+  });
 });
 ```
 
 ## User Information
+
+User information arrives once after each `ready()`, right after `onStart`. `token` is the viewer's own session token: keep it out of logs and third-party requests.
 
 ```javascript
 window.TagoIO.onSyncUserInformation(function (userInfo) {
@@ -180,13 +326,34 @@ window.TagoIO.onSyncUserInformation(function (userInfo) {
 
 ## Navigation
 
-```javascript
-// Navigate to another dashboard
-window.TagoIO.openLink("https://admin.tago.io/dashboards/info/dashboard-id");
+`openLink(url)` asks the dashboard to open a link, and `closeModal()` asks it to close the modal the widget is in. Both return nothing, and no reply comes back.
 
-// Close modal (for header button widgets)
-window.TagoIO.closeModal();
+```javascript
+// Markup: three <button type="button"> elements with the ids used below.
+// A dashboard, in the same tab. The query string preselects a blueprint device on it.
+document.getElementById("open-dashboard").addEventListener("click", function () {
+  window.TagoIO.openLink("/dashboards/info/DASHBOARD_ID?IDENTIFIER=DEVICE_ID");
+});
+
+// A web page, in a new tab.
+document.getElementById("open-docs").addEventListener("click", function () {
+  window.TagoIO.openLink("https://docs.tago.io/docs/tagoio/widgets/custom-widget/");
+});
+
+// The modal a header button opened this widget in.
+document.getElementById("close").addEventListener("click", function () {
+  window.TagoIO.closeModal();
+});
 ```
+
+Plan for the following:
+
+- **Dashboards open in the same tab.** A link that contains `/dashboards/info/<dashboardId>` opens that dashboard in the current tab, without a page reload, and keeps the query string. The dashboard drops everything before `/dashboards/`, so the relative form works on the Admin, TagoRUN and TagoDeploy domains alike. Keep `/info/`: the `/dashboards/<id>` address the browser bar shows is not treated as a dashboard link.
+- **Blueprint devices are picked by Identifier.** To preselect a device on a blueprint dashboard, add `?<identifier>=<deviceId>` to the link, where `<identifier>` is the Identifier of one of that dashboard's blueprint devices.
+- **Web pages open in a new tab.** Any other full `https://` URL opens in a new tab. The dashboard page opens that tab, and browsers block it when the click was not recent, so call `openLink` in the click handler itself, not after awaiting a request or a timer.
+- **Some links are not supported.** These do nothing useful: Admin pages other than dashboards (`https://admin.tago.io/devices/<id>`), `mailto:` and `tel:` links, bare e-mail addresses, and relative paths that are not dashboard links. In a dashboard embedded in another site, `openLink` does nothing at all. In the TagoRUN mobile app, or a custom-branded app built on it, the dashboard hands the link to the app.
+- **`closeModal` only closes a widget modal.** A header button set to open a widget shows it in a modal, and `closeModal` closes that modal. On a dashboard tile it does nothing, and the widget cannot tell which of the two it is in. A header button set to open an iframe loads the page in a plain iframe, where `onStart` never fires and `closeModal` does nothing.
+- **Closing removes the widget from the page.** Let a pending `sendData` or `editData` call settle before `closeModal`, or its reply is lost.
 
 ## Scanning QR codes and barcodes
 
@@ -228,32 +395,51 @@ The [`scan-code.html`](./examples/scan-code.html) example adds the rest: one req
 
 ## TypeScript Support
 
-The SDK includes TypeScript definitions. For TypeScript projects:
+`@tago-io/custom-widget` ships no type declarations, so `window.TagoIO` has no type in a TypeScript project. The data types it works with, such as `TWidget`, `TRealtimeData` and `TDataRecord`, are typed in `@tago-io/custom-widget-core`. Install it and declare the members you call:
+
+```bash
+npm install @tago-io/custom-widget-core --save-dev
+```
 
 ```typescript
 import "@tago-io/custom-widget";
+import type { TRealtimeData, TWidget } from "@tago-io/custom-widget-core";
 
-window.TagoIO.onStart((widget: TWidget) => {
-  widget.display.variables.forEach((variable: TWidgetVariable) => {
+declare global {
+  interface Window {
+    TagoIO: {
+      onStart(callback: (widget: TWidget) => void): void;
+      onRealtime(callback: (data: TRealtimeData[]) => void): void;
+      ready(): void;
+    };
+  }
+}
+
+window.TagoIO.onStart((widget) => {
+  widget.display.variables.forEach((variable) => {
     console.log(`Variable: ${variable.variable}, Device: ${variable.origin.id}`);
   });
 });
+
+window.TagoIO.ready();
 ```
+
+The React SDK, `@tago-io/custom-widget-react`, ships its own type declarations.
 
 ## Error Handling
 
-Always handle errors so your widget doesn't break silently:
+`onError` receives every failure the dashboard reports with `status: false`. A failure that answers a call carries that call's `key` and also rejects its promise, so you can handle it where you make the call. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, and a call whose records the SDK dropped gets `"No records to process"`. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a failure unanswered or answer it without the `key`, as it does with `"Failed to delete"`. Only `onError` sees such a failure, if anything does, and its call never settles, so race calls against a timer, as `withTimeout` does in [Sending Data](#sending-data).
 
 ```javascript
 window.TagoIO.onError(function (error) {
-  console.error("Widget error:", error);
+  console.error("Widget error:", error.message);
   // Show something to the user so they know what happened
 });
 ```
 
 ## Performance Tips
 
-- Use `window.TagoIO.autoFill = true` to automatically handle device/bucket IDs
+- Rebuild your view from each `onRealtime` call instead of appending to it: every call carries the full data set
 - Throttle high-frequency updates to avoid UI jank
 - Clean up timers and event listeners when the widget is destroyed
 - Limit stored data to prevent memory issues
@@ -273,6 +459,10 @@ This package includes HTML examples in the [`examples/`](./examples/) folder:
 | `time-interval.html`    | Time-based data analysis                               |
 | `custom-units.html`     | Unit conversions and formatting                        |
 | `scan-code.html`        | Scanning a QR code or barcode                          |
+| `edit-delete-data.html` | Editing and deleting the records a widget receives     |
+| `edit-resource.html`    | Editing device, user and entity rows, then refreshing  |
+| `navigation.html`       | Opening dashboards and web pages, closing a modal      |
+| `run-analysis.html`     | Running the widget's Analysis, showing what it writes  |
 
 ## External Project Examples
 

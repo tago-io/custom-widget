@@ -142,7 +142,7 @@ The two product families are independent: the dashboard packages share no code w
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 10+
 
 ### Setup
