@@ -41,6 +41,7 @@
       return this.pending.has(key);
     }
   };
+  var BRIDGE_DESTROYED = "MessageBridge destroyed";
   var MessageBridge = class {
     constructor(options = {}) {
       this.handlers = /* @__PURE__ */ new Set();
@@ -79,12 +80,28 @@
       if (typeof window === "undefined") return;
       window.parent.postMessage(message, "*");
     }
-    sendWithResponse(message) {
-      const key = generateId();
+    /**
+     * Post a request and settle with the reply that carries its key. Pass `key` to know it before the reply
+     * arrives; it defaults to a new ID. An empty key, or one still waiting for its reply, rejects without posting.
+     */
+    sendWithResponse(message, key = generateId()) {
+      if (this.destroyed) {
+        return Promise.reject(new Error(BRIDGE_DESTROYED));
+      }
+      if (!key) {
+        return Promise.reject(new Error("A request needs a non-empty key."));
+      }
+      if (this.pool.has(key)) {
+        return Promise.reject(new Error(`A request with key "${key}" is still waiting for its reply.`));
+      }
       const messageWithKey = { ...message, key };
       return new Promise((resolve, reject) => {
         this.pool.add(key, { resolve, reject });
-        this.send(messageWithKey);
+        try {
+          this.send(messageWithKey);
+        } catch (error) {
+          this.pool.reject(key, error);
+        }
       });
     }
     onMessage(handler) {
@@ -98,7 +115,7 @@
       if (typeof window !== "undefined") {
         window.removeEventListener("message", this.boundReceive, false);
       }
-      this.pool.rejectAll(new Error("MessageBridge destroyed"));
+      this.pool.rejectAll(new Error(BRIDGE_DESTROYED));
       this.handlers.clear();
     }
     get pendingCount() {
@@ -227,16 +244,117 @@
     blueprintDevices: null,
     errors: [],
     isReady: false,
+    capabilities: null,
     realtimeEventCount: 0,
     lastRealtimeAt: null
   };
   var SERVER_SNAPSHOT = { ...INITIAL_STATE };
+  var ENDPOINT_ID_PATTERN = /^[a-z0-9]{24}$/i;
+  function isObject(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function endpointCallError(code, message) {
+    return { code, message };
+  }
+  function errorMessage(error) {
+    return isObject(error) && typeof error.message === "string" ? error.message : String(error);
+  }
+  function toEndpointCallError(reason) {
+    if (isObject(reason) && reason.status === false) {
+      const code = typeof reason.code === "string" && reason.code ? reason.code : "api_error";
+      const message = typeof reason.message === "string" && reason.message ? reason.message : "The dashboard could not call the Endpoint.";
+      return endpointCallError(code, message);
+    }
+    if (reason instanceof Error && reason.message === BRIDGE_DESTROYED) {
+      return endpointCallError("aborted", "The widget stopped before the dashboard answered. The Endpoint may have run.");
+    }
+    return endpointCallError("bad_request", `The request could not be posted to the dashboard: ${errorMessage(reason)}`);
+  }
+  function constructorName(value) {
+    return value.constructor?.name || "object";
+  }
+  function describeValue(value) {
+    if (typeof value === "string") return JSON.stringify(value);
+    if (value === null || value === void 0) return String(value);
+    return `a value of type ${typeof value === "object" ? constructorName(value) : typeof value}`;
+  }
+  function isPlainObject(value) {
+    if (!isObject(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+  var boxedTypes = typeof BigInt === "function" ? [Number, String, Boolean, BigInt] : [Number, String, Boolean];
+  var boxedValueOf = boxedTypes.map((type) => type.prototype.valueOf);
+  function isBoxedPrimitive(value) {
+    return boxedValueOf.some((valueOf) => {
+      try {
+        valueOf.call(value);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  }
+  function refuseValuesJsonEmpties(_key, value) {
+    const emptied = isObject(value) && !Array.isArray(value) && !isPlainObject(value) && !isBoxedPrimitive(value) && Object.keys(value).length === 0;
+    if (emptied) {
+      throw new TypeError(
+        `The body holds a value of type ${constructorName(value)}, which JSON writes as {}. Convert it to a plain object.`
+      );
+    }
+    return value;
+  }
+  function encodeEndpointBody(body) {
+    if (body === void 0 || typeof body === "string") return body;
+    const json = JSON.stringify(body, refuseValuesJsonEmpties);
+    if (json === void 0) throw new TypeError(`The body, ${describeValue(body)}, is not a JSON value.`);
+    const encoded = JSON.parse(json);
+    if (typeof encoded === "string") {
+      throw new TypeError(
+        "The body's JSON is a bare string, which the dashboard would send as text. Put the value in an object, or pass a string to send text."
+      );
+    }
+    return encoded;
+  }
+  function isQueryValue(value) {
+    return typeof value === "string" || typeof value === "boolean" || Number.isFinite(value);
+  }
+  function encodeEndpointQuery(query) {
+    if (!isPlainObject(query)) {
+      throw new TypeError(
+        `The query must be a plain object of keys and values, not ${describeValue(query)}. For a URLSearchParams, pass Object.fromEntries(params).`
+      );
+    }
+    const encoded = /* @__PURE__ */ Object.create(null);
+    for (const [key, value] of Object.entries(query)) {
+      if (value === void 0) continue;
+      const items = Array.isArray(value) ? Array.from({ length: value.length }, (_, index) => value[index]) : null;
+      if (isQueryValue(value)) {
+        encoded[key] = value;
+      } else if (items?.every(isQueryValue)) {
+        encoded[key] = items;
+      } else {
+        throw new TypeError(
+          `Query key ${JSON.stringify(key)} must be a string, a finite number or a boolean, or an array of them.`
+        );
+      }
+    }
+    return encoded;
+  }
+  function readEndpointResult(reply) {
+    const result = isObject(reply) ? reply.result : void 0;
+    if (isObject(result) && typeof result.status === "number" && isObject(result.headers)) {
+      return result;
+    }
+    throw endpointCallError("api_error", "The dashboard sent a malformed reply.");
+  }
   var WidgetStore = class {
     constructor(options = {}) {
       this.state = { ...INITIAL_STATE };
       this.listeners = /* @__PURE__ */ new Set();
       this.initialized = false;
       this.unsubBridge = null;
+      this.endpointCallKeys = /* @__PURE__ */ new Set();
       this.handleInbound = (data) => {
         const partial = {};
         if (data.userInformation) {
@@ -248,8 +366,14 @@
         if (data.widget) {
           partial.widget = data.widget;
           partial.isReady = true;
+          if (Array.isArray(data.capabilities)) {
+            partial.capabilities = data.capabilities;
+          } else if (this.state.capabilities === null) {
+            partial.capabilities = [];
+          }
         }
-        if (data.status === false) {
+        const isEndpointCallReply = data.key !== void 0 && this.endpointCallKeys.has(data.key) || data.method === "call-endpoint";
+        if (data.status === false && !isEndpointCallReply) {
           const error = data;
           partial.errors = [...this.state.errors, error];
         }
@@ -345,6 +469,64 @@
     editResourceData(records) {
       const vars = Array.isArray(records) ? records : [records];
       return this.bridge.sendWithResponse({ variables: vars, method: "edit-resource" });
+    }
+    /**
+     * Call an Analysis Endpoint through the dashboard, which sends the viewer's session. Every HTTP answer
+     * resolves, 4xx and 5xx included, except a redirect, which the dashboard refuses; the promise rejects with a
+     * TEndpointCallError only when the call did not complete.
+     */
+    async callEndpoint(endpointID, options) {
+      if (typeof endpointID !== "string" || !ENDPOINT_ID_PATTERN.test(endpointID)) {
+        throw endpointCallError(
+          "bad_request",
+          `Invalid Endpoint ID ${describeValue(endpointID)}: pass the 24-character ID of the Analysis.`
+        );
+      }
+      const { capabilities } = this.state;
+      if (capabilities === null) {
+        throw endpointCallError(
+          "not_ready",
+          "The widget settings have not arrived yet. Call callEndpoint after the widget starts."
+        );
+      }
+      if (!capabilities.includes("call-endpoint")) {
+        throw endpointCallError("unsupported", "This dashboard does not support Endpoint calls from custom widgets.");
+      }
+      let payload;
+      try {
+        if (options !== void 0 && !isPlainObject(options)) {
+          throw new TypeError(
+            `The options must be an object such as { method, path, query, body }, not ${describeValue(options)}.`
+          );
+        }
+        const { method, path, query, body } = options ?? {};
+        if (body !== void 0 && (typeof method !== "string" || method.toUpperCase() === "GET")) {
+          throw new TypeError('A body is not allowed with GET, the default method. Set method, for example to "POST".');
+        }
+        payload = {
+          endpoint_id: endpointID,
+          method,
+          path,
+          query: query === void 0 ? void 0 : encodeEndpointQuery(query),
+          body: encodeEndpointBody(body)
+        };
+      } catch (error) {
+        throw endpointCallError("bad_request", `The request cannot be sent: ${errorMessage(error)}`);
+      }
+      if (this.bridge.isDestroyed) {
+        throw endpointCallError("aborted", "The widget stopped before the call was sent. Nothing was sent.");
+      }
+      const key = generateId();
+      this.endpointCallKeys.add(key);
+      let reply;
+      try {
+        reply = await this.bridge.sendWithResponse({ method: "call-endpoint", payload }, key);
+      } catch (reason) {
+        throw toEndpointCallError(reason);
+      } finally {
+        this.endpointCallKeys.delete(key);
+      }
+      return readEndpointResult(reply);
     }
     openLink(url) {
       this.bridge.send({ method: "open-link", url });
@@ -516,6 +698,7 @@
   var refreshResources = () => {
     store.refreshResources();
   };
+  var callEndpoint = (endpointID, options) => store.callEndpoint(endpointID, options);
   window.TagoIO.ready = onReady;
   window.TagoIO.onStart = onStart;
   window.TagoIO.onRealtime = onRealtime;
@@ -530,4 +713,5 @@
   window.TagoIO.closeModal = closeModal;
   window.TagoIO.runAnalysis = runAnalysis;
   window.TagoIO.refreshResources = refreshResources;
+  window.TagoIO.callEndpoint = callEndpoint;
 })();

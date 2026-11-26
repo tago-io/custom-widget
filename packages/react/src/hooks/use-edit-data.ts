@@ -1,54 +1,36 @@
 import { type TData, type TDataRecordInput, type TError, autoFillRecords } from "@tago-io/custom-widget-core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
+import { useLatestCall } from "./use-latest-call.js";
 import { useStore } from "./use-store-selector.js";
 import { useWidget } from "./use-widget.js";
 
 export interface UseEditDataReturn {
   editData: (records: TDataRecordInput | TDataRecordInput[]) => Promise<TData>;
+  /** True while the latest call waits for its answer. */
   isEditing: boolean;
-  error: TError | null;
+  /**
+   * The latest call's rejection: the dashboard's failure reply, or an Error when the request could not be posted
+   * or the provider unmounted before the answer.
+   */
+  error: TError | Error | null;
+  /** Back to idle. A call in flight still settles its own promise but no longer changes isEditing or error. */
   reset: () => void;
 }
 
 export function useEditData(): UseEditDataReturn {
   const { store } = useStore();
   const { variables } = useWidget();
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<TError | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const { run, isPending: isEditing, error, reset } = useLatestCall<TError | Error>();
 
   const editData = useCallback(
-    async (records: TDataRecordInput | TDataRecordInput[]) => {
-      setIsEditing(true);
-      setError(null);
-      try {
+    (records: TDataRecordInput | TDataRecordInput[]) =>
+      run(() => {
         const vars = Array.isArray(records) ? records : [records];
-        const filled = autoFillRecords(vars, variables);
-        const result = await store.editData(filled);
-        if (mountedRef.current) setIsEditing(false);
-        return result;
-      } catch (err) {
-        if (mountedRef.current) {
-          setError(err as TError);
-          setIsEditing(false);
-        }
-        throw err;
-      }
-    },
-    [store, variables]
+        return store.editData(autoFillRecords(vars, variables));
+      }),
+    [run, store, variables]
   );
-
-  const reset = useCallback(() => {
-    setIsEditing(false);
-    setError(null);
-  }, []);
 
   return { editData, isEditing, error, reset };
 }

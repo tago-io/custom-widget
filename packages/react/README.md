@@ -99,8 +99,9 @@ const temperatures = records.filter((record) => record.variable === "temperature
 | `useEditData()`         | `{ editData, isEditing, error, reset }`         |
 | `useDeleteData()`       | `{ deleteData, isDeleting, error, reset }`      |
 | `useEditResourceData()` | `{ editResourceData, isEditing, error, reset }` |
+| `useCallEndpoint()`     | `{ callEndpoint, isCalling, error, reset }`     |
 
-Each function returns a Promise that settles when the dashboard answers. The busy flag turns `true` when a call starts and `false` when any call settles, so with overlapping calls it can clear while one still waits. `error` holds the last rejection, and `reset()` clears both without cancelling the call.
+Each function returns a Promise that settles when the dashboard answers. The busy flag and `error` follow the latest call: the flag is `true` while that call waits for its answer, and `error` holds its rejection. An earlier call still settles its own promise but no longer changes them. `reset()` clears both and detaches the call in flight the same way, without cancelling it, so a reply that comes after a timeout leaves the hook idle.
 
 What each function takes:
 
@@ -108,6 +109,7 @@ What each function takes:
 - `editData(records)`: each record's `id` and `variable` with the new `value`, such as `{ id: record.id, variable: record.variable, value: 30 }`, addressed to the record's device as `setToZero` does below.
 - `deleteData(records)`: records with `id` and `device`, such as the ones in `useRealtimeData().records`. The hook sends each one as a `"<recordId>:<deviceId>"` string.
 - `editResourceData(rows)`: see [Editing resources](#editing-resources).
+- `callEndpoint(endpointID, options?)`: see [Calling an Analysis Endpoint](#calling-an-analysis-endpoint).
 
 ```tsx
 // No request times out by itself, and some never get an answer (see the notes below).
@@ -191,13 +193,13 @@ function RecordActions({ record }: { record: TDataRecord }) {
 
 Plan for the following:
 
-- **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise rejects with `"No records to process"`. While `isLoading` is `true`, no variable is bound yet, and the dashboard ignores a request until it has handled `ready()`, which the provider sends after its children's first effects, so a call made that early may never settle.
+- **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise rejects with `"No records to process"`. While `isLoading` is `true`, no variable is bound yet, and the dashboard ignores a request until it has handled `ready()`, which the provider sends when it mounts, so a call made that early may never settle.
 - **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To send to a single device, bind the variable on that device only.
 - **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `setToZero` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
 - **Addressed edits can still repeat.** With the variable bound on several devices, the record's device gets one identical copy per binding. That is redundant but correct.
 - **A refused write rejects.** When the platform refuses a `sendData`, `editData` or `deleteData`, the promise rejects with the dashboard's reply, `{ status: false, message }`, and the hook's `error` holds it until the next call or `reset()`. For an edit or a delete, `message` is the platform's error or `"Failed to edit"` / `"Failed to delete"`. A resolved promise means the platform accepted the change.
 - **Keep a timeout for requests that get no answer.** No request times out by itself. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a refused request unanswered: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, as `withTimeout` does, and call `reset()` when it fires. On a current host, a refusal rejects the promise long before the timer fires.
-- **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`.
+- **Read `error.message`.** The dashboard's reply, `{ status: false, message }`, is a plain object, not an `Error`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`. A call made after the provider unmounted, a call still waiting when it unmounts, and a call whose records `postMessage` cannot copy reject with an `Error` instead, so `error` is typed `TError | Error`.
 - **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` while realtime still shows the value from before the save, as `edit-delete-data.tsx` does.
 
 #### Editing resources
@@ -226,7 +228,7 @@ Plan for the following:
 
 ### Widget errors
 
-`useWidgetErrors()` returns `{ lastError, errors, clearErrors }`. It receives every failure the dashboard reports with `status: false`. A failure that answers a call carries that call's `key` and also rejects its promise, so you can handle it where you make the call. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, and a call whose records the hook dropped gets `"No records to process"`. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a failure unanswered or answer it without the `key`, as it does with `"Failed to delete"`. Only this hook sees such a failure, if anything does, and its call never settles. Entries are plain objects with a `message`, not `Error` instances.
+`useWidgetErrors()` returns `{ lastError, errors, clearErrors }`. It receives every failure the dashboard reports with `status: false`, except the ones that answer `callEndpoint`, which reject only that call's promise. A failure that answers another call carries that call's `key` and also rejects its promise, so you can handle it where you make the call. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, and a call whose records the hook dropped gets `"No records to process"`. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a failure unanswered or answer it without the `key`, as it does with `"Failed to delete"`. Only this hook sees such a failure, if anything does, and its call never settles. Entries are plain objects with a `message`, not `Error` instances.
 
 `clearErrors()` empties the list for every component under the provider. A mutation hook's `reset()` does not touch it.
 
@@ -330,6 +332,94 @@ Plan for the following:
 - **No reply comes back.** `runAnalysis` returns nothing, and the widget never learns whether the Analysis ran or failed. To show a result, have the Analysis write to a variable the widget reads, and watch `useRealtimeData` for the new record.
 - **Send the scope as an array of plain objects.** The Analysis receives that array as its `scope`. A single object arrives wrapped in an array, and a string does not arrive as sent. The dashboard removes the `source`, `displayValue` and `orderingValue` keys from each item, and an item with `source: "entity"` arrives rewritten as `{ entity: origin, [variable]: value }`, with a falsy `value` sent as `""`, so leave those keys out.
 - **Wrap it in an arrow function.** `onClick={runAnalysis}` would send the click event as the scope, which the browser cannot copy into a message, so the call throws.
+
+### Calling an Analysis Endpoint
+
+`useCallEndpoint()` returns `{ callEndpoint, isCalling, error, reset }`. `callEndpoint(endpointID, options?)` calls the Endpoint of a Luau Analysis through the dashboard, which makes the call with the viewer's session, so no token goes in your code. `endpointID` is the Analysis ID, the one in its Endpoint URL. The Promise resolves with the Endpoint's answer, `{ status, headers, body }`, for every HTTP status except a redirect, and rejects with a plain `{ code, message }` object only when the call did not complete. `isCalling` is `true` while the call waits, `error` holds its rejection, and `reset()` clears both.
+
+| Option   | Default | Description                                                                                                                              |
+| -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `method` | `"GET"` | `"GET"`, `"POST"`, `"PUT"`, `"PATCH"` or `"DELETE"`                                                                                      |
+| `path`   | `"/"`   | Below the Endpoint root, such as `"/setpoint"`. The dashboard refuses `.` and `..` segments                                              |
+| `query`  | None    | A plain object of strings, finite numbers and booleans, sent as text. An array repeats its key, and a key set to `undefined` is left out |
+| `body`   | None    | A JSON value, encoded with JSON's rules. Not allowed with `GET`, the default `method`                                                    |
+
+The form below saves a setpoint through the Analysis from the [Validate a Custom Dashboard form](https://docs.tago.io/docs/tagoio/analysis/endpoints/recipes/validate-dashboard-form) recipe, which stores a value from 5 to 30 and answers `422` with a field error otherwise.
+
+```tsx
+// The Analysis ID, the 24-character ID in its Endpoint URL.
+const ENDPOINT_ID = "YOUR_ANALYSIS_ID";
+
+type SetpointAnswer = { ok?: boolean; setpoint?: number; error?: string; errors?: { setpoint?: string } };
+
+function SetpointForm() {
+  const { isLoading } = useWidget();
+  const { callEndpoint, isCalling, error } = useCallEndpoint();
+  const [setpoint, setSetpoint] = useState("22");
+  const [feedback, setFeedback] = useState("");
+
+  async function save() {
+    setFeedback("");
+    const answer = await callEndpoint<SetpointAnswer>(ENDPOINT_ID, {
+      method: "POST",
+      path: "/setpoint",
+      body: { setpoint },
+    }).catch(() => null);
+    // The hook rethrows: the call did not complete, and `error` holds { code, message }.
+    if (!answer) return;
+    // Every HTTP status except a redirect resolves, so check it before reading the body.
+    if (answer.status === 422) {
+      setFeedback(answer.body?.errors?.setpoint ?? "Invalid setpoint.");
+    } else if (answer.status >= 400) {
+      setFeedback(answer.body?.error ?? `Request failed (${answer.status}).`);
+    } else {
+      setFeedback(`Saved: ${answer.body?.setpoint ?? setpoint} C`);
+    }
+  }
+
+  return (
+    <form
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <input aria-label="Setpoint" value={setpoint} onChange={(event) => setSetpoint(event.target.value)} />
+      <button type="submit" disabled={isLoading || isCalling}>
+        Save
+      </button>
+      <p role="status">{error ? `Not completed (${error.code}): ${error.message}` : feedback}</p>
+    </form>
+  );
+}
+```
+
+The promise rejects with one of these codes:
+
+| `code`        | When                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bad_request` | `endpointID` is not a 24-character ID; `options` or its `query` is not a plain object; a `query` value is not a string, a finite number or a boolean; a `body` comes with `GET`, holds a value JSON cannot encode, such as a `BigInt`, or one JSON would send wrong, such as a `Map` or a top-level `Date`; `options` holds a value a message cannot carry; or the dashboard refused the request, such as an unknown `method` or a `.` or `..` path segment. The Endpoint did not run |
+| `api_error`   | The dashboard could not complete the call: the Endpoint answered with a redirect, the network failed, or the reply was malformed. The Endpoint may have run, as it does before a redirect                                                                                                                                                                                                                                                                                             |
+| `not_ready`   | The widget settings have not arrived yet. Nothing is sent                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `unsupported` | The dashboard does not support Endpoint calls from custom widgets. Nothing is sent                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `aborted`     | The `TagoIOProvider` unmounted, or an `<Activity>` hid it, before the dashboard answered or before the call was made. The message says whether the call was sent; one that was sent may have run                                                                                                                                                                                                                                                                                      |
+
+Branch on `code`, and keep a default branch: a newer dashboard can send a code this table does not list.
+
+Plan for the following:
+
+- **Read `status` first.** Every HTTP answer except a redirect resolves, 4xx and 5xx included, and a script that runs longer than 30 seconds answers `504`. `body` is parsed when the response is JSON and is text otherwise, and `headers` holds the response headers the browser can read, with lowercase names. [Limits and errors](https://docs.tago.io/docs/tagoio/analysis/endpoints/using-endpoints#limits-and-errors) lists what each status means.
+- **The Run user needs Call Endpoint.** The dashboard always sends the viewer's token, so in TagoRUN the Run user needs **Call Endpoint** on the Analysis in Access Management, separate from **Run Analysis**. Without it the answer is `404`, even on a Public Endpoint ([Choose who can call](https://docs.tago.io/docs/tagoio/analysis/endpoints/using-endpoints#choose-who-can-call)).
+- **Call on a user action, not on a timer or on every realtime update.** Every Endpoint call on the profile counts toward one allowance that all its callers share, 60 calls a minute on the Free plan, and a `429` answer means it ran out.
+- **Send a JSON value;** a string is sent as text/plain, so the Analysis gets `scope` as nil and reads `context.request.body`. Any other value is encoded with JSON's rules: `toJSON()` applies, as for a `Date` inside an object, and a value JSON cannot encode, such as a `BigInt`, rejects with `bad_request`. A value whose JSON is a bare string, such as a top-level `Date`, rejects too, because the dashboard would send it as text: put it in an object.
+- **Convert a `FormData` or a `Map` to a plain object.** JSON writes a `FormData`, `Map`, `Set`, `Blob`, or a class instance that keeps its data in private fields, as `{}`, so a body that holds one, at any depth, rejects with `bad_request` instead of reaching the Analysis empty. Convert it first, for example with `Object.fromEntries(formData)`. A class instance with fields is sent as its fields.
+- **Disable the control while `useWidget().isLoading` or `isCalling` is `true`.** Until the widget settings arrive, the call rejects with `not_ready`, and a click during a call starts another one.
+- **Call from `useEffect` or an event handler, not from `useLayoutEffect`.** A child's layout effects run before the provider's, so when an `<Activity>` shows the provider again, a call made in one finds the provider stopped and rejects with `aborted` without being sent. The data hooks reject such a call with an `Error`, on a StrictMode replay too.
+- **`isCalling` and `error` follow the latest call.** An earlier call still settles its own promise but no longer changes them, and `reset()` detaches the call in flight the same way.
+- **Catch inside the handler.** The hook rethrows every rejection to its caller and also keeps it in `error`. None reaches `useWidgetErrors`.
+- **Dashboards without the operation reject with `unsupported`.** With the widget settings, the dashboard lists the request operations it answers that older dashboards do not, today only `"call-endpoint"`. On one without Endpoint calls for widgets, such as a TagoDeploy instance on an earlier Admin build, `callEndpoint` rejects at once and sends nothing.
+- **No custom headers, and redirects are refused.** The dashboard sends the viewer's token and, for a JSON body, `Content-Type: application/json`, and nothing else. An Endpoint that answers with a redirect still ran, but the call rejects with `api_error` and the redirect is not followed. To send the viewer elsewhere, return the URL in JSON and pass it to `openLink` from `useNavigation()`.
 
 ### i18n
 
@@ -481,6 +571,7 @@ The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy
 - **[navigation.tsx](./examples/navigation.tsx)**: Open a dashboard or web page, or close a widget modal
 - **[run-analysis.tsx](./examples/run-analysis.tsx)**: Run the widget's Analysis and show the data it writes
 - **[format-data.tsx](./examples/format-data.tsx)**: Format the latest readings in the viewer's language
+- **[call-endpoint.tsx](./examples/call-endpoint.tsx)**: Save a setpoint through an Analysis Endpoint
 
 ## Re-exports
 

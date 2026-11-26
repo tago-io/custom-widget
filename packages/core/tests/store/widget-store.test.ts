@@ -50,6 +50,7 @@ describe("WidgetStore", () => {
       expect(state.blueprintDevices).toBeNull();
       expect(state.errors).toEqual([]);
       expect(state.isReady).toBe(false);
+      expect(state.capabilities).toBeNull();
       expect(state.realtimeEventCount).toBe(0);
       expect(state.lastRealtimeAt).toBeNull();
     });
@@ -120,6 +121,40 @@ describe("WidgetStore", () => {
       const state = store.getSnapshot();
       expect(state.widget).toEqual(mockWidget);
       expect(state.isReady).toBe(true);
+    });
+
+    it("stores the capabilities sent with the widget settings", () => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { widget: mockWidget, capabilities: ["call-endpoint"] } })
+      );
+
+      expect(store.getSnapshot().capabilities).toEqual(["call-endpoint"]);
+    });
+
+    it("settles capabilities as empty when the first widget message has none", () => {
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget } }));
+
+      expect(store.getSnapshot().capabilities).toEqual([]);
+    });
+
+    it("keeps the capabilities when a later widget message has none", () => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { widget: mockWidget, capabilities: ["call-endpoint"] } })
+      );
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: { ...mockWidget, label: "Renamed" } } }));
+
+      const state = store.getSnapshot();
+      expect(state.widget?.label).toBe("Renamed");
+      expect(state.capabilities).toEqual(["call-endpoint"]);
+    });
+
+    it("replaces the capabilities when a later widget message sends a list, even an empty one", () => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { widget: mockWidget, capabilities: ["call-endpoint"] } })
+      );
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget, capabilities: [] } }));
+
+      expect(store.getSnapshot().capabilities).toEqual([]);
     });
 
     it("handles userInformation message", () => {
@@ -272,6 +307,479 @@ describe("WidgetStore", () => {
       store.editResourceData([{ id: "ent-1", entity: "entity-abc", status: "closed", value: 42 }]).catch(() => {});
       const sentMessage = mockPostMessage.mock.calls[0][0];
       expect(sentMessage.variables).toEqual([{ id: "ent-1", entity: "entity-abc", status: "closed", value: 42 }]);
+    });
+  });
+
+  describe("callEndpoint", () => {
+    const endpointID = "65f1c0a2b3d4e5f6a7b8c9d0";
+
+    function hostReady(data: Record<string, unknown> = { capabilities: ["call-endpoint"] }) {
+      window.dispatchEvent(new MessageEvent("message", { data: { widget: mockWidget, ...data } }));
+    }
+
+    function lastSent(): Record<string, unknown> {
+      const calls = mockPostMessage.mock.calls;
+      return calls[calls.length - 1][0] as Record<string, unknown>;
+    }
+
+    function reply(data: Record<string, unknown>) {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { key: lastSent().key, method: "call-endpoint", ...data } })
+      );
+    }
+
+    it("rejects with not_ready before the widget settings arrive, posting nothing", async () => {
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({ code: "not_ready", message: expect.any(String) });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("rejects with unsupported on a host without the capability, posting nothing", async () => {
+      hostReady({});
+
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({
+        code: "unsupported",
+        message: expect.any(String),
+      });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed ID with bad_request before the readiness check, posting nothing", async () => {
+      await expect(store.callEndpoint("YOUR_ANALYSIS_ID")).rejects.toEqual({
+        code: "bad_request",
+        message: expect.any(String),
+      });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("rejects an ID that has no string form with bad_request", async () => {
+      await expect(store.callEndpoint(Object.create(null) as string)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("Invalid Endpoint ID"),
+      });
+    });
+
+    function postedEndpointCall(): boolean {
+      return mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint");
+    }
+
+    it.each([
+      { label: "a path string", options: "/setpoint" },
+      { label: "a number", options: 22 },
+      { label: "an array", options: ["POST", "/setpoint"] },
+      { label: "null", options: null },
+    ])("refuses $label in place of the options object with bad_request, posting nothing", async ({ options }) => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, options as never)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("{ method, path, query, body }"),
+      });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
+    it.each([
+      { label: "no method", options: { body: { setpoint: 22 } } },
+      { label: "GET", options: { method: "GET" as const, body: { setpoint: 22 } } },
+      { label: "a lowercase get", options: { method: "get" as "GET", body: "22" } },
+    ])("refuses a body with $label with bad_request, posting nothing", async ({ options }) => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, options)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("Set method"),
+      });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
+    it("leaves out query keys set to undefined", () => {
+      hostReady();
+      // No answer comes, so the call settles with aborted when afterEach destroys the store.
+      store.callEndpoint(endpointID, { query: { page: 2, filter: undefined } }).catch(() => {});
+
+      expect((lastSent().payload as Record<string, unknown>).query).toEqual({ page: 2 });
+      expect(Object.keys((lastSent().payload as { query: object }).query)).toEqual(["page"]);
+    });
+
+    it("sends a query array by its indexes, as JSON reads an array, not through its iterator", () => {
+      hostReady();
+      const tags = Object.defineProperty(["a", "b"], Symbol.iterator, {
+        value: function* () {
+          yield "x";
+        },
+      });
+      // No answer comes, so the call settles with aborted when afterEach destroys the store.
+      store.callEndpoint(endpointID, { query: { tag: tags } }).catch(() => {});
+
+      expect((lastSent().payload as Record<string, unknown>).query).toEqual({ tag: ["a", "b"] });
+    });
+
+    it.each([
+      { label: "NaN", value: Number.NaN },
+      { label: "Infinity", value: Number.POSITIVE_INFINITY },
+      { label: "null", value: null },
+      { label: "an object", value: { from: 1 } },
+      { label: "an array holding an object", value: [1, { from: 1 }] },
+      {
+        label: "an array with a hole",
+        value: (() => {
+          const holey: number[] = [1];
+          holey[2] = 2;
+          return holey;
+        })(),
+      },
+    ])("refuses a query value that is $label with bad_request naming its key, posting nothing", async ({ value }) => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, { query: { limit: value as unknown as number } })).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining('"limit"'),
+      });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
+    it.each([
+      { label: "a URLSearchParams", make: () => new URLSearchParams("page=2") },
+      { label: "a Map", make: () => new Map([["page", "2"]]) },
+    ])("refuses $label as the query, which would go out empty, posting nothing", async ({ make }) => {
+      hostReady();
+
+      await expect(
+        store.callEndpoint(endpointID, { query: make() as unknown as Record<string, string> })
+      ).rejects.toEqual({ code: "bad_request", message: expect.stringContaining("Object.fromEntries") });
+      expect(postedEndpointCall()).toBe(false);
+    });
+
+    it("posts the payload under call-endpoint without variables", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID, {
+        method: "POST",
+        path: "/setpoint",
+        query: { dry_run: true, tag: ["a", "b"] },
+        body: { setpoint: 22 },
+      });
+
+      expect(mockPostMessage).toHaveBeenLastCalledWith(
+        {
+          method: "call-endpoint",
+          key: expect.any(String),
+          payload: {
+            endpoint_id: endpointID,
+            method: "POST",
+            path: "/setpoint",
+            query: { dry_run: true, tag: ["a", "b"] },
+            body: { setpoint: 22 },
+          },
+        },
+        "*"
+      );
+      expect(lastSent()).not.toHaveProperty("variables");
+
+      reply({ status: true, result: { status: 200, headers: {}, body: { ok: true } } });
+      await promise;
+    });
+
+    it.each([200, 404, 422])("resolves with the unwrapped result for HTTP %i", async (status) => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+      const result = { status, headers: { "content-type": "application/json" }, body: { status } };
+
+      reply({ status: true, result });
+
+      await expect(promise).resolves.toEqual(result);
+    });
+
+    it("maps a failure reply to { code, message } and keeps it out of state.errors", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      reply({ status: false, code: "bad_request", message: "Invalid endpoint.call payload" });
+
+      await expect(promise).rejects.toEqual({ code: "bad_request", message: "Invalid endpoint.call payload" });
+      expect(store.getSnapshot().errors).toEqual([]);
+    });
+
+    it("keeps a failure reply without method out of state.errors by its key", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { status: false, key: lastSent().key, code: "api_error", message: "The Endpoint call failed" },
+        })
+      );
+
+      await expect(promise).rejects.toEqual({ code: "api_error", message: "The Endpoint call failed" });
+      expect(store.getSnapshot().errors).toEqual([]);
+    });
+
+    describe("forgets the call's key once it settles", () => {
+      // A later failure that reuses the key and carries no method is then an ordinary error again.
+      function strayFailure(key: unknown) {
+        window.dispatchEvent(new MessageEvent("message", { data: { status: false, key, message: "Stray" } }));
+      }
+
+      it.each([
+        { path: "an answer", settle: () => reply({ status: true, result: { status: 200, headers: {}, body: null } }) },
+        { path: "a failure reply", settle: () => reply({ status: false, code: "api_error", message: "Failed" }) },
+        {
+          path: "a destroy and a remount",
+          settle: () => {
+            store.destroy();
+            store.initialize();
+          },
+        },
+      ])("after $path", async ({ settle }) => {
+        hostReady();
+        const outcome = store.callEndpoint(endpointID).catch(() => {});
+        const { key } = lastSent();
+
+        settle();
+        await outcome;
+        strayFailure(key);
+
+        expect(store.getSnapshot().errors).toEqual([expect.objectContaining({ key, message: "Stray" })]);
+      });
+
+      it("after a post that throws", async () => {
+        hostReady();
+        mockPostMessage.mockImplementationOnce(() => {
+          throw new DOMException("() => {} could not be cloned.", "DataCloneError");
+        });
+
+        await store.callEndpoint(endpointID).catch(() => {});
+        const { key } = lastSent();
+        strayFailure(key);
+
+        expect(store.getSnapshot().errors).toEqual([expect.objectContaining({ key, message: "Stray" })]);
+      });
+    });
+
+    it("uses api_error when a failure reply has no code", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      reply({ status: false, message: "The Endpoint call failed" });
+
+      await expect(promise).rejects.toEqual({ code: "api_error", message: "The Endpoint call failed" });
+    });
+
+    it.each([
+      { label: "no result", data: {} },
+      { label: "a data operation result", data: { result: [] } },
+      { label: "a result without headers", data: { result: { status: 200, body: null } } },
+    ])("rejects a success reply with $label as api_error", async ({ data }) => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      reply({ status: true, ...data });
+
+      await expect(promise).rejects.toEqual({ code: "api_error", message: expect.any(String) });
+    });
+
+    it("maps a DataCloneError to bad_request and keeps nothing pending", async () => {
+      hostReady();
+      mockPostMessage.mockImplementationOnce(() => {
+        throw new DOMException("() => {} could not be cloned.", "DataCloneError");
+      });
+
+      await expect(store.callEndpoint(endpointID, { path: (() => {}) as unknown as string })).rejects.toEqual({
+        code: "bad_request",
+        message: expect.any(String),
+      });
+      expect(store.getBridge().pendingCount).toBe(0);
+    });
+
+    it("encodes the body with JSON rules before posting", async () => {
+      hostReady();
+      // No answer comes, so the call settles with aborted when afterEach destroys the store.
+      store
+        .callEndpoint(endpointID, {
+          method: "POST",
+          body: { when: new Date("2026-10-20T12:00:00Z"), skipped: undefined, save: () => {} },
+        })
+        .catch(() => {});
+
+      expect((lastSent().payload as Record<string, unknown>).body).toEqual({ when: "2026-10-20T12:00:00.000Z" });
+    });
+
+    it("names the body that JSON writes as nothing, posting nothing", async () => {
+      hostReady();
+
+      await expect(
+        store.callEndpoint(endpointID, { method: "POST", body: { toJSON: () => undefined } })
+      ).rejects.toEqual({ code: "bad_request", message: expect.stringContaining("The body, a value of type Object,") });
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+    });
+
+    it("refuses a body JSON cannot encode with bad_request, posting nothing", async () => {
+      hostReady();
+
+      await expect(store.callEndpoint(endpointID, { method: "POST", body: { total: 10n } })).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("BigInt"),
+      });
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+    });
+
+    it("refuses a BigInt object the way JSON refuses a bigint, not as a value JSON writes as {}", async () => {
+      hostReady();
+      const plain = await store
+        .callEndpoint(endpointID, { method: "POST", body: { total: 10n } })
+        .catch((error: unknown) => error);
+      const boxed = await store
+        .callEndpoint(endpointID, { method: "POST", body: { total: Object(10n) as object } })
+        .catch((error: unknown) => error);
+
+      expect(boxed).toEqual(plain);
+      expect(boxed).toEqual({ code: "bad_request", message: expect.not.stringContaining("{}") });
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+    });
+
+    it.each([
+      { label: "a top-level Date", body: new Date("2026-10-20T12:00:00Z") },
+      { label: "an object whose toJSON returns a string", body: { toJSON: () => "22" } },
+    ])(
+      "refuses $label, whose JSON is a bare string the dashboard would send as text, posting nothing",
+      async ({ body }) => {
+        hostReady();
+        const outcome = store.callEndpoint(endpointID, { method: "POST", body }).catch((error: unknown) => error);
+
+        expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+        await expect(outcome).resolves.toEqual({
+          code: "bad_request",
+          message: expect.stringMatching(/bare string.*Put the value in an object/),
+        });
+      }
+    );
+
+    it.each([
+      {
+        label: "a FormData",
+        make: () => {
+          const form = new FormData();
+          form.append("setpoint", "22");
+          return form;
+        },
+      },
+      { label: "a Map", make: () => new Map([["setpoint", 22]]) },
+      { label: "a Set", make: () => new Set([22]) },
+      { label: "a URLSearchParams", make: () => new URLSearchParams("setpoint=22") },
+      { label: "a Blob", make: () => new Blob(["22"]) },
+      {
+        label: "a class instance that keeps its data in private fields",
+        make: () =>
+          new (class Temperature {
+            #celsius = 22;
+            get celsius() {
+              return this.#celsius;
+            }
+          })(),
+      },
+      { label: "a Map inside a plain object", make: () => ({ values: new Map([["setpoint", 22]]) }) },
+      // JSON unwraps only an object that holds a boxed value, not one that merely inherits from Number.prototype.
+      {
+        label: "an object made from Number.prototype",
+        make: () => ({ count: Object.create(Number.prototype) as object }),
+      },
+      { label: "a Proxy around a Number object", make: () => ({ count: new Proxy(new Number(5), {}) }) },
+    ])("refuses $label, which JSON would send as {}, posting nothing", async ({ make }) => {
+      hostReady();
+      const outcome = store.callEndpoint(endpointID, { method: "POST", body: make() }).catch((error: unknown) => error);
+
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+      await expect(outcome).resolves.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("plain object"),
+      });
+    });
+
+    it("sends plain objects, arrays, prototype-free objects, scalars, nested Dates, toJSON objects, class instances with fields and boxed primitives", () => {
+      hostReady();
+      const prototypeFree = Object.assign(Object.create(null) as Record<string, unknown>, { setpoint: 22 });
+      class Setpoint {
+        constructor(readonly value: number) {}
+      }
+      // An iframe has its own Number and String, so its boxed values fail `instanceof` here.
+      const frame = document.createElement("iframe");
+      document.body.appendChild(frame);
+      const other = frame.contentWindow as unknown as typeof globalThis;
+      const bodies = [
+        { setpoint: [22, { unit: "C" }] },
+        [1, 2],
+        prototypeFree,
+        22,
+        true,
+        null,
+        { at: new Date("2026-10-20T12:00:00Z") },
+        { toJSON: () => ({ setpoint: 22 }) },
+        new Setpoint(22),
+        {},
+        // JSON writes a boxed primitive as its value.
+        { enabled: new Boolean(false), count: new Number(5), label: new String("C") },
+        new Number(5),
+        { count: new other.Number(5), label: new other.String("C") },
+      ];
+
+      for (const body of bodies) {
+        // No answer comes, so each call settles with aborted when afterEach destroys the store.
+        store.callEndpoint(endpointID, { method: "POST", body }).catch(() => {});
+      }
+
+      const sent = mockPostMessage.mock.calls
+        .map(([message]) => message as Record<string, unknown>)
+        .filter((message) => message.method === "call-endpoint")
+        .map((message) => (message.payload as Record<string, unknown>).body);
+      expect(sent).toEqual([
+        { setpoint: [22, { unit: "C" }] },
+        [1, 2],
+        { setpoint: 22 },
+        22,
+        true,
+        null,
+        { at: "2026-10-20T12:00:00.000Z" },
+        { setpoint: 22 },
+        { value: 22 },
+        {},
+        { enabled: false, count: 5, label: "C" },
+        5,
+        { count: 5, label: "C" },
+      ]);
+      frame.remove();
+    });
+
+    it("maps an options getter that throws to bad_request", async () => {
+      hostReady();
+      const options = {
+        get body(): unknown {
+          throw new RangeError("not ready");
+        },
+      };
+
+      await expect(store.callEndpoint(endpointID, options)).rejects.toEqual({
+        code: "bad_request",
+        message: expect.stringContaining("not ready"),
+      });
+    });
+
+    it("rejects with aborted when called after destroy, posting nothing", async () => {
+      hostReady();
+      store.destroy();
+      mockPostMessage.mockClear();
+
+      await expect(store.callEndpoint(endpointID)).rejects.toEqual({
+        code: "aborted",
+        message: expect.stringContaining("Nothing was sent"),
+      });
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+
+    it("rejects with aborted when the store is destroyed mid-call, saying the Endpoint may have run", async () => {
+      hostReady();
+      const promise = store.callEndpoint(endpointID);
+
+      store.destroy();
+
+      await expect(promise).rejects.toEqual({ code: "aborted", message: expect.stringContaining("may have run") });
     });
   });
 

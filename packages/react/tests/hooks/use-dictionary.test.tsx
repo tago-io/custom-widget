@@ -1,6 +1,6 @@
-import { renderHook, act } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useDictionary } from "../../src/hooks/use-dictionary.js";
 import { TagoIOProvider } from "../../src/provider/tago-io-provider.js";
@@ -25,7 +25,13 @@ function wrapperWithDict({ children }: { children: ReactNode }) {
 
 describe("useDictionary", () => {
   beforeEach(() => {
-    window.parent.postMessage = vi.fn();
+    vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
+  });
+
+  // Each test mounts a provider, whose store would otherwise keep listening and take later tests' messages.
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
   });
 
   it("returns pass-through when no dictionary class is provided", () => {
@@ -79,5 +85,34 @@ describe("useDictionary", () => {
     });
 
     expect(result.current.tSync("hello")).toBe("hello");
+  });
+
+  describe("under StrictMode", () => {
+    // reactStrictMode renders StrictMode above the wrapper. React replays effects only for a newly mounted
+    // tree that starts at or inside StrictMode, so a wrapper that renders StrictMode itself would skip it.
+    const strictOptions = { wrapper: wrapperWithDict, reactStrictMode: true };
+
+    it("finishes loading", () => {
+      const { result } = renderHook(() => useDictionary({ language: "pt" }), strictOptions);
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.dictionary).toBeInstanceOf(MockDictionary);
+    });
+
+    it("loads the dictionary when the language arrives with the user information", () => {
+      const { result } = renderHook(() => useDictionary(), strictOptions);
+
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: { userInformation: { token: "tok", language: "fr", runURL: null } },
+          })
+        );
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.dictionary).toBeInstanceOf(MockDictionary);
+      expect((result.current.dictionary as MockDictionary).language).toBe("fr");
+    });
   });
 });
