@@ -36,11 +36,32 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   return prototype === Object.prototype || prototype === null;
 }
 
+// A browser without BigInt (Safari before 14) still loads the SDK; it only skips that check.
+const boxedTypes = typeof BigInt === "function" ? [Number, String, Boolean, BigInt] : [Number, String, Boolean];
+const boxedValueOf = boxedTypes.map((type) => type.prototype.valueOf as (this: object) => unknown);
+
+/**
+ * JSON writes a `Number`, `String` or `Boolean` object as its value, and refuses a `BigInt` object as it refuses a
+ * bigint, but a replacer still sees the object. JSON goes by the value the object holds, which is what `valueOf` reads
+ * and throws without, so an object from another frame counts, and one that only inherits from `Number.prototype`, or a
+ * Proxy around a boxed value, does not: JSON writes those as `{}`.
+ */
+function isBoxedPrimitive(value: object): boolean {
+  return boxedValueOf.some((valueOf) => {
+    try {
+      valueOf.call(value);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /**
  * JSON writes a `Map`, a `FormData`, a `Blob`, or a class instance that keeps its data in private fields, as `{}`, so
- * the Analysis would get an empty body and no error. That is any object other than a plain object or an array with no
- * enumerable fields of its own. A replacer sees each value after `toJSON()` ran, so a `Date` inside an object arrives
- * here as its string, and a class instance with fields is written as its fields.
+ * the Analysis would get an empty body and no error. That is any object other than a plain object, an array or a boxed
+ * primitive with no enumerable fields of its own. A replacer sees each value after `toJSON()` ran, so a `Date` inside
+ * an object arrives here as its string, and a class instance with fields is written as its fields.
  */
 function refuseValuesJsonEmpties(_key: string, value: unknown): unknown {
   const emptied =
@@ -48,6 +69,7 @@ function refuseValuesJsonEmpties(_key: string, value: unknown): unknown {
     value !== null &&
     !Array.isArray(value) &&
     !isPlainObject(value) &&
+    !isBoxedPrimitive(value) &&
     Object.keys(value).length === 0;
   if (emptied) {
     throw new TypeError(
@@ -111,10 +133,13 @@ export function encodeEndpointQuery(
     if (value === undefined) {
       continue;
     }
+    // One copy, read by index as JSON reads an array, is both checked and sent. `every()` skips holes, which the copy
+    // turns into `undefined`, so the copy is what gets checked.
+    const items = Array.isArray(value) ? Array.from({ length: value.length }, (_, index) => value[index]) : null;
     if (isQueryValue(value)) {
       encoded[key] = value;
-    } else if (Array.isArray(value) && value.every(isQueryValue)) {
-      encoded[key] = [...value];
+    } else if (items?.every(isQueryValue)) {
+      encoded[key] = items;
     } else {
       throw new TypeError(
         `Query key ${JSON.stringify(key)} must be a string, a finite number or a boolean, or an array of them.`
