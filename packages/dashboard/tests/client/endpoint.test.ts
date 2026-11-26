@@ -437,6 +437,9 @@ describe("endpoint.call request checks", () => {
         })(),
     ],
     ["a Map inside an object", () => ({ values: new Map([["a", 1]]) })],
+    // JSON unwraps only an object that holds a boxed value, not one that merely inherits from Number.prototype.
+    ["an object made from Number.prototype", () => ({ count: Object.create(Number.prototype) as object })],
+    ["a Proxy around a Number object", () => ({ count: new Proxy(new Number(5), {}) })],
   ])("refuses %s as the body, which JSON would turn into {}, before posting", async (_label, make) => {
     ctx = setupClient();
 
@@ -453,6 +456,10 @@ describe("endpoint.call request checks", () => {
     class Setpoint {
       constructor(readonly value: number) {}
     }
+    // An iframe has its own Number and String, so its boxed values fail `instanceof` here.
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    const other = frame.contentWindow as unknown as typeof globalThis;
     const bodies = [
       { a: [1, { b: "c" }] },
       [1, 2],
@@ -464,6 +471,7 @@ describe("endpoint.call request checks", () => {
       // JSON writes a boxed primitive as its value.
       { enabled: new Boolean(false), count: new Number(5), label: new String("") },
       new Number(5),
+      { count: new other.Number(5), label: new other.String("x") },
     ];
 
     for (const body of bodies) {
@@ -480,7 +488,22 @@ describe("endpoint.call request checks", () => {
       {},
       { enabled: false, count: 5, label: "" },
       5,
+      { count: 5, label: "x" },
     ]);
+    frame.remove();
+  });
+
+  it("refuses a BigInt object the way JSON refuses a bigint, not as a value JSON writes as {}", async () => {
+    ctx = setupClient();
+    const plain = (await ctx.client.endpoint
+      .call(ANALYSIS_ID, { method: "POST", body: { big: 1n } })
+      .catch((error: unknown) => error)) as Error;
+    const boxed = await ctx.client.endpoint
+      .call(ANALYSIS_ID, { method: "POST", body: { big: Object(1n) as object } })
+      .catch((error: unknown) => error);
+
+    expect(boxed).toMatchObject({ code: "bad_request", op: "endpoint.call", message: plain.message });
+    expect(ctx.requests()).toHaveLength(0);
   });
 
   it.each([
@@ -546,6 +569,18 @@ describe("endpoint.call request checks", () => {
       .catch(() => undefined);
 
     expect(ctx.requests()[0].payload).toEqual({ endpoint_id: ANALYSIS_ID, query: { room: "4" } });
+  });
+
+  it("sends a query array by its indexes, as JSON reads an array, not through its iterator", () => {
+    ctx = setupClient();
+    const tags = Object.defineProperty(["a", "b"], Symbol.iterator, {
+      value: function* () {
+        yield "x";
+      },
+    });
+    void ctx.client.endpoint.call(ANALYSIS_ID, { query: { tag: tags } }).catch(() => undefined);
+
+    expect(ctx.requests()[0].payload).toEqual({ endpoint_id: ANALYSIS_ID, query: { tag: ["a", "b"] } });
   });
 
   it.each([
