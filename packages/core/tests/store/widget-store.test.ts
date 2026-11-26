@@ -400,6 +400,19 @@ describe("WidgetStore", () => {
       expect(Object.keys((lastSent().payload as { query: object }).query)).toEqual(["page"]);
     });
 
+    it("sends a query array by its indexes, as JSON reads an array, not through its iterator", () => {
+      hostReady();
+      const tags = Object.defineProperty(["a", "b"], Symbol.iterator, {
+        value: function* () {
+          yield "x";
+        },
+      });
+      // No answer comes, so the call settles with aborted when afterEach destroys the store.
+      store.callEndpoint(endpointID, { query: { tag: tags } }).catch(() => {});
+
+      expect((lastSent().payload as Record<string, unknown>).query).toEqual({ tag: ["a", "b"] });
+    });
+
     it.each([
       { label: "NaN", value: Number.NaN },
       { label: "Infinity", value: Number.POSITIVE_INFINITY },
@@ -608,6 +621,20 @@ describe("WidgetStore", () => {
       expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
     });
 
+    it("refuses a BigInt object the way JSON refuses a bigint, not as a value JSON writes as {}", async () => {
+      hostReady();
+      const plain = await store
+        .callEndpoint(endpointID, { method: "POST", body: { total: 10n } })
+        .catch((error: unknown) => error);
+      const boxed = await store
+        .callEndpoint(endpointID, { method: "POST", body: { total: Object(10n) as object } })
+        .catch((error: unknown) => error);
+
+      expect(boxed).toEqual(plain);
+      expect(boxed).toEqual({ code: "bad_request", message: expect.not.stringContaining("{}") });
+      expect(mockPostMessage.mock.calls.some(([message]) => message?.method === "call-endpoint")).toBe(false);
+    });
+
     it.each([
       { label: "a top-level Date", body: new Date("2026-10-20T12:00:00Z") },
       { label: "an object whose toJSON returns a string", body: { toJSON: () => "22" } },
@@ -649,6 +676,12 @@ describe("WidgetStore", () => {
           })(),
       },
       { label: "a Map inside a plain object", make: () => ({ values: new Map([["setpoint", 22]]) }) },
+      // JSON unwraps only an object that holds a boxed value, not one that merely inherits from Number.prototype.
+      {
+        label: "an object made from Number.prototype",
+        make: () => ({ count: Object.create(Number.prototype) as object }),
+      },
+      { label: "a Proxy around a Number object", make: () => ({ count: new Proxy(new Number(5), {}) }) },
     ])("refuses $label, which JSON would send as {}, posting nothing", async ({ make }) => {
       hostReady();
       const outcome = store.callEndpoint(endpointID, { method: "POST", body: make() }).catch((error: unknown) => error);
@@ -666,6 +699,10 @@ describe("WidgetStore", () => {
       class Setpoint {
         constructor(readonly value: number) {}
       }
+      // An iframe has its own Number and String, so its boxed values fail `instanceof` here.
+      const frame = document.createElement("iframe");
+      document.body.appendChild(frame);
+      const other = frame.contentWindow as unknown as typeof globalThis;
       const bodies = [
         { setpoint: [22, { unit: "C" }] },
         [1, 2],
@@ -680,6 +717,7 @@ describe("WidgetStore", () => {
         // JSON writes a boxed primitive as its value.
         { enabled: new Boolean(false), count: new Number(5), label: new String("C") },
         new Number(5),
+        { count: new other.Number(5), label: new other.String("C") },
       ];
 
       for (const body of bodies) {
@@ -704,7 +742,9 @@ describe("WidgetStore", () => {
         {},
         { enabled: false, count: 5, label: "C" },
         5,
+        { count: 5, label: "C" },
       ]);
+      frame.remove();
     });
 
     it("maps an options getter that throws to bad_request", async () => {

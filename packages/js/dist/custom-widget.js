@@ -283,8 +283,17 @@
     const prototype = Object.getPrototypeOf(value);
     return prototype === Object.prototype || prototype === null;
   }
+  var boxedTypes = typeof BigInt === "function" ? [Number, String, Boolean, BigInt] : [Number, String, Boolean];
+  var boxedValueOf = boxedTypes.map((type) => type.prototype.valueOf);
   function isBoxedPrimitive(value) {
-    return value instanceof Number || value instanceof String || value instanceof Boolean;
+    return boxedValueOf.some((valueOf) => {
+      try {
+        valueOf.call(value);
+        return true;
+      } catch {
+        return false;
+      }
+    });
   }
   function refuseValuesJsonEmpties(_key, value) {
     const emptied = isObject(value) && !Array.isArray(value) && !isPlainObject(value) && !isBoxedPrimitive(value) && Object.keys(value).length === 0;
@@ -319,10 +328,11 @@
     const encoded = /* @__PURE__ */ Object.create(null);
     for (const [key, value] of Object.entries(query)) {
       if (value === void 0) continue;
+      const items = Array.isArray(value) ? Array.from({ length: value.length }, (_, index) => value[index]) : null;
       if (isQueryValue(value)) {
         encoded[key] = value;
-      } else if (Array.isArray(value) && [...value].every(isQueryValue)) {
-        encoded[key] = [...value];
+      } else if (items?.every(isQueryValue)) {
+        encoded[key] = items;
       } else {
         throw new TypeError(
           `Query key ${JSON.stringify(key)} must be a string, a finite number or a boolean, or an array of them.`
