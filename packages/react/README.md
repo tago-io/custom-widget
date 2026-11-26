@@ -373,7 +373,7 @@ function SetpointForm() {
     } else if (answer.status >= 400) {
       setFeedback(answer.body?.error ?? `Request failed (${answer.status}).`);
     } else {
-      setFeedback(`Saved: ${answer.body.setpoint} C`);
+      setFeedback(`Saved: ${answer.body?.setpoint ?? setpoint} C`);
     }
   }
 

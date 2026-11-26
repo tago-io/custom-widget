@@ -329,12 +329,13 @@ window.TagoIO.onStart(function () {
 form.addEventListener("submit", async function (event) {
   event.preventDefault();
   form.querySelector("button").disabled = true;
+  const setpoint = form.elements.setpoint.value;
   let answer;
   try {
     answer = await window.TagoIO.callEndpoint(ENDPOINT_ID, {
       method: "POST",
       path: "/setpoint",
-      body: { setpoint: form.elements.setpoint.value },
+      body: { setpoint: setpoint },
     });
   } catch (error) {
     // The call did not complete: error is a plain { code, message } object.
@@ -349,7 +350,7 @@ form.addEventListener("submit", async function (event) {
   } else if (answer.status >= 400) {
     feedback.textContent = (answer.body && answer.body.error) || "Request failed (" + answer.status + ").";
   } else {
-    feedback.textContent = "Saved: " + answer.body.setpoint + " C";
+    feedback.textContent = "Saved: " + ((answer.body && answer.body.setpoint) || setpoint) + " C";
   }
 });
 ```

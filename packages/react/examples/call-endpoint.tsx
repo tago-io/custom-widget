@@ -76,7 +76,7 @@ function SetpointForm() {
       // the profile's allowance ran out.
       setAnswer({ text: result.body?.error ?? `Request failed (${result.status}).`, failed: true });
     } else {
-      setAnswer({ text: `Saved: ${result.body.setpoint} C`, failed: false });
+      setAnswer({ text: `Saved: ${result.body?.setpoint ?? setpoint} C`, failed: false });
     }
   }
 

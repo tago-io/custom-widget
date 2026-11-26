@@ -94,10 +94,11 @@
         // The Endpoint checks the value, so the field's text goes as typed, inside an object
         // sent as JSON. A string body would go as text/plain, and the Analysis would get scope
         // as nil.
+        const setpoint = form.elements.setpoint.value;
         window.TagoIO.callEndpoint(ENDPOINT_ID, {
           method: "POST",
           path: "/setpoint",
-          body: { setpoint: form.elements.setpoint.value },
+          body: { setpoint: setpoint },
         })
           .then(
             function (answer) {
@@ -112,7 +113,7 @@
                 const reason = answer.body && answer.body.error;
                 setFeedback(reason || "Request failed (" + answer.status + ").", true);
               } else {
-                setFeedback("Saved: " + answer.body.setpoint + " C", false);
+                setFeedback("Saved: " + ((answer.body && answer.body.setpoint) || setpoint) + " C", false);
               }
             },
             // The second handler gets only the call's rejection, so an error in the first one is
