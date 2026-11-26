@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scan Code</title>
+    <script type="text/javascript" src="https://admin.tago.io/dist/custom-widget.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      button {
+        font-size: 16px;
+        padding: 12px 16px;
+        margin-right: 8px;
+        min-height: 48px;
+      }
+      .result {
+        font-family: monospace;
+        font-size: 20px;
+        word-break: break-all;
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 12px 0;
+      }
+      .status {
+        color: #555;
+        margin: 12px 0;
+      }
+      .sent {
+        color: #555;
+        font-family: monospace;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Scan a QR code or a barcode</h1>
+    <p>
+      Either button reads QR codes and barcodes. The TagoRUN mobile app opens its own scanner, and a browser opens a
+      camera scanner on the page. The reply carries back whichever method you asked for.
+    </p>
+
+    <button id="scan-barcode" type="button">Scan barcode</button>
+    <button id="scan-qrcode" type="button">Scan QR code</button>
+    <button id="stop" type="button" style="display: none">Stop waiting</button>
+
+    <p class="sent" id="sent"></p>
+    <p class="status" id="status">Pick one to start.</p>
+
+    <h3>Scanned value</h3>
+    <div class="result" id="result">-</div>
+
+    <script>
+      /**
+       * Scan Code Example
+       * Demonstrates asking the dashboard for a QR code or barcode scan
+       */
+
+      // The scanner is not part of the SDK, so the request and the reply are plain
+      // postMessage. The SDK's own listener ignores these, so the two coexist.
+      let pendingMethod = null;
+      let hintTimeoutId = null;
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      // The reply carries no `key`, so two requests' replies cannot be told apart.
+      // Keep exactly one request in flight by locking the buttons until it ends.
+      function setPending(method) {
+        pendingMethod = method;
+        window.clearTimeout(hintTimeoutId);
+        document.getElementById("scan-barcode").disabled = method !== null;
+        document.getElementById("scan-qrcode").disabled = method !== null;
+        document.getElementById("stop").style.display = method === null ? "none" : "inline-block";
+      }
+
+      function requestScan(method) {
+        setPending(method);
+        document.getElementById("sent").textContent = 'sent { method: "' + method + '" }';
+        setStatus("Waiting for the scanner...");
+
+        // The reply comes once the user scans or cancels, which can take a while. A host
+        // with no scanner never answers. The page cannot tell the two apart, so this is a
+        // hint, not a verdict.
+        hintTimeoutId = window.setTimeout(function () {
+          setStatus("Still waiting. If no scanner opened, nothing will answer. Press Stop waiting.");
+        }, 5000);
+
+        window.parent.postMessage({ method: method }, "*");
+      }
+
+      window.addEventListener("message", function (event) {
+        // Only the host page answers, and it is this widget's parent window. Opened on its
+        // own, `window.parent` is this same window, so no message is a reply.
+        if (window.parent === window || event.source !== window.parent) {
+          return;
+        }
+
+        // The reply echoes the method that was asked for, so a message with any other
+        // method is not the answer. After "Stop waiting" nothing is pending, so a late
+        // reply is dropped here too.
+        const message = event.data;
+        if (!message || pendingMethod === null || message.method !== pendingMethod) {
+          return;
+        }
+        setPending(null);
+
+        // `data` holds the decoded string, or "" when the user canceled.
+        const value = message.data;
+        if (!value) {
+          setStatus("Scan canceled.");
+          return;
+        }
+
+        document.getElementById("result").textContent = value;
+        setStatus("Scanned with " + JSON.stringify(message.method) + ", " + value.length + " characters.");
+      });
+
+      document.getElementById("scan-barcode").addEventListener("click", function () {
+        requestScan("barcode");
+      });
+
+      document.getElementById("scan-qrcode").addEventListener("click", function () {
+        requestScan("qrcode");
+      });
+
+      // A cancel answers with an empty `data`, but an older host or app may never answer,
+      // so the page keeps its own way out. Any reply that arrives after this is ignored.
+      document.getElementById("stop").addEventListener("click", function () {
+        setPending(null);
+        setStatus("Stopped waiting. A reply that arrives now is ignored.");
+      });
+
+      window.TagoIO.onError(function (error) {
+        setStatus("Error: " + (error.message || "Unknown error"));
+      });
+
+      window.TagoIO.ready({
+        header: { color: "#00897B" },
+      });
+    </script>
+  </body>
+</html>
