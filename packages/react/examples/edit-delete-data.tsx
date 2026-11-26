@@ -5,8 +5,8 @@
  * This is the React equivalent of the JavaScript "edit-delete-data.html" example.
  *
  * useRealtimeData gives the records, useEditData and useDeleteData send the changes,
- * and useWidgetErrors holds the errors the host reports, including the ones that
- * arrive without a request key.
+ * and useWidgetErrors holds every error the host reports, including the ones a row
+ * already shows.
  */
 
 import type { TDataRecord } from "@tago-io/custom-widget-react";
@@ -24,8 +24,8 @@ type TValue = NonNullable<TDataRecord["value"]>;
 // staleValue is what realtime showed for the record when the save was sent.
 type TSavedValue = { value: TValue; staleValue: TDataRecord["value"] };
 
-// When the platform API refuses an edit or a delete, the host never replies and the
-// promise stays pending, so stop waiting after a while.
+// A refused edit or delete rejects with the dashboard's message. An older host, such as a
+// TagoDeploy instance that has not been updated, may never answer, so stop waiting after a while.
 const REPLY_TIMEOUT_MS = 10_000;
 
 const buttonStyle = { fontSize: 16, padding: "8px 12px", margin: "4px 8px 4px 0", minHeight: 44 };
@@ -34,7 +34,11 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
   let timeoutId = 0;
   const timeout = new Promise<never>((_resolve, reject) => {
     timeoutId = window.setTimeout(() => {
-      reject(new Error(`TagoIO did not confirm the change within ${REPLY_TIMEOUT_MS / 1000} seconds.`));
+      const error = new Error(
+        `No answer from TagoIO within ${REPLY_TIMEOUT_MS / 1000} seconds. The change may still go through.`
+      );
+      error.name = "TimeoutError";
+      reject(error);
     }, REPLY_TIMEOUT_MS);
   });
   return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
@@ -53,9 +57,13 @@ function parseValue(text: string, current: TDataRecord["value"]): TValue | null 
   return text;
 }
 
-// Rejections are the host's plain { status, message } replies or the timeout's Error.
-function errorText(error: unknown): string {
-  return (error as { message?: string } | null)?.message || "Unknown error";
+// Rejections are the host's plain { status, message } replies or the timeout's Error. A
+// timeout leaves the outcome unknown, so it gets neither the failure style nor a
+// "Not saved" or "Not deleted" label.
+function failureStatus(label: string, error: unknown): { text: string; failed: boolean } {
+  const { name, message } = (error ?? {}) as { name?: string; message?: string };
+  const reason = message || "Unknown error";
+  return name === "TimeoutError" ? { text: reason, failed: false } : { text: `${label}: ${reason}`, failed: true };
 }
 
 function App() {
@@ -72,8 +80,8 @@ function RecordEditor() {
   const { lastError, clearErrors } = useWidgetErrors();
   // Changes TagoIO confirmed, applied on top of `records`: realtime may not bring the
   // change back, and a later push can still carry the old record. An entry is dropped as soon
-  // as realtime shows any value other than its staleValue: the saved one, or a newer change
-  // made somewhere else.
+  // as realtime shows any value other than its staleValue: the saved one, a newer change
+  // made somewhere else, or the value of an earlier save from this row.
   const [savedValues, setSavedValues] = useState<Map<string, TSavedValue>>(() => new Map());
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
@@ -115,8 +123,8 @@ function RecordEditor() {
       <h1>Edit and delete data records</h1>
       <p>Change the value of a record or delete it. The rows are the records this widget receives from TagoIO.</p>
 
-      {/* The host reports some failures without the request key, so no promise settles for
-          them. "Failed to delete" arrives only here. */}
+      {/* The only place that sees a failure sent without the request key, such as the
+          "Failed to delete" of an older host, or one that comes after its row stopped waiting. */}
       {lastError && (
         <div style={{ color: "red", border: "1px solid red", padding: 10, margin: "10px 0" }}>
           Error: {lastError.message || "Unknown error"}{" "}
@@ -212,7 +220,7 @@ function RecordRow({
       setDraft(null);
       setStatus({ text: "Saved.", failed: false });
     } catch (error) {
-      setStatus({ text: `Not saved: ${errorText(error)}`, failed: true });
+      setStatus(failureStatus("Not saved", error));
     }
     setBusy(false);
   }
@@ -226,7 +234,7 @@ function RecordRow({
       await withTimeout(deleteData(record));
       onDeleted();
     } catch (error) {
-      setStatus({ text: `Not deleted: ${errorText(error)}`, failed: true });
+      setStatus(failureStatus("Not deleted", error));
       setBusy(false);
     }
   }

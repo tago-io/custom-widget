@@ -112,7 +112,7 @@ What each function takes:
 - `callEndpoint(endpointID, options?)`: see [Calling an Analysis Endpoint](#calling-an-analysis-endpoint).
 
 ```tsx
-// No request times out by itself, and some failures get no reply.
+// No request times out by itself, and some never get an answer (see the notes below).
 function withTimeout<T>(promise: Promise<T>, ms = 10_000): Promise<T> {
   let timeoutId = 0;
   const timeout = new Promise<never>((_resolve, reject) => {
@@ -137,9 +137,12 @@ function SendButton() {
   }
 
   return (
-    <button type="button" disabled={isSending} onClick={() => void send()}>
-      {status || "Send"}
-    </button>
+    <p>
+      <button type="button" disabled={isSending} onClick={() => void send()}>
+        Send
+      </button>{" "}
+      {status}
+    </p>
   );
 }
 
@@ -159,7 +162,8 @@ function RecordActions({ record }: { record: TDataRecord }) {
       setStatus("Saved.");
     } catch (error) {
       resetEdit();
-      setStatus(`Not saved: ${(error as { message?: string }).message}`);
+      // A missing binding, a refusal or a timeout. After a timeout, the edit may still go through.
+      setStatus(`Not confirmed: ${(error as { message?: string }).message}`);
     }
   }
 
@@ -169,7 +173,7 @@ function RecordActions({ record }: { record: TDataRecord }) {
       setStatus("Deleted.");
     } catch (error) {
       resetDelete();
-      setStatus(`Not deleted: ${(error as { message?: string }).message}`);
+      setStatus(`Not confirmed: ${(error as { message?: string }).message}`);
     }
   }
 
@@ -189,11 +193,12 @@ function RecordActions({ record }: { record: TDataRecord }) {
 
 Plan for the following:
 
-- **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise never settles.
+- **Send after the widget settings arrive, and only bound variables.** Wait until `useWidget().isLoading` is `false`. `useSendData` and `useEditData` fill each record's `device` and `origin` from the widget's binding for its variable, and drop a record whose variable is not bound. When they drop every record, the promise rejects with `"No records to process"`. While `isLoading` is `true`, no variable is bound yet, and the dashboard ignores a request until it has handled `ready()`, which the provider sends after its children's first effects, so a call made that early may never settle.
 - **A variable bound on several devices is written to each.** The hooks make one record per device the variable is bound on, and they always fill records this way. To send to a single device, bind the variable on that device only.
 - **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `setToZero` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
-- **A refused `sendData` rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`, and `error` holds it. A resolved `sendData` means every request succeeded.
-- **A resolved `editData` or `deleteData` means the platform accepted the change.** When the platform refuses one, the dashboard shows an error toast and never replies: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, and call `reset()` when it fires.
+- **Addressed edits can still repeat.** With the variable bound on several devices, the record's device gets one identical copy per binding. That is redundant but correct.
+- **A refused write rejects.** When the platform refuses a `sendData`, `editData` or `deleteData`, the promise rejects with the dashboard's reply, `{ status: false, message }`, and the hook's `error` holds it until the next call or `reset()`. For an edit or a delete, `message` is the platform's error or `"Failed to edit"` / `"Failed to delete"`. A resolved promise means the platform accepted the change.
+- **Keep a timeout for requests that get no answer.** No request times out by itself. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a refused request unanswered: the promise stays pending and the busy flag stays `true`. Race each call against a timeout, as `withTimeout` does, and call `reset()` when it fires. On a current host, a refusal rejects the promise long before the timer fires.
 - **Read `error.message`.** The dashboard's reply, `{ status: false, message }`, is a plain object, not an `Error`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `useWidgetErrors`. A call made after the provider unmounted, a call still waiting when it unmounts, and a call whose records `postMessage` cannot copy reject with an `Error` instead, so `error` is typed `TError | Error`.
 - **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of `records` while realtime still shows the value from before the save, as `edit-delete-data.tsx` does.
 
@@ -223,7 +228,7 @@ Plan for the following:
 
 ### Widget errors
 
-`useWidgetErrors()` returns `{ lastError, errors, clearErrors }`. It receives every failure the dashboard reports with `status: false`, except the ones that answer `callEndpoint`, which reject only that call's promise. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `editData` and `deleteData` never reach it. Entries are plain objects with a `message`, not `Error` instances.
+`useWidgetErrors()` returns `{ lastError, errors, clearErrors }`. It receives every failure the dashboard reports with `status: false`, except the ones that answer `callEndpoint`, which reject only that call's promise. A failure that answers another call carries that call's `key` and also rejects its promise, so you can handle it where you make the call. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, and a call whose records the hook dropped gets `"No records to process"`. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a failure unanswered or answer it without the `key`, as it does with `"Failed to delete"`. Only this hook sees such a failure, if anything does, and its call never settles. Entries are plain objects with a `message`, not `Error` instances.
 
 `clearErrors()` empties the list for every component under the provider. A mutation hook's `reset()` does not touch it.
 
@@ -555,12 +560,12 @@ The [scan-code.tsx](./examples/scan-code.tsx) example adds the rest: one request
 
 The [`examples/`](./examples/) folder has ready-to-use `.tsx` files you can copy into your project:
 
-- **[read-data.tsx](./examples/read-data.tsx)** — Display real-time data from devices
-- **[send-data.tsx](./examples/send-data.tsx)** — Send data back to devices with a form
-- **[read-resource.tsx](./examples/read-resource.tsx)** — Read platform resources (device list, users, entities)
-- **[edit-resource.tsx](./examples/edit-resource.tsx)** — Edit resource rows driven by the `editable` columns
-- **[read-widget-info.tsx](./examples/read-widget-info.tsx)** — Widget config, user info, and blueprint devices
-- **[scan-code.tsx](./examples/scan-code.tsx)** — Scan a QR code or barcode
+- **[read-data.tsx](./examples/read-data.tsx)**: Display real-time data from devices
+- **[send-data.tsx](./examples/send-data.tsx)**: Send data back to devices with a form
+- **[read-resource.tsx](./examples/read-resource.tsx)**: Read platform resources (device list, users, entities)
+- **[edit-resource.tsx](./examples/edit-resource.tsx)**: Edit resource rows driven by the `editable` columns
+- **[read-widget-info.tsx](./examples/read-widget-info.tsx)**: Widget config, user info, and blueprint devices
+- **[scan-code.tsx](./examples/scan-code.tsx)**: Scan a QR code or barcode
 - **[edit-delete-data.tsx](./examples/edit-delete-data.tsx)**: Edit and delete the data records a widget receives
 - **[navigation.tsx](./examples/navigation.tsx)**: Open a dashboard or web page, or close a widget modal
 - **[run-analysis.tsx](./examples/run-analysis.tsx)**: Run the widget's Analysis and show the data it writes

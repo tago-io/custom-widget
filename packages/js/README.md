@@ -76,11 +76,11 @@ The SDK exposes everything through the global `window.TagoIO` object.
 
 ### Initialization
 
-| Function                   | Direction   | Description                                                                                                                  |
-| -------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `TagoIO.ready()`           | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget.                                   |
-| `TagoIO.onStart(callback)` | You receive | Called when TagoIO starts your widget. Provides configuration, variables, and settings.                                      |
-| `TagoIO.onError(callback)` | You receive | Called when the dashboard reports a failed request ([Error Handling](#error-handling)). Some platform errors never reach it. |
+| Function                   | Direction   | Description                                                                                |
+| -------------------------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `TagoIO.ready()`           | You send    | Tells TagoIO your widget has finished loading. **Must be called** to activate your widget. |
+| `TagoIO.onStart(callback)` | You receive | Called when TagoIO starts your widget. Provides configuration, variables, and settings.    |
+| `TagoIO.onError(callback)` | You receive | Called when the dashboard reports a failed request ([Error Handling](#error-handling)).    |
 
 ### Data Operations
 
@@ -139,7 +139,7 @@ window.TagoIO.onRealtime(function (data) {
 With `autoFill` on (the default), a record needs only its `variable` and `value`: the SDK adds `device` and `origin` from the widget's binding for that variable, and `bucket` when the binding has one.
 
 ```javascript
-// No request times out by itself, and some failures get no reply.
+// No request times out by itself, and some never get an answer (see the notes below).
 function withTimeout(promise, ms) {
   let timeoutId;
   const timeout = new Promise(function (resolve, reject) {
@@ -168,10 +168,10 @@ async function sendSensorData() {
 
 Plan for the following:
 
-- **Send after `onStart`, and only bound variables.** The SDK drops a record whose variable is not bound to the widget. When it drops every record, as it does before the widget settings arrive, the promise never settles.
+- **Send after `onStart`, and only bound variables.** The SDK drops a record whose variable is not bound to the widget, and when it drops every record, the promise rejects with `"No records to process"`. Before `onStart`, no variable is bound yet, and the dashboard ignores a request until it has handled `ready()`, so a call made that early may never settle.
 - **A variable bound on several devices is written to each.** The SDK makes one record per device the variable is bound on. To write to one device only, turn `autoFill` off and pass `origin` ([Editing and deleting data](#editing-and-deleting-data)).
-- **A refused write rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`. A resolved promise means every request succeeded, and `result` holds one `{ status: "fulfilled", value }` entry per request.
-- **Stop waiting after a while.** No request times out by itself, and some failures get no reply, so race each call against a timer, as `withTimeout` does.
+- **A refused write rejects.** When the platform refuses a request, the promise rejects with the dashboard's reply, `{ status: false, message }`. A resolved promise means every request succeeded, and `result` holds one `{ status: "fulfilled", value }` entry per API call the dashboard made to store the records, not one per record.
+- **Keep a timeout for requests that get no answer.** No request times out by itself. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a refused request unanswered. Race each call against a timer, as `withTimeout` does. On a current host, a refusal rejects the promise long before the timer fires.
 - **Rejections are plain objects.** The dashboard's reply, `{ status: false, message }`, is not an `Error`, so read `error.message`. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`. The same reply also reaches `onError`.
 
 ## Editing and deleting data
@@ -206,7 +206,8 @@ async function changeValue(record, value) {
     await withTimeout(window.TagoIO.editData(edit), 10000);
     console.log("Saved");
   } catch (error) {
-    console.error("Not saved:", error.message);
+    // A missing binding, a refusal or a timeout. After a timeout, the edit may still go through.
+    console.error("Not confirmed:", error.message);
   }
 }
 
@@ -215,7 +216,7 @@ async function removeRecord(record) {
     await withTimeout(window.TagoIO.deleteData(record.id + ":" + record.device), 10000);
     console.log("Deleted");
   } catch (error) {
-    console.error("Not deleted:", error.message);
+    console.error("Not confirmed:", error.message);
   }
 }
 ```
@@ -246,9 +247,9 @@ Plan for the following:
 
 - **`editData` goes through `autoFill` like `sendData`.** The record's variable must be bound to the widget, and a variable bound on several devices sends one copy of the edit per device. `deleteData` ignores `autoFill`: each string names its device.
 - **Address each edit to the record's device.** When a copy of an edit goes to a device that does not hold the record, the platform refuses the call, and the copies it handled before that one stay saved. Pass the `device`, `origin` and `bucket` of the binding for the record's device, as `changeValue` does: every copy then goes to the device that holds the record. When no binding matches that device, do not send the edit.
+- **Addressed edits can still repeat.** With the variable bound on several devices, the record's device gets one identical copy per binding. That is redundant but correct. To send a single copy, turn `autoFill` off: `changeValue` already passes `origin`.
 - **With `autoFill` off, every record needs `origin`.** A record without it makes the call throw before any Promise exists, so `.catch()` never sees the error: wrap the call in `try`/`catch`.
-- **A resolved promise means the platform accepted the change.** When the platform refuses an edit or a delete, the dashboard shows an error toast and never replies, so the promise stays pending: race it against a timeout.
-- **`"Failed to delete"` reaches only `onError`.** The dashboard sends it without the request key, so no promise settles for it.
+- **A refused edit or delete rejects.** The promise rejects with the dashboard's reply, `{ status: false, message }`, where `message` is the platform's error or `"Failed to edit"` / `"Failed to delete"`. A resolved promise means the platform accepted the change.
 - **Keep confirmed changes on screen.** Realtime may not bring an edit or a delete back, and a later push can still carry the old record. Apply what you confirmed on top of each new snapshot while realtime still shows the value from before the save, as `edit-delete-data.html` does.
 
 ## Editing Resources
@@ -281,6 +282,7 @@ Plan for the following:
 
 ```javascript
 // Markup: <button id="run" type="button" disabled>Run Analysis</button>
+// The SDK keeps one onStart handler, so do this in yours.
 window.TagoIO.onStart(function (widget) {
   // The dashboard ignores runAnalysis while no Analysis is selected.
   document.getElementById("run").disabled = !widget.analysis_run;
@@ -380,6 +382,7 @@ Plan for the following:
 `onSyncBlueprintDevices` receives blueprint device settings and selections when the dashboard sends them. A blueprint dashboard delivers the selected devices in the widget's variables, so read them there: each `origin.id` is the device selected for that variable's blueprint device, and it is `undefined` until the viewer selects one.
 
 ```javascript
+// The SDK keeps one onStart handler, so do this in yours.
 window.TagoIO.onStart(function (widget) {
   widget.display.variables.forEach(function (item) {
     console.log(item.variable, "comes from device", item.origin.id);
@@ -505,7 +508,7 @@ The React SDK, `@tago-io/custom-widget-react`, ships its own type declarations.
 
 ## Error Handling
 
-`onError` receives every failure the dashboard reports with `status: false`, except the ones that answer `callEndpoint`, which reject only that call's promise. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, which also rejects that call's promise. `"Failed to delete"` arrives without a request key, so no promise settles for it and it shows up only here. Platform API errors on `editData` and `deleteData` never reach `onError`: the dashboard shows a toast and never replies, so race those calls against a timer, as `withTimeout` does in [Sending Data](#sending-data).
+`onError` receives every failure the dashboard reports with `status: false`, except the ones that answer `callEndpoint`, which reject only that call's promise. A failure that answers another call carries that call's `key` and also rejects its promise, so you can handle it where you make the call. A record whose `variable`, `origin` and `bucket` match none of the widget's bindings gets `"Invalid variable"`, and a call whose records the SDK dropped gets `"No records to process"`. The dashboard ignores a request it gets before handling `ready()`, and an older host, such as a TagoDeploy instance that has not been updated, may leave a failure unanswered or answer it without the `key`, as it does with `"Failed to delete"`. Only `onError` sees such a failure, if anything does, and its call never settles, so race calls against a timer, as `withTimeout` does in [Sending Data](#sending-data).
 
 ```javascript
 window.TagoIO.onError(function (error) {
