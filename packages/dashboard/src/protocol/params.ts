@@ -36,11 +36,16 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   return prototype === Object.prototype || prototype === null;
 }
 
+/** JSON writes a `Number`, `String` or `Boolean` object as its value, but a replacer still sees the object. */
+function isBoxedPrimitive(value: object): boolean {
+  return value instanceof Number || value instanceof String || value instanceof Boolean;
+}
+
 /**
  * JSON writes a `Map`, a `FormData`, a `Blob`, or a class instance that keeps its data in private fields, as `{}`, so
- * the Analysis would get an empty body and no error. That is any object other than a plain object or an array with no
- * enumerable fields of its own. A replacer sees each value after `toJSON()` ran, so a `Date` inside an object arrives
- * here as its string, and a class instance with fields is written as its fields.
+ * the Analysis would get an empty body and no error. That is any object other than a plain object, an array or a boxed
+ * primitive with no enumerable fields of its own. A replacer sees each value after `toJSON()` ran, so a `Date` inside
+ * an object arrives here as its string, and a class instance with fields is written as its fields.
  */
 function refuseValuesJsonEmpties(_key: string, value: unknown): unknown {
   const emptied =
@@ -48,6 +53,7 @@ function refuseValuesJsonEmpties(_key: string, value: unknown): unknown {
     value !== null &&
     !Array.isArray(value) &&
     !isPlainObject(value) &&
+    !isBoxedPrimitive(value) &&
     Object.keys(value).length === 0;
   if (emptied) {
     throw new TypeError(
@@ -113,7 +119,8 @@ export function encodeEndpointQuery(
     }
     if (isQueryValue(value)) {
       encoded[key] = value;
-    } else if (Array.isArray(value) && value.every(isQueryValue)) {
+    } else if (Array.isArray(value) && [...value].every(isQueryValue)) {
+      // `every()` skips holes, which the copy turns into `undefined`, so the copy is what gets checked.
       encoded[key] = [...value];
     } else {
       throw new TypeError(
